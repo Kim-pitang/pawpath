@@ -1,0 +1,91 @@
+@import 'tailwindcss';
+@import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css';
+@import '@fontsource/jua/index.css';
+@import 'leaflet/dist/leaflet.css';
+
+@theme {
+  --font-sans: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  --font-brand: 'Jua', 'Pretendard Variable', sans-serif;
+
+  --color-cream: #fff8ec;
+  --color-cream-deep: #fbeeda;
+
+  --color-leaf-50: #ebf6f0;
+  --color-leaf-100: #d3ecdf;
+  --color-leaf-300: #8fcdae;
+  --color-leaf-500: #2e8b62;
+  --color-leaf-600: #25784f;
+  --color-leaf-800: #175239;
+
+  --color-carrot-50: #fef2e7;
+  --color-carrot-100: #fde0c8;
+  --color-carrot-300: #f5ad73;
+  --color-carrot-500: #d9661a;
+  --color-carrot-700: #a34a0f;
+
+  --color-sky-500: #3f7cc4;
+  --color-plum-500: #a0569e;
+
+  --color-ink: #2d2a24;
+  --color-ink-soft: #5f5b50;
+  --color-ink-muted: #827d6f;
+  --color-line: #eee5d4;
+}
+
+html {
+  background: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  word-break: keep-all;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:not(:disabled) {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-leaf-500);
+  outline-offset: 2px;
+}
+
+.font-brand {
+  font-weight: 400;
+}
+
+.pp-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 9999px;
+  border: 2px solid #fff;
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 1px 4px rgb(45 42 36 / 0.35);
+}
+
+.pp-marker-start {
+  width: auto;
+  height: auto;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.leaflet-container {
+  font-family: var(--font-sans);
+  background: var(--color-cream-deep);
+}

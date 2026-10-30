@@ -1,0 +1,28 @@
+# 인증정보
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# DB
+*.db
+*.sqlite3
+
+# Frontend
+node_modules/
+dist/
+*.tsbuildinfo
+test-results/
+playwright-report/
+
+# 기타
+.DS_Store
+.logs/
+
+# 코스 빌더 캐시
+.osm_cache/
