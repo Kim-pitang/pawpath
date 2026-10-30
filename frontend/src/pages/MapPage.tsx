@@ -130,7 +130,7 @@ function SelectedCourse({ course, recommendationId }: { course: Course; recommen
         경로와 시설 위치는 OpenStreetMap 기준이에요.{estimates ? ' 혼잡도, 조명, 그늘, 차량 노출은 팀 추정값이니 현장에서 확인해 주세요.' : ''} {course.pet_rule_note}
       </p>
       <LinkButton
-        to={`/walk?course=${course.id}${recommendationId ? `&recommendation=${recommendationId}` : ''}`}
+        to={`/navigate?course=${course.id}${recommendationId ? `&recommendation=${recommendationId}` : ''}`}
         className="mt-3 w-full"
       >
         <Footprints size={16} aria-hidden />

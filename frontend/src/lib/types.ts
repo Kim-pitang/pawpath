@@ -105,6 +105,14 @@ export interface Course {
   };
 }
 
+export interface Approach {
+  mode: 'routed' | 'straight' | 'too_far';
+  distance_m: number;
+  duration_min: number;
+  route: [number, number][];
+  notice: string | null;
+}
+
 export interface SlotWeather {
   temperature: number;
   apparent_temperature: number;

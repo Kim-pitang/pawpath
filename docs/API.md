@@ -107,6 +107,30 @@
 
 코스 정보, 경로(`route`: `[위도, 경도]` 배열), 시설(`facilities`), 출처(`data_sources`)를 돌려줍니다.
 
+### `POST /courses/{course_id}/approach`
+
+현재 위치에서 코스 출발점까지의 도보 경로입니다. 좌표가 접근 로그에 남지 않도록 쿼리가 아닌 본문으로 받으며, 저장하지 않습니다.
+
+```json
+{ "latitude": 37.556, "longitude": 126.9105 }
+```
+
+```json
+{
+  "mode": "routed",
+  "distance_m": 422.6,
+  "duration_min": 7,
+  "route": [[37.556, 126.9105], [37.5545, 126.9065]],
+  "notice": null
+}
+```
+
+| `mode` | 의미 | `route` |
+|---|---|---|
+| `routed` | OSRM 도보 경로 | 경로 좌표 |
+| `straight` | 길찾기 실패 또는 미사용. `notice`에 안내 문구 | 현재 위치와 출발점 |
+| `too_far` | `ROUTING_MAX_DISTANCE_KM` 초과. 외부 길찾기를 호출하지 않음 | 빈 배열 |
+
 ## 추천
 
 ### `POST /recommendations`

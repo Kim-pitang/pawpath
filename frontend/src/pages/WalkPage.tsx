@@ -1,6 +1,6 @@
 import { CheckCircle2, Footprints, PawPrint, Star, TrendingUp } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button, Card, Chip, ChoiceGroup, EmptyState, ErrorNotice, LinkButton, PageTitle, SectionTitle } from '../components/ui';
 import { useApp } from '../context/AppContext';
 import { api } from '../lib/api';
@@ -12,16 +12,23 @@ export default function WalkPage() {
   const { selectedPet, petsLoaded, invalidateRecommendations, refreshPets } = useApp();
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [courses, setCourses] = useState<Course[]>([]);
   const [courseId, setCourseId] = useState<number | null>(Number(params.get('course')) || null);
   const [walks, setWalks] = useState<Walk[]>([]);
-  const [activeWalk, setActiveWalk] = useState<Walk | null>(null);
+  // 길 안내를 마치고 넘어오면 방금 끝낸 산책의 피드백부터 받는다.
+  const [activeWalk, setActiveWalk] = useState<Walk | null>((location.state as { walk?: Walk } | null)?.walk ?? null);
   const [result, setResult] = useState<Feedback | null>(null);
   const [duration, setDuration] = useState(30);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const recommendationId = Number(params.get('recommendation')) || null;
   const petId = selectedPet?.id;
+
+  useEffect(() => {
+    // 새로고침 때 이미 끝낸 피드백 폼이 다시 열리지 않도록 전달 값을 지운다.
+    if (location.state) navigate(location.pathname + location.search, { replace: true, state: null });
+  }, [location, navigate]);
 
   const loadWalks = useCallback(async () => {
     if (petId) setWalks(await api.listWalks(petId));

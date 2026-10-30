@@ -32,6 +32,12 @@ export function dateTimeLabel(iso: string): string {
   return `${dayLabel(iso)} ${clock(new Date(iso))}`;
 }
 
+/** 서비스 시각 형식(타임존 없는 현지 시각)으로 바꾼다. */
+export function toLocalIso(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
 export function windowLabel(start: number, end: number): string {
   return `${start}시 ~ ${end}시`;
 }

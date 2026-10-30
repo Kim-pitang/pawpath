@@ -1,4 +1,5 @@
 import type {
+  Approach,
   Course,
   CurrentWeather,
   Feedback,
@@ -59,13 +60,22 @@ export const api = {
     request<ForecastWeather>(`/weather/forecast?scenario=${scenario}&hours=${hours}`),
 
   listCourses: () => request<Course[]>('/courses'),
+  getCourse: (id: number) => request<Course>(`/courses/${id}`),
+  approach: (courseId: number, latitude: number, longitude: number) =>
+    post<Approach>(`/courses/${courseId}/approach`, { latitude, longitude }),
 
   recommend: (petId: number, scenario: WeatherScenario) =>
     post<Recommendation>('/recommendations', { pet_id: petId, weather_scenario: scenario }),
   latestRecommendations: (petId: number, limit = 1) =>
     request<Recommendation[]>(`/recommendations?pet_id=${petId}&limit=${limit}`),
 
-  createWalk: (body: { pet_id: number; course_id: number; recommendation_id: number | null; duration_min: number }) =>
+  createWalk: (body: {
+    pet_id: number;
+    course_id: number;
+    recommendation_id: number | null;
+    duration_min: number;
+    started_at?: string;
+  }) =>
     post<Walk>('/walks', body),
   listWalks: (petId: number) => request<Walk[]>(`/walks?pet_id=${petId}`),
 

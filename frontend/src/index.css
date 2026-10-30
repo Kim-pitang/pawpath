@@ -85,6 +85,28 @@ button:not(:disabled) {
   white-space: nowrap;
 }
 
+.pp-me {
+  border-radius: 9999px;
+  border: 3px solid #fff;
+  background: var(--color-sky-500);
+  box-shadow: 0 1px 5px rgb(45 42 36 / 0.45);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pp-me {
+    animation: pp-me-pulse 2s ease-out infinite;
+  }
+}
+
+@keyframes pp-me-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgb(63 124 196 / 0.5), 0 1px 5px rgb(45 42 36 / 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 16px rgb(63 124 196 / 0), 0 1px 5px rgb(45 42 36 / 0.45);
+  }
+}
+
 .leaflet-container {
   font-family: var(--font-sans);
   background: var(--color-cream-deep);

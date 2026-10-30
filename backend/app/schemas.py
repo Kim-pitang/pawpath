@@ -126,6 +126,19 @@ class CourseDetail(CourseSummary):
     route: list[list[float]]
 
 
+class ApproachRequest(BaseModel):
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+
+
+class ApproachRead(BaseModel):
+    mode: Literal["routed", "straight", "too_far"]
+    distance_m: float
+    duration_min: int
+    route: list[list[float]]
+    notice: str | None
+
+
 class RecommendationRequest(BaseModel):
     pet_id: int
     weather_scenario: WeatherScenario = "live"

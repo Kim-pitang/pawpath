@@ -29,6 +29,7 @@ export default defineConfig({
         DATABASE_URL: `sqlite:///${dbDir}/e2e.db`,
         WEATHER_PROVIDER: 'mock',
         SEED_DEMO_PET: 'true',
+        ROUTING_PROVIDER: 'none',
       },
     },
     {

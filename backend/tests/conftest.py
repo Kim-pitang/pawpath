@@ -9,6 +9,7 @@ _db_dir = tempfile.mkdtemp(prefix="pawpath-test-")
 os.environ["DATABASE_URL"] = f"sqlite:///{_db_dir}/test.db"
 os.environ["WEATHER_PROVIDER"] = "mock"
 os.environ["SEED_DEMO_PET"] = "true"
+os.environ["ROUTING_PROVIDER"] = "none"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

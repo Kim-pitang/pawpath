@@ -11,6 +11,7 @@ from app.recommender.features import build_features
 from app.recommender.timeslots import hour_comfort, is_rainy
 from app.recommender.types import FeedbackInput
 from app.seed import DEFAULT_USER_ID
+from app.services.routing_service import Approach, plan_approach
 from app.services.recommendation_service import create_recommendation, to_profile, windows_of
 from app.services.walk_service import build_insights, record_walk, submit_feedback
 from app.services.weather_service import WeatherResult, get_weather
@@ -182,6 +183,15 @@ def get_course(course_id: int, db: Session = Depends(get_db)) -> WalkingCourse:
     if course is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "코스를 찾을 수 없습니다")
     return course
+
+
+@router.post("/courses/{course_id}/approach", response_model=schemas.ApproachRead, tags=["산책 코스"])
+def course_approach(course_id: int, body: schemas.ApproachRequest, db: Session = Depends(get_db)) -> Approach:
+    """현재 위치에서 코스 출발점까지의 도보 경로. 위치는 저장하지 않으며, 로그에 남지 않도록 본문으로 받는다."""
+    course = db.get(WalkingCourse, course_id)
+    if course is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "코스를 찾을 수 없습니다")
+    return plan_approach((body.latitude, body.longitude), (course.start_lat, course.start_lng))
 
 
 # 추천

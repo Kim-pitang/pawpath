@@ -37,6 +37,7 @@ test('최종 검증 시나리오: 추천, 산책, 5점 피드백, 다음 추천 
   const secondCard = page.getByTestId('course-card-2');
   const secondName = (await secondCard.getByRole('heading').textContent())!;
   await secondCard.getByRole('link', { name: '이 코스로 산책' }).click();
+  await page.getByRole('link', { name: 'GPS 없이 기록하기' }).click();
 
   // 6. 산책 완료
   await expect(page.getByLabel('다녀온 코스')).toHaveValue(/\d+/);

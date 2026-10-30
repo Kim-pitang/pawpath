@@ -275,7 +275,7 @@ function CourseCard({ course, recommendationId }: { course: RecommendedCourse; r
             <MapIcon size={16} aria-hidden />
             지도 보기
           </LinkButton>
-          <LinkButton to={`/walk?course=${course.course_id}&recommendation=${recommendationId}`} variant={course.rank === 1 ? 'primary' : 'ghost'} className="whitespace-nowrap !px-2">
+          <LinkButton to={`/navigate?course=${course.course_id}&recommendation=${recommendationId}`} variant={course.rank === 1 ? 'primary' : 'ghost'} className="whitespace-nowrap !px-2">
             <Footprints size={16} aria-hidden />
             이 코스로 산책
           </LinkButton>
