@@ -45,7 +45,17 @@ git pull --ff-only
 docker compose -f compose.prod.yaml up -d --build --wait
 ```
 
-구조 변경(Alembic 리비전)은 backend가 켜질 때 적용됩니다. 백업은 [PostgreSQL 운영](POSTGRES.md#백업과-복구)의 `pg_dump`를 `docker compose -f compose.prod.yaml exec -T db pg_dump ...`로 실행합니다.
+구조 변경(Alembic 리비전)은 backend가 켜질 때 적용됩니다.
+
+## 백업
+
+`scripts/backup_postgres.sh`가 `pg_dump`로 `~/pawpath-backups`에 백업하고, 읽을 수 있는지 확인한 뒤, 14일이 지난 백업을 지웁니다. 서버의 cron이 매일 04:30에 부릅니다.
+
+```bash
+crontab -l   # 30 4 * * * /home1/ncloud/pawpath/scripts/backup_postgres.sh >> /home1/ncloud/pawpath-backups/backup.log 2>&1
+```
+
+복구는 [PostgreSQL 운영](POSTGRES.md#백업과-복구)의 `pg_restore` 절차를 따르되, 명령의 `docker compose`를 `docker compose -f compose.prod.yaml`로 바꿉니다.
 
 ## 상태 보기
 
