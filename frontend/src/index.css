@@ -44,6 +44,8 @@ html {
   color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-text-size-adjust: 100%;
+  /* 누를 때 브라우저가 칠하는 회색 사각형을 없앤다. 눌림 표시는 각 버튼이 직접 한다. */
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -52,9 +54,26 @@ body {
   word-break: keep-all;
 }
 
+/* 두 번 탭 확대를 기다리지 않고 바로 누르게 하고, 길게 눌러도 버튼 글자가 선택되지 않게 한다. */
 button,
-a {
-  -webkit-tap-highlight-color: transparent;
+a,
+[role='button'] {
+  touch-action: manipulation;
+}
+
+button,
+[role='button'] {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* iOS는 16px보다 작은 입력칸에 초점이 가면 화면을 확대하고 되돌리지 않는다. 터치 기기에서만 키운다. */
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: max(16px, 1em);
+  }
 }
 
 button:not(:disabled) {

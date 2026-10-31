@@ -445,7 +445,7 @@ function NavigationView({ courseId, recommendationId }: { courseId: number; reco
 
       <section
         aria-live="polite"
-        className="z-10 flex max-h-[62dvh] flex-col gap-3 overflow-y-auto rounded-t-xl border-t border-line bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgb(120_90_40/0.12)]"
+        className="z-10 flex max-h-[62dvh] flex-col gap-3 overflow-y-auto overscroll-contain rounded-t-xl border-t border-line bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgb(120_90_40/0.12)]"
       >
         {error && <ErrorNotice message={error} />}
 

@@ -26,7 +26,7 @@ export default function Layout() {
 
   return (
     <div className="min-h-dvh pb-24 md:pb-10">
-      <header className="sticky top-0 z-30 border-b border-line bg-cream">
+      <header className="sticky top-0 z-30 border-b border-line bg-cream pt-[env(safe-area-inset-top)]">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-2.5">
           <Link to="/" className="flex items-center gap-2" aria-label="mungo 홈">
             <MungoMark />

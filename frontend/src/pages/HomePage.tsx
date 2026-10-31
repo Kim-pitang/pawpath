@@ -309,7 +309,7 @@ function OtherCourses({ courses, loading }: { courses: RecommendedCourse[]; load
           <Bar className="h-40 w-40" />
         </div>
       ) : (
-        <ul className="-mx-5 flex snap-x scroll-px-5 gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none]">
+        <ul className="-mx-5 flex snap-x scroll-px-5 gap-2 overflow-x-auto overscroll-x-contain px-5 pb-1 [scrollbar-width:none]">
           {courses.map((course) => {
             const route = routes[course.course_id] ?? [];
             return (
@@ -403,7 +403,7 @@ function TimeStrip({ slots, best }: { slots: Slot[]; best: Slot | null }) {
 
   return (
     <div>
-      <div ref={scroller} className="relative -mx-1 overflow-x-auto px-1 pt-1 pb-1">
+      <div ref={scroller} className="relative -mx-1 overflow-x-auto overscroll-x-contain px-1 pt-1 pb-1">
         <div className="flex items-end gap-1" style={{ height: PLOT_HEIGHT + 40 }} role="group" aria-label="시간대별 산책 점수">
           {shown.map((slot, index) => {
             const kind = slotKind(slot, best);

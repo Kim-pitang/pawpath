@@ -194,7 +194,7 @@ export default function CommunityPage() {
       {showPopular && (
         <section aria-label="인기 산책길">
           <SectionTitle>인기 산책길</SectionTitle>
-          <ul className="-mx-4 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pb-1 md:mx-0 md:scroll-px-0 md:px-0" data-testid="popular-trails">
+          <ul className="-mx-4 flex snap-x scroll-px-4 gap-3 overflow-x-auto overscroll-x-contain px-4 pb-1 md:mx-0 md:scroll-px-0 md:px-0" data-testid="popular-trails">
             {popular.map((trail) => (
               <li key={trail.id} className="w-72 shrink-0 snap-start">
                 <TrailCard trail={trail} className="h-full" />
