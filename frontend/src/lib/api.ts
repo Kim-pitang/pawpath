@@ -1,5 +1,6 @@
 import type {
   Account,
+  AccountSummary,
   AlternativeResult,
   Approach,
   Course,
@@ -54,12 +55,11 @@ export class ApiError extends Error {
   }
 }
 
-/** 로그인이 필요하거나 만료되면 앱 상태가 계정 정보를 다시 읽도록 알린다. */
-export const UNAUTHORIZED_EVENT = 'pawpath:unauthorized';
+let recoverSession: () => Promise<boolean> = async () => false;
 
-function failed(status: number, detail: unknown): ApiError {
-  if (status === 401) window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
-  return new ApiError(describeDetail(detail), status);
+/** 401을 받으면 부른다. 앱이 다시 로그인을 받아 같은 보호자로 돌아오면 참을 돌려주고, 요청을 다시 보낸다. */
+export function setSessionRecovery(handler: () => Promise<boolean>) {
+  recoverSession = handler;
 }
 
 function describeDetail(detail: unknown): string {
@@ -68,7 +68,7 @@ function describeDetail(detail: unknown): string {
   return '요청을 처리하지 못했어요.';
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string, init?: RequestInit, retried = false): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${BASE}${path}`, {
@@ -82,7 +82,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw failed(response.status, body.detail);
+    // 401이면 서버가 요청을 처리하지 않았으므로 다시 보내도 안전하다. 틀린 비밀번호의 401은 세션과 상관없다.
+    if (response.status === 401 && !retried && path !== '/auth/login' && (await recoverSession())) return request<T>(path, init, true);
+    throw new ApiError(describeDetail(body.detail), response.status);
   }
   if (response.status === 204) return undefined as T;
   return response.json();
@@ -107,7 +109,10 @@ function uploadGpx(file: File, onProgress: (percent: number) => void): Promise<G
         // 본문이 JSON이 아니면 아래 기본 문구를 쓴다.
       }
       if (xhr.status >= 200 && xhr.status < 300) resolve(body as GpxPreview);
-      else reject(failed(xhr.status, body.detail));
+      else {
+        if (xhr.status === 401) void recoverSession();
+        reject(new ApiError(describeDetail(body.detail), xhr.status));
+      }
     };
     xhr.send(file);
   });
@@ -127,6 +132,11 @@ export const api = {
   signup: (body: { login_id: string; password: string; name: string }) => post<Account>('/auth/signup', body),
   login: (body: { login_id: string; password: string }) => post<Account>('/auth/login', body),
   logout: () => post<Account>('/auth/logout', {}),
+  accountSummary: () => request<AccountSummary>('/auth/account'),
+  reauthenticate: (password: string) => post<{ reauth_required: boolean }>('/auth/reauth', { password }),
+  deleteAccount: () => request<void>('/auth/account', { method: 'DELETE' }),
+  /** 페이지 이동으로 여는 주소. 본인 확인이 끝나면 계정 화면으로 돌아온다. */
+  googleReauthUrl: () => `${BASE}/auth/google/start?reauth=true`,
   /** 페이지 이동으로 여는 주소. 서버가 Google 로그인 화면으로 보낸다. */
   googleStartUrl: (next: string) => `${BASE}/auth/google/start?next=${encodeURIComponent(next)}`,
 

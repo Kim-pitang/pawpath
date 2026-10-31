@@ -13,7 +13,7 @@ const NAV_ITEMS = [
 ];
 
 export default function Layout() {
-  const { selectedPet, account, authNotice } = useApp();
+  const { selectedPet, account } = useApp();
   const location = useLocation();
   const here = location.pathname + location.search;
 
@@ -62,17 +62,6 @@ export default function Layout() {
           </div>
         </div>
       </header>
-
-      {authNotice && (
-        <div className="mx-auto max-w-md px-4 pt-3 md:max-w-5xl">
-          <div className="flex items-center justify-between gap-2 rounded-2xl bg-carrot-50 p-3 text-sm text-carrot-700" role="alert" data-testid="auth-notice">
-            <span>{authNotice}</span>
-            <Link to="/login" state={{ from: here }} className="shrink-0 font-bold underline">
-              로그인
-            </Link>
-          </div>
-        </div>
-      )}
 
       <main className="mx-auto max-w-md px-4 pt-4 md:max-w-5xl">
         <Outlet />

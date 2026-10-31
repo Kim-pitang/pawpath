@@ -1,6 +1,8 @@
 import { Route, Routes } from 'react-router-dom';
 import Layout from './components/Layout';
+import AccountPage from './pages/AccountPage';
 import CommunityPage from './pages/CommunityPage';
+import GoodbyePage from './pages/GoodbyePage';
 import GeneratePage from './pages/GeneratePage';
 import GpxImportPage from './pages/GpxImportPage';
 import HomePage from './pages/HomePage';
@@ -31,6 +33,7 @@ export default function App() {
       <Route path="record" element={<RecordPage />} />
       <Route path="shared/:token" element={<SharedWalkPage />} />
       <Route path="login" element={<LoginPage />} />
+      <Route path="goodbye" element={<GoodbyePage />} />
       <Route element={<Layout />}>
         <Route index element={<HomePage />} />
         <Route path="pets" element={<PetsPage />} />
@@ -41,6 +44,7 @@ export default function App() {
         <Route path="map" element={<MapPage />} />
         <Route path="walk" element={<WalkPage />} />
         <Route path="my" element={<MyPage />} />
+        <Route path="account" element={<AccountPage />} />
         <Route path="report" element={<ReportPage />} />
         <Route path="my-walks" element={<MyWalksPage />} />
         <Route path="my-walks/import" element={<GpxImportPage />} />

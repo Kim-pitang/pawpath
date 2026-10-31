@@ -1,15 +1,25 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { api, UNAUTHORIZED_EVENT } from '../lib/api';
-import type { Account, Pet, Recommendation, Schedule, WeatherScenario } from '../lib/types';
+import { api, setSessionRecovery } from '../lib/api';
+import { clearDraft } from '../lib/recording';
+import type { Account, AccountUser, Pet, Recommendation, Schedule, WeatherScenario } from '../lib/types';
+
+/** 이 기기에서 마지막으로 로그인한 보호자. 세션이 끝난 뒤에도 누가 다시 로그인해야 하는지 알기 위해 남긴다. */
+type RememberedAccount = Pick<AccountUser, 'id' | 'login_id' | 'provider'>;
+
+export interface ExpiredSession extends RememberedAccount {
+  authRequired: boolean;
+  googleEnabled: boolean;
+}
 
 interface AppState {
   /** 로그인 상태. 처음 읽는 동안은 null이다. */
   account: Account | null;
   refreshAccount: () => Promise<Account>;
   signOut: () => Promise<void>;
-  /** 세션이 만료되었을 때처럼 화면 위에 알릴 계정 안내. */
-  authNotice: string | null;
-  clearAuthNotice: () => void;
+  /** 세션이 끝나 다시 로그인을 기다리는 중이면 그 보호자. 이때는 시연 보호자로 넘어가지 않는다. */
+  expired: ExpiredSession | null;
+  /** 기기에 남긴 계정 정보를 지우고 로그인하지 않은 상태로 돌아간다. */
+  leaveAccount: () => Promise<void>;
   pets: Pet[];
   petsLoaded: boolean;
   loadError: string | null;
@@ -32,6 +42,16 @@ interface AppState {
 const AppContext = createContext<AppState | null>(null);
 const PET_KEY = 'pawpath.selectedPetId';
 const SCENARIO_KEY = 'pawpath.scenario';
+const REMEMBERED_KEY = 'pawpath.account';
+
+function loadRemembered(): RememberedAccount | null {
+  try {
+    const remembered = JSON.parse(localStorage.getItem(REMEMBERED_KEY) ?? 'null') as RememberedAccount | null;
+    return typeof remembered?.id === 'number' ? remembered : null;
+  } catch {
+    return null;
+  }
+}
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [pets, setPets] = useState<Pet[]>([]);
@@ -45,15 +65,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [cache, setCache] = useState<Record<string, Recommendation>>({});
   const inFlight = useRef<Record<string, Promise<Recommendation>>>({});
   const [account, setAccount] = useState<Account | null>(null);
-  const accountRef = useRef<Account | null>(null);
-  const [authNotice, setAuthNotice] = useState<string | null>(null);
+  const [expired, setExpired] = useState<ExpiredSession | null>(null);
+  const waitingRequests = useRef<((resume: boolean) => void)[]>([]);
+
+  const settleRequests = useCallback((resume: boolean) => {
+    waitingRequests.current.splice(0).forEach((settle) => settle(resume));
+  }, []);
 
   const refreshAccount = useCallback(async () => {
     const next = await api.authMe();
-    accountRef.current = next;
+    const remembered = loadRemembered();
+    if (next.user) {
+      const sameUser = remembered === null || remembered.id === next.user.id;
+      // 다른 사람이 이 기기에서 로그인했다면 앞사람의 저장하지 않은 기록과 멈춰 둔 요청을 넘겨주지 않는다.
+      if (!sameUser) clearDraft();
+      const { id, login_id, provider } = next.user;
+      const remember: RememberedAccount = { id, login_id, provider };
+      localStorage.setItem(REMEMBERED_KEY, JSON.stringify(remember));
+      setExpired(null);
+      settleRequests(sameUser);
+    } else if (remembered) {
+      // 세션이 끝났다. 시연 보호자로 넘어가면 다시 저장한 경로가 공용 계정에 들어가므로, 화면을 그대로 두고 로그인을 받는다.
+      setExpired({ ...remembered, authRequired: next.auth_required, googleEnabled: next.google_enabled });
+      return next;
+    }
     setAccount(next);
     return next;
-  }, []);
+  }, [settleRequests]);
 
   const refreshPets = useCallback(async () => {
     const list = await api.listPets();
@@ -70,18 +108,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, [refreshAccount]);
 
-  // 어느 API든 401을 받으면 계정 상태를 다시 읽는다. 로그인해 있었다면 만료를 알린다.
+  // 어느 API든 401을 받으면 다시 로그인할 때까지 그 요청을 멈춰 둔다. 저장 중이던 내용을 잃지 않고 이어서 보낸다.
   useEffect(() => {
-    const onUnauthorized = () => {
-      const wasSignedIn = accountRef.current?.authenticated ?? false;
-      refreshAccount()
-        .then((next) => {
-          if (wasSignedIn && !next.authenticated) setAuthNotice('로그인이 만료되었어요. 다시 로그인해 주세요.');
-        })
-        .catch(() => undefined);
+    setSessionRecovery(
+      () =>
+        new Promise<boolean>((resolve) => {
+          waitingRequests.current.push(resolve);
+          refreshAccount()
+            .then((next) => {
+              // 로그인한 적이 없는 기기면 기다릴 일이 없다.
+              if (!next.user && !loadRemembered()) settleRequests(false);
+            })
+            .catch(() => settleRequests(false));
+        }),
+    );
+  }, [refreshAccount, settleRequests]);
+
+  // 오래 두었다가 돌아오면 무언가 누르기 전에 세션이 끝났거나 다른 탭에서 로그아웃했는지 확인한다.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refreshAccount().catch(() => undefined);
     };
-    window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
-    return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, [refreshAccount]);
 
   // 계정이 바뀌면 그 보호자의 반려동물과 일정을 새로 읽고, 다른 계정의 추천 캐시를 비운다.
@@ -105,12 +154,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     api.getSchedule().then(setSchedule).catch(() => undefined);
   }, [accountKey, refreshPets]);
 
+  const leaveAccount = useCallback(async () => {
+    localStorage.removeItem(REMEMBERED_KEY);
+    localStorage.removeItem(PET_KEY);
+    setSelectedId(null);
+    setExpired(null);
+    settleRequests(false);
+    await refreshAccount();
+  }, [refreshAccount, settleRequests]);
+
   const signOut = useCallback(async () => {
     await api.logout();
-    setAuthNotice(null);
-    await refreshAccount();
-  }, [refreshAccount]);
-  const clearAuthNotice = useCallback(() => setAuthNotice(null), []);
+    await leaveAccount();
+  }, [leaveAccount]);
 
   const selectedPet = useMemo(
     () => pets.find((pet) => pet.id === selectedId) ?? pets[0] ?? null,
@@ -162,8 +218,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       account,
       refreshAccount,
       signOut,
-      authNotice,
-      clearAuthNotice,
+      expired,
+      leaveAccount,
       pets,
       petsLoaded,
       loadError,
@@ -183,8 +239,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       account,
       refreshAccount,
       signOut,
-      authNotice,
-      clearAuthNotice,
+      expired,
+      leaveAccount,
       pets,
       petsLoaded,
       loadError,

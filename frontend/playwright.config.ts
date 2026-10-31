@@ -40,6 +40,8 @@ export default defineConfig({
         GOOGLE_CLIENT_ID: 'e2e-client.apps.googleusercontent.com',
         GOOGLE_CLIENT_SECRET: 'e2e-google-secret',
         GOOGLE_REDIRECT_URI: `http://127.0.0.1:${WEB_PORT}/api/auth/google/callback`,
+        BACKUP_ENABLED: 'false',
+        BACKUP_DIR: `${dbDir}/backups`,
       },
     },
     {

@@ -84,6 +84,14 @@ export const VISIBILITY_HINTS: Record<Visibility, string> = {
 };
 export const WALK_SOURCE_LABELS: Record<WalkSourceType, string> = { recorded: '직접 기록', imported: 'GPX 가져옴', generated: '자동 생성' };
 
+export const GOOGLE_ERRORS: Record<string, string> = {
+  google_cancelled: 'Google 로그인을 취소했어요.',
+  google_failed: 'Google 로그인에 실패했어요. 잠시 뒤 다시 시도해 주세요.',
+  google_state: '로그인 요청이 만료되었거나, 시작한 주소와 돌아온 주소가 달라요. 이 화면에서 다시 시도해 주세요.',
+  google_unavailable: '이 서버에는 Google 로그인이 설정되어 있지 않아요.',
+  google_mismatch: '로그인한 계정과 다른 Google 계정이에요. 같은 계정을 골라 주세요.',
+};
+
 export const TRAIL_VISIBILITY_LABELS: Record<TrailVisibility, string> = { public: '공개', private: '비공개' };
 export const TRAIL_DIFFICULTY_LABELS: Record<TrailDifficulty, string> = { easy: '가벼워요', moderate: '보통이에요', hard: '힘들어요' };
 export const TRAIL_FEATURE_LABELS: Record<TrailFeature, string> = {

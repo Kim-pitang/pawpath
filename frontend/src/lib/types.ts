@@ -602,6 +602,28 @@ export interface AccountUser {
   provider: 'password' | 'google';
 }
 
+export interface AccountSummary {
+  provider: 'password' | 'google';
+  /** 참이면 탈퇴 전에 본인을 다시 확인해야 한다. */
+  reauth_required: boolean;
+  session_expires_at: string;
+  session_idle_days: number;
+  data: {
+    pets: number;
+    walks: number;
+    feedback: number;
+    recommendations: number;
+    saved_walks: number;
+    photos: number;
+    personal_courses: number;
+    shared_walks: number;
+    community_trails: number;
+    trail_reviews: number;
+  };
+  /** 자동 백업을 쓰지 않으면 비어 있다. */
+  backup_retention_days: number | null;
+}
+
 export interface Account {
   authenticated: boolean;
   auth_required: boolean;
