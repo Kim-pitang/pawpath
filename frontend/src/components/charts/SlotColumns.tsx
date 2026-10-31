@@ -10,8 +10,8 @@ function slotState(slot: Slot, bestStarts: Set<string>) {
 }
 
 const COLUMN_COLOR = {
-  best: 'bg-carrot-500',
-  available: 'bg-leaf-300',
+  best: 'bg-mango-500',
+  available: 'bg-[#ecd6c1]',
   excluded: 'bg-line',
 };
 
@@ -51,13 +51,13 @@ export default function SlotColumns({ slots, bestSlots }: { slots: Slot[]; bestS
       </div>
 
       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-soft">
-        <LegendSwatch className="bg-carrot-500" label="추천 시간" />
-        <LegendSwatch className="bg-leaf-300" label="가능 시간" />
+        <LegendSwatch className="bg-mango-500" label="추천 시간" />
+        <LegendSwatch className="bg-[#ecd6c1]" label="가능 시간" />
         <LegendSwatch className="bg-line" label="날씨로 제외" />
       </div>
 
       {shown && (
-        <p className="mt-2 rounded-2xl bg-cream px-3 py-2 text-xs text-ink-soft" aria-live="polite">
+        <p className="mt-2 rounded-lg bg-cream px-3 py-2 text-xs text-ink-soft" aria-live="polite">
           <strong className="font-semibold text-ink">
             {dayLabel(shown.start)} {hourLabel(shown.start)}
           </strong>{' '}

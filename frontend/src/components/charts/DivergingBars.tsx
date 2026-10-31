@@ -19,7 +19,7 @@ export default function DivergingBars({ items, ariaLabel }: { items: DivergingIt
             <div className="relative h-3">
               <div className="absolute inset-y-[-3px] left-1/2 w-px bg-ink-muted/50" aria-hidden />
               <div
-                className={`absolute top-0 h-full ${item.value >= 0 ? 'rounded-r bg-leaf-500' : 'rounded-l bg-carrot-500'}`}
+                className={`absolute top-0 h-full ${item.value >= 0 ? 'rounded-r bg-mango-500' : 'rounded-l bg-ink-muted'}`}
                 style={item.value >= 0 ? { left: '50%', width: `${share}%` } : { right: '50%', width: `${share}%` }}
               />
             </div>

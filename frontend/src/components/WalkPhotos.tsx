@@ -58,7 +58,7 @@ export default function WalkPhotos({ walk, onChange }: { walk: SavedWalkDetail; 
                 src={api.photoUrl(walk.id, photo.id)}
                 alt={`${walk.title} 사진 ${index + 1}`}
                 loading="lazy"
-                className="aspect-square w-full rounded-2xl bg-cream-deep object-cover"
+                className="aspect-square w-full rounded-lg bg-cream-deep object-cover"
                 data-testid="walk-photo"
               />
             </a>
@@ -73,8 +73,8 @@ export default function WalkPhotos({ walk, onChange }: { walk: SavedWalkDetail; 
           </div>
         ))}
         {walk.photos.length < MAX_PHOTOS && (
-          <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed border-line text-xs font-semibold text-ink-soft hover:bg-leaf-50">
-            <ImagePlus size={20} className="text-leaf-500" aria-hidden />
+          <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-line text-xs font-semibold text-ink-soft hover:bg-leaf-50">
+            <ImagePlus size={20} className="text-mango-700" aria-hidden />
             {busy ? '올리는 중' : '사진 추가'}
             <input type="file" accept="image/*" multiple aria-label="사진 추가" className="sr-only" disabled={busy} onChange={(event) => void add(event.target.files).then(() => (event.target.value = ''))} />
           </label>

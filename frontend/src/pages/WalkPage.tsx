@@ -116,7 +116,7 @@ export default function WalkPage() {
               다녀온 코스
               <select
                 aria-label="다녀온 코스"
-                className="mt-1.5 min-h-12 w-full rounded-2xl border border-line bg-white px-3 text-base"
+                className="mt-1.5 min-h-12 w-full rounded-lg border border-line bg-white px-3 text-base"
                 value={courseId ?? ''}
                 onChange={(event) => setCourseId(Number(event.target.value) || null)}
               >
@@ -130,7 +130,7 @@ export default function WalkPage() {
             </label>
             {course && (
               <label className="mt-4 block text-sm font-semibold">
-                실제 산책 시간: <span className="text-leaf-600">{duration}분</span>
+                실제 산책 시간: <span className="text-mango-700">{duration}분</span>
                 <input
                   type="range"
                   min={5}
@@ -138,7 +138,7 @@ export default function WalkPage() {
                   step={5}
                   value={duration}
                   onChange={(event) => setDuration(Number(event.target.value))}
-                  className="mt-2 w-full accent-[var(--color-leaf-500)]"
+                  className="mt-2 w-full accent-[var(--color-mango-700)]"
                 />
               </label>
             )}
@@ -162,7 +162,7 @@ export default function WalkPage() {
                     setActiveWalk(walk);
                     setResult(null);
                   }}
-                  className="flex min-h-12 w-full items-center justify-between gap-2 rounded-2xl bg-carrot-50 px-3 text-left text-sm"
+                  className="flex min-h-12 w-full items-center justify-between gap-2 rounded-lg bg-cream-deep px-3 text-left text-sm"
                 >
                   <span className="font-semibold">{walk.course_name}</span>
                   <span className="shrink-0 text-xs font-semibold text-carrot-700">피드백 남기기</span>
@@ -225,8 +225,8 @@ function Rating({ label, value, onChange, icon }: { label: string; value: number
               aria-label={`${label} ${score}점`}
               aria-pressed={value === score}
               onClick={() => onChange(score)}
-              className={`flex h-12 flex-1 items-center justify-center rounded-2xl border transition ${
-                on ? 'border-carrot-500 bg-carrot-50 text-carrot-500' : 'border-line bg-white text-ink-muted'
+              className={`flex h-12 flex-1 items-center justify-center rounded-lg border transition ${
+                on ? 'border-ink bg-cream-deep text-ink' : 'border-line bg-white text-ink-muted'
               }`}
             >
               <Icon size={22} fill={on ? 'currentColor' : 'none'} aria-hidden />
@@ -300,7 +300,7 @@ function FeedbackForm({ walk, petName, onDone }: { walk: Walk; petName: string; 
             rows={2}
             onChange={(event) => setMemo(event.target.value)}
             placeholder="오늘 산책에서 기억하고 싶은 점"
-            className="mt-1.5 w-full rounded-2xl border border-line p-3 text-base outline-none focus:border-leaf-500"
+            className="mt-1.5 w-full rounded-lg border border-line p-3 text-base outline-none focus:border-ink"
           />
         </label>
         {error && <ErrorNotice message={error} />}
@@ -315,8 +315,8 @@ function FeedbackForm({ walk, petName, onDone }: { walk: Walk; petName: string; 
 function FeedbackResult({ feedback, petName, onSeeChange }: { feedback: Feedback; petName: string; onSeeChange: () => void }) {
   const delta = feedback.affinity_after - feedback.affinity_before;
   return (
-    <Card className="border-leaf-300 bg-leaf-50">
-      <p className="flex items-center gap-1.5 font-bold text-leaf-800">
+    <Card className="bg-cream-deep">
+      <p className="flex items-center gap-1.5 font-bold text-ink">
         <TrendingUp size={19} aria-hidden />
         {petName}의 취향을 배웠어요
       </p>

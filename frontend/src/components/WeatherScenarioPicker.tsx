@@ -18,11 +18,11 @@ export default function WeatherScenarioPicker() {
             type="button"
             aria-pressed={scenario === key}
             onClick={() => setScenario(key)}
-            className={`min-h-9 shrink-0 rounded-full border px-3.5 text-sm font-semibold transition ${
+            className={`min-h-9 shrink-0 rounded-md border px-3.5 text-sm font-semibold transition ${
               scenario === key
                 ? key === 'live'
-                  ? 'border-leaf-500 bg-leaf-500 text-white'
-                  : 'border-carrot-500 bg-carrot-500 text-white'
+                  ? 'border-mango-500 bg-cream-deep text-ink'
+                  : 'border-mango-500 bg-cream-deep text-ink'
                 : 'border-line bg-white text-ink-soft'
             }`}
           >

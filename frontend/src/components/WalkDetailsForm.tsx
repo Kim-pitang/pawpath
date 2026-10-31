@@ -11,7 +11,7 @@ export interface WalkDetailsValue {
   shareMemo: boolean;
 }
 
-const INPUT_CLASS = 'mt-1.5 min-h-12 w-full rounded-2xl border border-line bg-white px-4 text-base outline-none focus:border-leaf-500';
+const INPUT_CLASS = 'mt-1.5 min-h-12 w-full rounded-lg border border-line bg-white px-4 text-base outline-none focus:border-ink';
 const VISIBILITY_OPTIONS = (Object.keys(VISIBILITY_LABELS) as Visibility[]).map((value) => ({ value, label: VISIBILITY_LABELS[value] }));
 
 export const PRIVACY_WARNING = 'GPS 경로에는 집 주소 같은 민감한 위치가 드러날 수 있어요. 출발점과 도착점을 확인한 뒤 공유해 주세요.';
@@ -41,7 +41,7 @@ export default function WalkDetailsForm({ value, onChange }: { value: WalkDetail
       <label className="text-sm font-semibold">
         산책 메모
         <textarea
-          className="mt-1.5 min-h-24 w-full rounded-2xl border border-line bg-white p-4 text-base outline-none focus:border-leaf-500"
+          className="mt-1.5 min-h-24 w-full rounded-lg border border-line bg-white p-4 text-base outline-none focus:border-ink"
           value={value.memo}
           maxLength={1000}
           onChange={(event) => update('memo', event.target.value)}
@@ -54,7 +54,7 @@ export default function WalkDetailsForm({ value, onChange }: { value: WalkDetail
       {value.visibility !== 'private' && (
         <>
           <label className="flex min-h-11 items-center gap-2 text-sm font-semibold">
-            <input type="checkbox" className="h-5 w-5 accent-leaf-500" checked={value.shareMemo} onChange={(event) => update('shareMemo', event.target.checked)} />
+            <input type="checkbox" className="h-5 w-5 accent-mango-700" checked={value.shareMemo} onChange={(event) => update('shareMemo', event.target.checked)} />
             공유 화면에 메모도 보여 주기
           </label>
           <ErrorNotice message={PRIVACY_WARNING} />

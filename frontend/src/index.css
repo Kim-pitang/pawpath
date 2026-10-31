@@ -7,8 +7,15 @@
   --font-sans: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
   --font-brand: 'Jua', 'Pretendard Variable', sans-serif;
 
-  --color-cream: #fff8ec;
-  --color-cream-deep: #fbeeda;
+  /* mungo 브랜드 색. cream은 페이지 바탕, cream-deep은 연한 살구(선택 영역, 보조 버튼). */
+  --color-cream: #fdf7ee;
+  --color-cream-deep: #fbe4cf;
+  --color-peach-deep: #f6d4b4;
+
+  /* 멍고 오렌지는 면(버튼, 추천 시간)에만 칠한다. 글자와 아이콘은 대비가 나오는 700을 쓴다. */
+  --color-mango-500: #f28b38;
+  --color-mango-600: #ec8230;
+  --color-mango-700: #9e4c0c;
 
   --color-leaf-50: #ebf6f0;
   --color-leaf-100: #d3ecdf;
@@ -26,10 +33,10 @@
   --color-sky-500: #3f7cc4;
   --color-plum-500: #a0569e;
 
-  --color-ink: #2d2a24;
-  --color-ink-soft: #5f5b50;
-  --color-ink-muted: #827d6f;
-  --color-line: #eee5d4;
+  --color-ink: #422d21;
+  --color-ink-soft: #735f52;
+  --color-ink-muted: #806b5d;
+  --color-line: #eadbc8;
 }
 
 html {
@@ -55,8 +62,148 @@ button:not(:disabled) {
 }
 
 :focus-visible {
-  outline: 2px solid var(--color-leaf-500);
+  outline: 2px solid var(--color-ink);
   outline-offset: 2px;
+}
+
+/* 카드가 차례로 살짝 떠오르며 나타난다. 강한 ease-out, 300ms 미만, transform과 opacity만 쓴다. */
+@keyframes pp-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.pp-rise {
+  animation: pp-rise 240ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+/* 아래에서 올라오는 시트와 뒤의 어두운 막. 시트는 iOS 시트와 비슷한 감속 곡선을 쓴다. */
+@keyframes pp-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes pp-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.pp-sheet {
+  animation: pp-sheet-in 260ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+.pp-scrim {
+  animation: pp-fade-in 200ms ease-out both;
+}
+
+/* 작은 메뉴가 누른 자리에서 커지며 나타난다. transform-origin은 쓰는 쪽에서 정한다. */
+@keyframes pp-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.pp-pop {
+  animation: pp-pop-in 180ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+/* 홈 말풍선 제목. 이름표 쪽(왼쪽 위)에서 살짝 커지며 나타난다. */
+@keyframes pp-bubble-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.pp-bubble {
+  transform-origin: left top;
+  animation: pp-bubble-in 220ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+/* 홈 시간표 막대가 바닥에서 자라며 나타난다. */
+@keyframes pp-bar-grow {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: none;
+  }
+}
+
+.pp-bar {
+  transform-origin: bottom center;
+  animation: pp-bar-grow 280ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+/* 고른 값이 바뀔 때 살짝 내려오며 바뀐다. */
+@keyframes pp-swap-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.pp-swap {
+  animation: pp-swap-in 180ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+/* 누르는 순간 살짝 줄어드는 반응. */
+.pp-press {
+  transition:
+    transform 160ms ease-out,
+    background-color 150ms ease-out,
+    color 150ms ease-out;
+}
+
+.pp-press:active {
+  transform: scale(0.94);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pp-rise {
+    animation: none;
+  }
+
+  .pp-sheet {
+    animation: pp-fade-in 150ms ease-out both;
+  }
+
+  .pp-pop,
+  .pp-bubble,
+  .pp-bar,
+  .pp-swap {
+    animation: none;
+  }
+
+  .pp-press:active {
+    transform: none;
+  }
 }
 
 .font-brand {

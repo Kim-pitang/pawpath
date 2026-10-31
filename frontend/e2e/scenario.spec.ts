@@ -9,15 +9,16 @@ async function chooseScenario(page: Page, name: string) {
 
 test.describe.configure({ mode: 'serial' });
 
-test('메인 화면에 브랜드와 핵심 정보가 표시된다', async ({ page }) => {
+test('메인 화면이 오늘의 산책 시간과 코스를 먼저 보여 준다', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'PawPath', level: 1 })).toBeVisible();
-  await expect(page.getByText('Every Paw Deserves a Perfect Path.')).toBeVisible();
-  await expect(page.getByText('AI-Powered Personalized Pet Walking Recommendation')).toBeVisible();
-  await expect(page.getByText('말티즈 · 5세 · 4.2kg')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'mungo 홈' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('두부 산책은');
+  await expect(page.getByRole('link', { name: '두부 프로필 보기: 말티즈, 5세, 4.2kg, 소심함' })).toBeVisible();
   await expect(page.getByText('16시 ~ 20시')).toBeVisible();
+  await expect(page.getByRole('group', { name: '시간대별 산책 점수' })).toBeVisible();
   await expect(page.getByText('출처: 모의 날씨')).toBeVisible();
-  await expect(page.getByRole('link', { name: '추천 시작' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '이 코스로 산책' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '추천 자세히' })).toBeVisible();
 });
 
 test('최종 검증 시나리오: 추천, 산책, 5점 피드백, 다음 추천 반영', async ({ page }) => {

@@ -61,7 +61,7 @@ export default function ReportPage() {
             aria-pressed={weekOffset === option.offset}
             onClick={() => setWeekOffset(option.offset)}
             className={`min-h-9 rounded-full border px-3.5 text-sm font-semibold ${
-              weekOffset === option.offset ? 'border-leaf-500 bg-leaf-500 text-white' : 'border-line bg-white text-ink-soft'
+              weekOffset === option.offset ? 'border-mango-500 bg-cream-deep text-ink' : 'border-line bg-white text-ink-soft'
             }`}
           >
             {option.label}
@@ -151,7 +151,7 @@ function Stat({ label, value, change, unit }: { label: string; value: string; ch
   const Icon = difference > 0 ? ArrowUp : difference < 0 ? ArrowDown : Minus;
   const size = Math.abs(difference);
   return (
-    <div className="rounded-3xl border border-line bg-white p-4">
+    <div className="rounded-xl border border-line bg-white p-4">
       <p className="text-xs text-ink-muted">{label}</p>
       <p className="mt-1 text-xl font-bold">{value}</p>
       {change && (

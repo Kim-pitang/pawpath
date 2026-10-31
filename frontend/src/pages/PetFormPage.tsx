@@ -56,7 +56,7 @@ const EMPTY_FORM: FormState = {
   preferred_time_bucket: 'any',
 };
 
-const INPUT_CLASS = 'mt-1.5 min-h-12 w-full rounded-2xl border border-line bg-white px-4 text-base outline-none focus:border-leaf-500';
+const INPUT_CLASS = 'mt-1.5 min-h-12 w-full rounded-lg border border-line bg-white px-4 text-base outline-none focus:border-ink';
 
 export default function PetFormPage() {
   const { petId } = useParams();

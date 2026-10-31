@@ -14,7 +14,7 @@ const SORT_OPTIONS: { value: SavedWalkSort; label: string }[] = [
   { value: 'recent', label: '최근 기록순' },
   { value: 'distance', label: '거리순' },
 ];
-const FILTER_CLASS = 'min-h-11 w-full rounded-2xl border border-line bg-white px-3 text-sm';
+const FILTER_CLASS = 'min-h-11 w-full rounded-lg border border-line bg-white px-3 text-sm';
 
 export default function MyWalksPage() {
   const { pets } = useApp();
@@ -94,7 +94,7 @@ export default function MyWalksPage() {
         <ul className="flex flex-col gap-3" aria-label="나의 산책길 목록">
           {walks.map((walk) => (
             <li key={walk.id}>
-              <Link to={`/my-walks/${walk.id}`} className="flex items-center gap-3 rounded-3xl border border-line bg-white p-3 transition hover:bg-leaf-50" data-testid="saved-walk-card">
+              <Link to={`/my-walks/${walk.id}`} className="flex items-center gap-3 rounded-xl border border-line bg-white p-3 transition hover:bg-cream" data-testid="saved-walk-card">
                 <RouteThumbnail segments={walk.preview} label={`${walk.title} 경로`} />
                 <div className="min-w-0 flex-1">
                   <h2 className="truncate font-bold">{walk.title}</h2>
@@ -116,7 +116,7 @@ export default function MyWalksPage() {
         </ul>
       )}
 
-      <Link to="/public-walks" className="flex min-h-11 items-center justify-center gap-1.5 text-sm font-semibold text-leaf-800 underline">
+      <Link to="/public-walks" className="flex min-h-11 items-center justify-center gap-1.5 text-sm font-semibold text-mango-700 underline">
         <Globe size={16} aria-hidden />
         공개된 산책길 둘러보기
       </Link>

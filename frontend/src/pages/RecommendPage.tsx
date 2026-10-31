@@ -7,27 +7,26 @@ import {
   Home as HomeIcon,
   Map as MapIcon,
   RefreshCw,
-  Route,
   ShieldCheck,
-  Thermometer,
   TrendingUp,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import HBarChart from '../components/charts/HBarChart';
 import SlotColumns from '../components/charts/SlotColumns';
+import RouteThumbnail from '../components/RouteThumbnail';
 import SafetyPanel from '../components/SafetyPanel';
 import { Button, Card, Chip, EmptyState, ErrorNotice, InfoNotice, LinkButton, Loading, PageTitle, SectionTitle } from '../components/ui';
 import WeatherScenarioPicker from '../components/WeatherScenarioPicker';
 import { useApp } from '../context/AppContext';
 import { api } from '../lib/api';
-import { signed, slotRange } from '../lib/format';
+import { dayLabel, signed, slotRange } from '../lib/format';
 import { CROWD_LABELS, FACILITY_LABELS, WEATHER_SOURCE_LABELS } from '../lib/labels';
-import type { Recommendation, RecommendedCourse } from '../lib/types';
+import type { Course, Recommendation, RecommendedCourse } from '../lib/types';
 
 const RANK_BADGE: Record<number, string> = {
-  1: 'bg-leaf-500',
-  2: 'bg-carrot-500',
+  1: 'bg-mango-700',
+  2: 'bg-leaf-500',
   3: 'bg-sky-500',
 };
 
@@ -35,7 +34,16 @@ export default function RecommendPage() {
   const { selectedPet, petsLoaded, scenario, loadRecommendation, cachedRecommendation, replaceRecommendation } = useApp();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [routes, setRoutes] = useState<Record<number, Course['route']>>({});
   const petId = selectedPet?.id;
+
+  // 카드에 코스 모양을 그리려고 경로를 한 번 받아 둔다. 실패해도 카드는 빈 그림으로 그대로 보인다.
+  useEffect(() => {
+    api
+      .listCourses()
+      .then((list) => setRoutes(Object.fromEntries(list.map((item) => [item.id, item.route]))))
+      .catch(() => undefined);
+  }, []);
 
   const load = useCallback(
     async (force: boolean) => {
@@ -111,10 +119,16 @@ export default function RecommendPage() {
           <TimeSection result={result} />
           {result.walkable ? (
             <section aria-label="추천 코스 TOP 3" className="flex flex-col gap-4">
-              <h2 className="font-brand text-xl text-leaf-800">추천 코스 TOP 3</h2>
+              <h2 className="text-lg font-bold text-ink">추천 코스 TOP 3</h2>
               <div className="grid items-start gap-4 lg:grid-cols-3">
                 {result.courses.map((course) => (
-                  <CourseCard key={course.course_id} course={course} recommendationId={result.id} explanationStatus={result.explanation_engine?.status} />
+                  <CourseCard
+                    key={course.course_id}
+                    course={course}
+                    route={routes[course.course_id] ?? []}
+                    recommendationId={result.id}
+                    explanationStatus={result.explanation_engine?.status}
+                  />
                 ))}
               </div>
               <ExcludedCourses result={result} />
@@ -151,9 +165,9 @@ function TimeSection({ result }: { result: Recommendation }) {
       {best.length > 0 ? (
         <ul className="mb-4 flex flex-col gap-2">
           {best.map((slot) => (
-            <li key={slot.start} className="rounded-2xl bg-carrot-50 p-3">
+            <li key={slot.start} className="rounded-lg bg-cream-deep p-3">
               <p className="flex items-center gap-1.5 font-bold text-ink">
-                <Clock size={17} className="text-carrot-500" aria-hidden />
+                <Clock size={17} className="text-ink-soft" aria-hidden />
                 {slotRange(slot.start, slot.end)}
               </p>
               <p className="mt-1 text-sm text-ink-soft">
@@ -176,7 +190,7 @@ function TimeSection({ result }: { result: Recommendation }) {
 function ExcludedCourses({ result }: { result: Recommendation }) {
   if (result.excluded_courses.length === 0) return null;
   return (
-    <details className="rounded-2xl border border-line bg-white p-3 text-sm" data-testid="excluded-courses">
+    <details className="rounded-lg border border-line bg-white p-3 text-sm" data-testid="excluded-courses">
       <summary className="cursor-pointer font-semibold text-ink-soft">
         위험 조건으로 제외한 코스 {result.excluded_courses.length}곳
       </summary>
@@ -200,10 +214,12 @@ function ReasonSource({ course, status }: { course: RecommendedCourse; status?: 
 
 function CourseCard({
   course,
+  route,
   recommendationId,
   explanationStatus,
 }: {
   course: RecommendedCourse;
+  route: [number, number][];
   recommendationId: number;
   explanationStatus?: Recommendation['explanation_engine']['status'];
 }) {
@@ -215,75 +231,61 @@ function CourseCard({
   const disclaimer = course.cautions[course.cautions.length - 1];
   // 다녀오지 않은 코스의 작은 감소는 가중치 이동에 따른 것이라 표시하지 않는다.
   const showLearning = course.feedback_count > 0 ? course.learning_delta !== 0 : course.learning_delta >= 0.5;
+  const primary = course.rank === 1;
 
+  // 경로 티켓: 코스 모양이 카드의 얼굴이고, 아래 띠가 출발 시각을 표처럼 보여 준다.
   return (
-    <Card className={course.rank === 1 ? 'border-leaf-300' : ''}>
-      <article data-testid={`course-card-${course.rank}`}>
-        <div className="flex items-start gap-3">
-          <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-brand text-lg text-white ${RANK_BADGE[course.rank]}`}>
+    <article
+      data-testid={`course-card-${course.rank}`}
+      className={`pp-rise overflow-hidden rounded-xl border bg-white ${primary ? 'border-mango-500' : 'border-line'}`}
+      style={{ animationDelay: `${(course.rank - 1) * 60}ms` }}
+    >
+      <div className="flex gap-4 p-4 pb-0">
+        <div className="relative shrink-0">
+          <RouteThumbnail segments={route.length > 1 ? [route] : []} size={96} label={`${course.name} 경로 모양`} />
+          <span
+            className={`absolute -top-1.5 -left-1.5 flex h-7 w-7 items-center justify-center rounded-full font-brand text-sm text-white ${RANK_BADGE[course.rank]}`}
+          >
             {course.rank}
           </span>
-          <div className="min-w-0 flex-1">
-            <h3 className="font-bold leading-snug">{course.name}</h3>
-            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-ink-soft">
-              <span className="flex items-center gap-0.5"><Route size={13} aria-hidden />{course.distance_km.toFixed(1)}km</span>
-              <span className="flex items-center gap-0.5"><Footprints size={13} aria-hidden />약 {course.duration_min}분</span>
-            </p>
-          </div>
-          <div className="shrink-0 text-right">
-            <p className="text-2xl font-bold leading-none text-ink">{course.total_score.toFixed(1)}</p>
-            <p className="text-[11px] text-ink-muted">추천 점수</p>
-          </div>
         </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-lg font-bold leading-snug text-ink">{course.name}</h3>
+          <p className="mt-0.5 text-sm tabular-nums text-ink-soft">
+            {course.distance_km.toFixed(2)}km · 약 {course.duration_min}분 ·{' '}
+            <span className="font-semibold text-ink">{course.total_score.toFixed(1)}점</span>
+          </p>
+          {(showLearning || course.rank_change > 0) && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {showLearning && (
+                <Chip tone={course.learning_delta > 0 ? 'leaf' : 'carrot'}>
+                  <TrendingUp size={13} aria-hidden />
+                  학습 효과 {signed(course.learning_delta)}점
+                </Chip>
+              )}
+              {course.rank_change > 0 && (
+                <Chip tone="leaf">
+                  <ArrowUp size={13} aria-hidden />
+                  학습 전보다 {course.rank_change}계단 상승
+                </Chip>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
 
-        {(showLearning || course.rank_change > 0) && (
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {showLearning && (
-              <Chip tone={course.learning_delta > 0 ? 'leaf' : 'carrot'}>
-                <TrendingUp size={13} aria-hidden />
-                학습 효과 {signed(course.learning_delta)}점
-              </Chip>
-            )}
-            {course.rank_change > 0 && (
-              <Chip tone="leaf">
-                <ArrowUp size={13} aria-hidden />
-                학습 전보다 {course.rank_change}계단 상승
-              </Chip>
-            )}
-          </div>
-        )}
-
-        <p className="mt-3 rounded-2xl bg-leaf-50 p-3 text-sm font-medium leading-relaxed text-leaf-800" data-testid="reason-summary">
+      <div className="px-4 pt-3 pb-4">
+        <p className="text-sm leading-relaxed text-ink" data-testid="reason-summary">
           {course.reason.llm_summary ?? course.reason.summary}
         </p>
         <ReasonSource course={course} status={explanationStatus} />
-
-        <dl className="mt-3 flex flex-col gap-1.5 text-sm">
-          <InfoRow icon={<Clock size={15} />} label="추천 시간">{slotRange(time.start, time.end)}</InfoRow>
-          <InfoRow icon={<Thermometer size={15} />} label="날씨">
-            체감 {time.weather.apparent_temperature.toFixed(0)}°C · 강수 {time.weather.precipitation_probability.toFixed(0)}% · 바람{' '}
-            {time.weather.wind_speed.toFixed(1)}m/s
-          </InfoRow>
-          <InfoRow icon={<ShieldCheck size={15} />} label="코스 정보">
-            {[
-              course.safety.has_park ? '공원 포함' : '공원 없음',
-              `노면: ${course.safety.surface_note}(추정)`,
-              `혼잡도 ${CROWD_LABELS[course.safety.crowd_level]}(추정)`,
-            ].join(' · ')}
-          </InfoRow>
-          {facilities.length > 0 && (
-            <InfoRow icon={<MapIcon size={15} />} label="확인된 시설">
-              {facilities.map(([type, count]) => `${FACILITY_LABELS[type] ?? type} ${count}`).join(' · ')}
-            </InfoRow>
-          )}
-        </dl>
 
         <div className="mt-3">
           <SafetyPanel assessment={course.safety_assessment} />
         </div>
 
         {course.alternative && (
-          <p className="mt-2 rounded-2xl bg-leaf-50 px-3 py-2 text-sm text-leaf-800">
+          <p className="mt-2 rounded-lg bg-cream-deep px-3 py-2 text-sm text-ink">
             더 안전한 대체 코스:{' '}
             <Link to={`/map?course=${course.alternative.course_id}`} className="font-bold underline">
               {course.alternative.name}
@@ -293,7 +295,7 @@ function CourseCard({
         )}
 
         {cautions.length > 0 && (
-          <ul className="mt-3 flex flex-col gap-1.5 rounded-2xl bg-carrot-50 p-3 text-sm text-carrot-700">
+          <ul className="mt-3 flex flex-col gap-1.5 rounded-lg bg-[#fffbeb] p-3 text-sm text-[#92400e]">
             {cautions.map((caution) => (
               <li key={caution} className="flex items-start gap-1.5">
                 <AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden />
@@ -307,13 +309,27 @@ function CourseCard({
           type="button"
           aria-expanded={open}
           onClick={() => setOpen((value) => !value)}
-          className="mt-3 flex min-h-10 w-full items-center justify-between text-sm font-semibold text-ink-soft"
+          className="mt-2 -mb-2 flex min-h-10 w-full items-center justify-between text-sm font-semibold text-ink-soft hover:text-ink"
         >
           점수 근거 보기
-          <ChevronDown size={18} className={`transition ${open ? 'rotate-180' : ''}`} aria-hidden />
+          <ChevronDown size={18} className={`transition-transform duration-200 ease-out ${open ? 'rotate-180' : ''}`} aria-hidden />
         </button>
         {open && (
-          <div className="mt-2 flex flex-col gap-3">
+          <div className="mt-3 flex flex-col gap-3">
+            <dl className="flex flex-col gap-1.5 text-sm">
+              <InfoRow icon={<ShieldCheck size={15} />} label="코스 정보">
+                {[
+                  course.safety.has_park ? '공원 포함' : '공원 없음',
+                  `노면: ${course.safety.surface_note}(추정)`,
+                  `혼잡도 ${CROWD_LABELS[course.safety.crowd_level]}(추정)`,
+                ].join(' · ')}
+              </InfoRow>
+              {facilities.length > 0 && (
+                <InfoRow icon={<MapIcon size={15} />} label="확인된 시설">
+                  {facilities.map(([type, count]) => `${FACILITY_LABELS[type] ?? type} ${count}`).join(' · ')}
+                </InfoRow>
+              )}
+            </dl>
             <HBarChart
               ariaLabel="항목별 점수"
               items={course.score_breakdown.map((group) => ({
@@ -333,19 +349,44 @@ function CourseCard({
           </div>
         )}
 
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <LinkButton to={`/map?course=${course.course_id}`} variant="ghost" className="whitespace-nowrap !px-2">
-            <MapIcon size={16} aria-hidden />
-            지도 보기
-          </LinkButton>
-          <LinkButton to={`/navigate?course=${course.course_id}&recommendation=${recommendationId}`} variant={course.rank === 1 ? 'primary' : 'ghost'} className="whitespace-nowrap !px-2">
-            <Footprints size={16} aria-hidden />
-            이 코스로 산책
-          </LinkButton>
+      </div>
+
+      <div className={`flex items-center gap-3 px-4 py-3 ${primary ? 'bg-mango-500' : 'bg-cream-deep'}`}>
+        <div className="min-w-0 flex-1">
+          <p className="text-2xl font-bold leading-none tabular-nums text-ink">
+            <span className="mr-1 text-sm font-semibold">{dayLabel(time.start)}</span>
+            {clockLabel(time.start)}
+            <span className="ml-1 text-sm font-semibold">출발</span>
+          </p>
+          <p className="mt-1 text-xs tabular-nums text-ink">
+            체감 {time.weather.apparent_temperature.toFixed(0)}° · 강수 {time.weather.precipitation_probability.toFixed(0)}% · 바람{' '}
+            {time.weather.wind_speed.toFixed(1)}m/s
+          </p>
         </div>
-      </article>
-    </Card>
+        <Link
+          to={`/map?course=${course.course_id}`}
+          aria-label="지도 보기"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/70 text-ink transition-[background-color,transform] hover:bg-white active:scale-95"
+        >
+          <MapIcon size={18} aria-hidden />
+        </Link>
+        <Link
+          to={`/navigate?course=${course.course_id}&recommendation=${recommendationId}`}
+          aria-label="이 코스로 산책"
+          className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-ink px-4 text-sm font-bold text-white transition-[background-color,transform] hover:bg-black active:scale-[0.97]"
+        >
+          <Footprints size={15} aria-hidden />
+          산책
+        </Link>
+      </div>
+    </article>
   );
+}
+
+/** "7:00", "17:30"처럼 시각만 짧게. */
+function clockLabel(iso: string): string {
+  const date = new Date(iso);
+  return `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
 function InfoRow({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
@@ -365,7 +406,7 @@ function IndoorCard({ result }: { result: Recommendation }) {
     <Card className="border-carrot-100">
       <SectionTitle>
         <span className="flex items-center gap-1.5">
-          <HomeIcon size={18} className="text-carrot-500" aria-hidden />
+          <HomeIcon size={18} className="text-ink-soft" aria-hidden />
           오늘은 실내 놀이를 추천해요
         </span>
       </SectionTitle>
@@ -374,7 +415,7 @@ function IndoorCard({ result }: { result: Recommendation }) {
       )}
       <ul className="flex flex-col gap-2 text-sm text-ink">
         {result.indoor_alternatives.map((tip) => (
-          <li key={tip} className="rounded-2xl bg-cream p-3">{tip}</li>
+          <li key={tip} className="rounded-lg bg-cream p-3">{tip}</li>
         ))}
       </ul>
       <p className="mt-3 text-xs text-ink-muted">{result.disclaimer}</p>

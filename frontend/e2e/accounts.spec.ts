@@ -19,6 +19,12 @@ const GPX = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" xmlns="htt
 
 const newId = () => `user${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
+/** 머리글 계정 메뉴를 열고 로그인 화면으로 간다. */
+async function openLogin(page: Page) {
+  await page.locator('header').getByRole('button', { name: /계정 메뉴/ }).click();
+  await page.locator('header').getByRole('link', { name: '로그인 또는 회원가입' }).click();
+}
+
 async function signUpInBrowser(page: Page, loginId: string, name = '새 보호자') {
   await page.goto('/login');
   await page.getByRole('button', { name: '회원가입' }).click();
@@ -63,14 +69,14 @@ test.describe('계정', () => {
   test('가입하면 빈 계정으로 시작하고, 시연 보호자의 데이터와 섞이지 않는다', async ({ page, request }) => {
     const demo = await guestWalk(request);
     await page.goto('/');
-    await page.locator('header').getByRole('link', { name: '로그인' }).click();
+    await openLogin(page);
     await expect(page).toHaveURL(/\/login$/);
     await expect(page.getByRole('link', { name: '로그인하지 않고 시연 보호자로 둘러보기' })).toBeVisible();
     await signUpInBrowser(page, newId());
 
     await expect(page).toHaveURL(/\/$/);
     await expect(page.getByText('아직 등록된 반려동물이 없어요')).toBeVisible();
-    await expect(page.locator('header').getByRole('link', { name: '로그인' })).toHaveCount(0);
+    await expect(page.locator('header').getByRole('button', { name: '계정 메뉴, 새 보호자' })).toBeVisible();
     expect(await (await page.request.get('/api/pets')).json()).toEqual([]);
     expect((await page.request.get(`/api/my-walks/${demo.id}`)).status()).toBe(404);
 
@@ -83,8 +89,8 @@ test.describe('계정', () => {
     await page.getByRole('button', { name: '로그아웃' }).click();
     await expect(page).toHaveURL(/\/$/);
     // 로그아웃하면 다시 시연 보호자로 돌아간다.
-    await expect(page.locator('header').getByRole('link', { name: '두부' })).toBeVisible();
-    await expect(page.locator('header').getByRole('link', { name: '로그인' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('두부');
+    await expect(page.locator('header').getByRole('button', { name: '계정 메뉴, 시연 보호자' })).toBeVisible();
   });
 
   test('비밀번호가 틀리면 알리고, 맞으면 원래 가려던 화면으로 간다', async ({ page }) => {
@@ -93,7 +99,7 @@ test.describe('계정', () => {
     await page.request.post('/api/auth/logout');
 
     await page.goto('/my-walks');
-    await page.locator('header').getByRole('link', { name: '로그인' }).click();
+    await openLogin(page);
     await page.getByLabel('아이디').fill(loginId.toUpperCase());
     await page.getByLabel('비밀번호').fill('wrong-password');
     await page.getByRole('button', { name: '로그인하기' }).click();
@@ -124,7 +130,7 @@ test.describe('계정', () => {
     await expect(page).toHaveURL(/\/$/);
     expect((await page.request.post('/api/pets', { data: PET })).status()).toBe(201);
     await page.reload();
-    await expect(page.locator('header').getByRole('link', { name: '콩' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('콩');
 
     // 서버에서 세션을 끝내 만료된 상황을 만든다. 브라우저에는 이제 쓸 수 없는 쿠키가 남아 있다.
     const token = (await context.cookies()).find((cookie) => cookie.name === 'pawpath_session')!.value;
@@ -134,7 +140,7 @@ test.describe('계정', () => {
     await expect(banner).toContainText('로그인이 만료되었어요');
     // 시연 보호자로 돌아간 뒤에는 이전 오류가 남지 않는다.
     await expect(page.getByRole('alert')).toHaveCount(1);
-    await expect(page.locator('header').getByRole('link', { name: '콩' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('두부');
     await banner.getByRole('link', { name: '로그인' }).click();
     await expect(page).toHaveURL(/\/login$/);
     await expect(page.getByRole('alert')).toContainText('로그인이 만료되었어요');
@@ -237,7 +243,7 @@ test.describe('Google 로그인', () => {
 
   test('Google로 계속하기는 PKCE와 state를 붙여 Google 로그인 화면으로 보낸다', async ({ page }) => {
     await page.goto('/my-walks');
-    await page.locator('header').getByRole('link', { name: '로그인' }).click();
+    await openLogin(page);
     const button = page.getByRole('link', { name: 'Google로 계속하기' });
     await expect(button).toHaveAttribute('href', '/api/auth/google/start?next=%2Fmy-walks');
 

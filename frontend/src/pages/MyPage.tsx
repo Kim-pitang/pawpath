@@ -196,7 +196,7 @@ export default function MyPage() {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-3xl border border-line bg-white p-4">
+    <div className="rounded-xl border border-line bg-white p-4">
       <p className="text-xs text-ink-muted">{label}</p>
       <p className="mt-1 text-xl font-bold">{value}</p>
     </div>

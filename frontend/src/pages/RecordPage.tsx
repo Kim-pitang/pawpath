@@ -151,7 +151,7 @@ export default function RecordPage() {
         )}
       </div>
 
-      <div className="z-10 flex flex-col gap-3 rounded-t-3xl border-t border-line bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+      <div className="z-10 flex flex-col gap-3 rounded-t-xl border-t border-line bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         {gpsMessage && <ErrorNotice message={gpsMessage} />}
         {restored && recording && status === 'paused' && (
           <InfoNotice>저장하지 않은 기록을 불러왔어요. 화면을 닫은 동안의 이동은 기록되지 않았어요.</InfoNotice>
@@ -265,11 +265,11 @@ function SaveStep({ recording, segments, onResume, onDiscard }: { recording: Rec
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-4 bg-cream p-4">
-      <h1 className="flex items-center gap-2 font-brand text-2xl text-leaf-800">
-        <PawPrint size={22} className="text-carrot-500" aria-hidden />
+      <h1 className="flex items-center gap-2 text-2xl font-bold text-ink">
+        <PawPrint size={22} className="text-ink-soft" aria-hidden />
         산책 저장
       </h1>
-      <div className="h-56 overflow-hidden rounded-3xl border border-line">
+      <div className="h-56 overflow-hidden rounded-xl border border-line">
         <WalkRouteMap segments={segments} />
       </div>
       <Card>

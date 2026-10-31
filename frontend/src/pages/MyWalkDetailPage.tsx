@@ -83,7 +83,7 @@ export default function MyWalkDetailPage() {
       {error && <ErrorNotice message={error} />}
       {photoFailures > 0 && <ErrorNotice message={`사진 ${photoFailures}장을 올리지 못했어요. 아래 사진 칸에서 다시 추가해 주세요.`} />}
 
-      <div className="h-72 overflow-hidden rounded-3xl border border-line md:h-96">
+      <div className="h-72 overflow-hidden rounded-xl border border-line md:h-96">
         <WalkRouteMap segments={route} />
       </div>
 
@@ -99,7 +99,7 @@ export default function MyWalkDetailPage() {
           {walk.pet_name && <Chip>{walk.pet_name}</Chip>}
           <Chip>지점 {walk.point_count.toLocaleString()}개</Chip>
         </div>
-        {walk.memo && <p className="mt-3 whitespace-pre-wrap rounded-2xl bg-cream p-3 text-sm text-ink-soft">{walk.memo}</p>}
+        {walk.memo && <p className="mt-3 whitespace-pre-wrap rounded-lg bg-cream p-3 text-sm text-ink-soft">{walk.memo}</p>}
       </Card>
 
       <WalkPhotos walk={walk} onChange={setWalk} />
@@ -107,7 +107,7 @@ export default function MyWalkDetailPage() {
       <a
         href={api.savedWalkGpxUrl(id)}
         download
-        className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-leaf-500 px-5 text-sm font-bold text-white transition hover:bg-leaf-600"
+        className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-mango-500 px-5 text-sm font-bold text-ink transition hover:bg-mango-600"
       >
         <Download size={18} aria-hidden />
         GPX 다운로드
@@ -193,7 +193,7 @@ function SharePanel({ walk, onChange, onError }: { walk: SavedWalkDetail; onChan
   const nativeShare = async () => {
     if (!url) return;
     try {
-      await navigator.share({ title: `PawPath 산책길: ${walk.title}`, url });
+      await navigator.share({ title: `mungo 산책길: ${walk.title}`, url });
     } catch {
       // 사용자가 공유 창을 닫은 경우다.
     }
@@ -206,7 +206,7 @@ function SharePanel({ walk, onChange, onError }: { walk: SavedWalkDetail; onChan
         <ErrorNotice message={PRIVACY_WARNING} />
         {url ? (
           <>
-            <input aria-label="공유 링크" readOnly value={url} onFocus={(event) => event.target.select()} className="min-h-11 w-full rounded-2xl border border-line bg-cream px-3 text-xs" />
+            <input aria-label="공유 링크" readOnly value={url} onFocus={(event) => event.target.select()} className="min-h-11 w-full rounded-lg border border-line bg-cream px-3 text-xs" />
             {walk.share_expires_at && <p className="text-xs text-ink-muted">{dateTimeLabel(walk.share_expires_at)}까지 열려요.</p>}
             {copied && <InfoNotice>링크를 복사했어요.</InfoNotice>}
             <div className="grid grid-cols-2 gap-2">
@@ -222,7 +222,7 @@ function SharePanel({ walk, onChange, onError }: { walk: SavedWalkDetail; onChan
               ) : (
                 <Link
                   to={`/shared/${walk.share_token}`}
-                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-line bg-white px-5 text-sm font-bold text-ink hover:bg-cream"
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border border-line bg-white px-5 text-sm font-bold text-ink hover:bg-cream"
                 >
                   공유 화면 보기
                 </Link>
@@ -238,7 +238,7 @@ function SharePanel({ walk, onChange, onError }: { walk: SavedWalkDetail; onChan
             {expired && <InfoNotice>공유 기간이 끝났어요. 새 링크를 만들면 예전 링크는 다시 열리지 않아요.</InfoNotice>}
             <ChoiceGroup label="링크 사용 기간" value={expiry} options={EXPIRY_OPTIONS} onChange={setExpiry} />
             <label className="flex min-h-11 items-center gap-2 text-sm font-semibold">
-              <input type="checkbox" className="h-5 w-5 accent-leaf-500" checked={shareMemo} onChange={(event) => setShareMemo(event.target.checked)} />
+              <input type="checkbox" className="h-5 w-5 accent-mango-700" checked={shareMemo} onChange={(event) => setShareMemo(event.target.checked)} />
               공유 화면에 메모도 보여 주기
             </label>
             <Button disabled={working} onClick={() => run(() => api.shareSavedWalk(walk.id, { expires_in_days: expiry || null, share_memo: shareMemo }))}>

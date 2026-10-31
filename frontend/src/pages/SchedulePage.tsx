@@ -8,7 +8,7 @@ import { windowLabel } from '../lib/format';
 import { SCHEDULE_PRESETS } from '../lib/labels';
 import type { TimeWindow } from '../lib/types';
 
-const SELECT_CLASS = 'min-h-12 flex-1 rounded-2xl border border-line bg-white px-3 text-base';
+const SELECT_CLASS = 'min-h-12 flex-1 rounded-lg border border-line bg-white px-3 text-base';
 const hasWindow = (windows: TimeWindow[], target: TimeWindow) =>
   windows.some((window) => window.start_hour === target.start_hour && window.end_hour === target.end_hour);
 
@@ -85,8 +85,8 @@ export default function SchedulePage() {
                   type="button"
                   aria-pressed={selected}
                   onClick={() => toggle(target)}
-                  className={`min-h-14 rounded-2xl border text-sm font-bold ${
-                    selected ? 'border-leaf-500 bg-leaf-500 text-white' : 'border-line bg-white text-ink-soft'
+                  className={`min-h-14 rounded-lg border text-sm font-bold ${
+                    selected ? 'border-mango-500 bg-cream-deep text-ink' : 'border-line bg-white text-ink-soft'
                   }`}
                 >
                   {preset.label}
@@ -117,7 +117,7 @@ export default function SchedulePage() {
               type="button"
               onClick={addCustom}
               aria-label="직접 입력한 시간 추가"
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-carrot-500 text-white"
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-cream-deep text-ink"
             >
               <Plus size={20} aria-hidden />
             </button>
@@ -136,7 +136,7 @@ export default function SchedulePage() {
                     type="button"
                     onClick={() => toggle(window)}
                     aria-label={`${windowLabel(window.start_hour, window.end_hour)} 삭제`}
-                    className="flex min-h-9 items-center gap-1 rounded-full bg-leaf-50 px-3 text-sm font-semibold text-leaf-800"
+                    className="flex min-h-9 items-center gap-1 rounded-md bg-cream-deep px-3 text-sm font-semibold text-ink"
                   >
                     {windowLabel(window.start_hour, window.end_hour)}
                     <X size={14} aria-hidden />
@@ -150,7 +150,7 @@ export default function SchedulePage() {
 
       <Card className="flex flex-col gap-5">
         <label className="text-sm font-semibold">
-          한 번에 걸을 수 있는 시간: <span className="text-leaf-600">{duration}분</span>
+          한 번에 걸을 수 있는 시간: <span className="text-mango-700">{duration}분</span>
           <input
             type="range"
             min={10}
@@ -158,7 +158,7 @@ export default function SchedulePage() {
             step={5}
             value={duration}
             onChange={(e) => setDuration(Number(e.target.value))}
-            className="mt-2 w-full accent-[var(--color-leaf-500)]"
+            className="mt-2 w-full accent-[var(--color-mango-700)]"
           />
         </label>
         <ChoiceGroup

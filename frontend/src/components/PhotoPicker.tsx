@@ -54,7 +54,7 @@ export default function PhotoPicker({ photos, onChange }: { photos: PendingPhoto
       <div className="grid grid-cols-4 gap-2">
         {photos.map((photo, index) => (
           <div key={photo.key} className="relative">
-            <img src={photo.url} alt={`고른 사진 ${index + 1}`} className="aspect-square w-full rounded-2xl object-cover" data-testid="pending-photo" />
+            <img src={photo.url} alt={`고른 사진 ${index + 1}`} className="aspect-square w-full rounded-lg object-cover" data-testid="pending-photo" />
             <button
               type="button"
               onClick={() => remove(photo.key)}
@@ -66,8 +66,8 @@ export default function PhotoPicker({ photos, onChange }: { photos: PendingPhoto
           </div>
         ))}
         {photos.length < MAX_PHOTOS && (
-          <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed border-line text-xs font-semibold text-ink-soft hover:bg-leaf-50">
-            <ImagePlus size={20} className="text-leaf-500" aria-hidden />
+          <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-line text-xs font-semibold text-ink-soft hover:bg-leaf-50">
+            <ImagePlus size={20} className="text-mango-700" aria-hidden />
             {busy ? '준비 중' : '사진 추가'}
             <input type="file" accept="image/*" multiple aria-label="사진 고르기" className="sr-only" disabled={busy} onChange={(event) => void add(event.target.files).then(() => (event.target.value = ''))} />
           </label>

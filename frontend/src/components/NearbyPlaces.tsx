@@ -43,7 +43,7 @@ export default function NearbyPlaces({ courseId }: { courseId: number }) {
                 aria-pressed={filter === label}
                 onClick={() => setFilter(filter === label ? null : label)}
                 className={`min-h-8 rounded-full border px-2.5 text-xs font-semibold ${
-                  filter === label ? 'border-leaf-500 bg-leaf-50 text-leaf-800' : 'border-line text-ink-soft'
+                  filter === label ? 'border-ink bg-cream-deep text-ink' : 'border-line text-ink-soft'
                 }`}
               >
                 {label}
