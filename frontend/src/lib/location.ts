@@ -58,13 +58,15 @@ const SIMULATION_INTERVAL_MS = 500;
 
 /** 시연용 위치. 실제 GPS 없이 코스를 일정한 속도로 따라 걷는다. */
 export function useSimulatedWalk(route: RouteModel | null, active: boolean): WalkPosition | null {
-  const [meters, setMeters] = useState(0);
+  // 걸은 거리를 경로와 묶어 둔다. 복귀 경로로 바뀐 첫 렌더에 이전 경로의 거리를 쓰면 바로 도착 처리된다.
+  const [walked, setWalked] = useState<{ route: RouteModel | null; meters: number }>({ route: null, meters: 0 });
+  const meters = walked.route === route ? walked.meters : 0;
 
   useEffect(() => {
     if (!active || !route) return;
-    setMeters(0);
+    setWalked({ route, meters: 0 });
     const timer = window.setInterval(
-      () => setMeters((value) => Math.min(route.total, value + SIMULATION_STEP_M)),
+      () => setWalked((value) => ({ route, meters: Math.min(route.total, value.meters + SIMULATION_STEP_M) })),
       SIMULATION_INTERVAL_MS,
     );
     return () => window.clearInterval(timer);

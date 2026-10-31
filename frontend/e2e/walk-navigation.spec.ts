@@ -210,6 +210,25 @@ test.describe('GPS를 쓸 수 없을 때', () => {
     await expect(page.getByText('시연용', { exact: true }).first()).toBeVisible();
   });
 
+  test('복귀를 고르면 바로 도착으로 넘어가지 않고 복귀 안내가 이어진다', async ({ page, request }) => {
+    const { id } = await firstCourse(request);
+    await openNavigation(page, id);
+    await page.getByRole('button', { name: '시연용 위치로 걷기' }).click();
+    const progress = page.getByTestId('walk-progress');
+    await expect(async () => {
+      expect(Number(await progress.getAttribute('aria-valuenow'))).toBeGreaterThanOrEqual(20);
+    }).toPass({ timeout: 20000 });
+
+    await page.getByRole('button', { name: '시연: 지금부터 비 내리기' }).click();
+    await page.getByTestId('alternative-panel').getByRole('button', { name: /출발점으로 돌아가기/ }).click();
+    const summary = page.getByTestId('return-summary');
+    await expect(summary).toContainText('복귀 안내 중');
+    // 첫 화면만 스쳐 지나가는 경우를 걸러 낸다. 시연용 걷기는 0.5초에 20m를 가므로 1초 뒤에도 복귀 중이어야 한다.
+    await page.waitForTimeout(1000);
+    await expect(summary).toBeVisible();
+    await expect(page.getByText('출발점에 도착했어요')).toBeHidden();
+  });
+
   test('코스 없이 들어오면 추천으로 안내한다', async ({ page }) => {
     await page.goto('/navigate');
     await expect(page.getByRole('link', { name: '오늘의 추천 보기' })).toBeVisible();
