@@ -364,13 +364,17 @@ Google이 돌려보내는 주소이며 콘솔의 리디렉션 URI와 같아야 �
 { "pet_id": 1, "course_id": 3, "recommendation_id": 12, "duration_min": 20, "started_at": "2026-10-31T16:00:00" }
 ```
 
-`recommendation_id`, `started_at`은 선택입니다. `started_at`이 없으면 지금 끝난 산책으로 기록합니다. 코스 방문 수가 함께 올라갑니다.
+`recommendation_id`, `started_at`은 선택입니다. `started_at`이 없으면 지금 끝난 산책으로 기록합니다. 코스 방문 수가 함께 올라갑니다. `started_at`은 시간대 학습에 쓰이므로 나중에 기록할 때는 실제 출발 시각을 보냅니다. 타임존이 붙어 있으면 서비스 현지 시각으로 바꾸고, 끝나는 시각(`started_at` + `duration_min`)이 지금보다 30분 넘게 늦으면 422로 거부합니다. 30분은 휴대폰과 서버 시계 차이를 위한 여유입니다.
 
 선택 필드: `tracking_source`(`gps`, `manual`, `simulation`, 기본 `manual`), `distance_km`(실제 걸은 거리, 없으면 코스 거리). `simulation`은 활동 통계에서 제외합니다.
 
 ### `GET /walks?pet_id=1`
 
 최신순 산책 기록과 각 산책의 피드백입니다. `tracking_source`, `is_simulated`를 함께 돌려줍니다.
+
+### `DELETE /walks/{walk_id}`
+
+잘못 남긴 산책 기록을 지웁니다(204). 기록할 때 올린 코스 방문 수를 되돌립니다. 피드백을 남긴 산책은 이미 학습에 반영되어 409로 거부합니다. 남의 기록이면 404입니다.
 
 ### `GET /walks/report?pet_id=1&week_offset=0`
 

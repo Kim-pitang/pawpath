@@ -55,6 +55,8 @@ test('최종 검증 시나리오: 추천, 산책, 5점 피드백, 다음 추천 
 
   // 7. 만족도 5점 피드백
   await expect(page.getByText(`${secondName}, 어땠나요?`)).toBeVisible();
+  // 넘겨받은 추천 번호는 이번 기록에만 쓰고 주소에서 지운다.
+  await expect(page).toHaveURL(/\/walk$/);
   await page.getByRole('button', { name: '산책 만족도 5점' }).click();
   await page.getByRole('button', { name: '두부 만족도 5점' }).click();
   await page.getByRole('button', { name: '딱 좋았어요' }).click();

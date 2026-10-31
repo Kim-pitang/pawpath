@@ -1,4 +1,8 @@
 """API 전체 흐름 검증. 기획서의 최종 검증 시나리오를 그대로 수행한다."""
+from datetime import timedelta
+
+from app.clock import now_local
+
 EXPECTED_SENTENCE = "낯선 길을 싫어하는 두부를 위해 익숙한 공원 코스를 골랐어요. 비가 오기 전 짧게 다녀올 수 있어요."
 
 PET_BODY = {
@@ -207,6 +211,69 @@ def test_walk_validation(client):
     assert client.post("/api/walks", json={"pet_id": 999, "course_id": 1, "duration_min": 25}).status_code == 404
     assert client.post("/api/walks", json={"pet_id": pet_id, "course_id": 1, "duration_min": 0}).status_code == 422
     assert client.post("/api/walks", json={"pet_id": pet_id, "course_id": 1, "duration_min": 25, "recommendation_id": 999}).status_code == 404
+
+
+def test_walk_can_be_logged_for_an_earlier_time_but_not_the_future(client):
+    pet_id = dubu_id(client)
+    course_id = client.get("/api/courses").json()[0]["id"]
+    now = now_local()
+    morning = (now - timedelta(days=1)).replace(hour=7, minute=30)
+    walk = client.post(
+        "/api/walks", json={"pet_id": pet_id, "course_id": course_id, "duration_min": 30, "started_at": morning.isoformat()}
+    ).json()
+    assert walk["started_at"] == morning.isoformat()
+    assert walk["ended_at"] == (morning + timedelta(minutes=30)).isoformat()
+
+    # 타임존이 붙은 시각은 서비스 현지 시각으로 바꿔 저장한다.
+    utc = (morning - timedelta(hours=9)).isoformat() + "Z"
+    aware = client.post("/api/walks", json={"pet_id": pet_id, "course_id": course_id, "duration_min": 30, "started_at": utc})
+    assert aware.status_code == 201
+    assert aware.json()["started_at"] == morning.isoformat()
+
+    later = (now + timedelta(hours=2)).isoformat()
+    future = client.post("/api/walks", json={"pet_id": pet_id, "course_id": course_id, "duration_min": 30, "started_at": later})
+    assert future.status_code == 422
+    assert "끝나지 않은" in future.json()["detail"]
+    # 방금 시작해서 아직 걷는 중인 시각도 끝난 산책으로 받지 않는다.
+    walking = client.post(
+        "/api/walks", json={"pet_id": pet_id, "course_id": course_id, "duration_min": 120, "started_at": now.isoformat()}
+    )
+    assert walking.status_code == 422
+
+
+def test_walk_without_feedback_can_be_deleted_and_visits_roll_back(client):
+    pet_id = dubu_id(client)
+    course_id = client.get("/api/courses").json()[0]["id"]
+
+    def visits() -> int:
+        courses = client.get(f"/api/pets/{pet_id}/insights").json()["courses"]
+        return next((course["visit_count"] for course in courses if course["course_id"] == course_id), 0)
+
+    kept = client.post("/api/walks", json={"pet_id": pet_id, "course_id": course_id, "duration_min": 25}).json()
+    mistake = client.post("/api/walks", json={"pet_id": pet_id, "course_id": course_id, "duration_min": 25}).json()
+    assert visits() == 2
+
+    assert client.delete(f"/api/walks/{mistake['id']}").status_code == 204
+    assert [walk["id"] for walk in client.get("/api/walks", params={"pet_id": pet_id}).json()] == [kept["id"]]
+    assert visits() == 1
+    assert client.delete(f"/api/walks/{mistake['id']}").status_code == 404
+
+    # 하나뿐인 기록을 지우면 그 코스는 다녀온 적 없는 코스로 돌아간다.
+    assert client.delete(f"/api/walks/{kept['id']}").status_code == 204
+    assert all(course["course_id"] != course_id for course in client.get(f"/api/pets/{pet_id}/insights").json()["courses"])
+
+
+def test_walk_with_feedback_cannot_be_deleted(client):
+    pet_id = dubu_id(client)
+    course_id = client.get("/api/courses").json()[0]["id"]
+    walk = client.post("/api/walks", json={"pet_id": pet_id, "course_id": course_id, "duration_min": 25}).json()
+    client.post("/api/feedback", json={"walk_id": walk["id"], **FIVE_STARS})
+
+    response = client.delete(f"/api/walks/{walk['id']}")
+    assert response.status_code == 409
+    assert "학습" in response.json()["detail"]
+    assert len(client.get("/api/walks", params={"pet_id": pet_id}).json()) == 1
+    assert client.get(f"/api/pets/{pet_id}").json()["feedback_total"] == 1
 
 
 def test_learning_is_isolated_between_pets(client):
