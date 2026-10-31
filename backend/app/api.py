@@ -17,7 +17,7 @@ from app.recommender.features import build_features
 from app.recommender.safety import assess_conditions, assess_course, assessment_payload
 from app.recommender.timeslots import evaluate_slot, hour_comfort, is_rainy
 from app.recommender.types import FeedbackInput
-from app.seed import DEFAULT_USER_ID
+from app.seed import DEFAULT_USER_ID, new_user_defaults
 from app.services import account_service, auth_service, backup_service, community_service, google_auth_service, profile_service, saved_walk_service
 from app.services.alternative_service import ALL_DAY, evaluate_alternative
 from app.services.gpx_service import MAX_GPX_BYTES, GpxError, build_gpx, content_disposition, parse_gpx
@@ -38,6 +38,8 @@ ACCOUNT_PAGE = "/account"
 SESSION_EXPIRED = "로그인이 만료되었어요. 다시 로그인해 주세요."
 PROFILE_REQUIRED = "누구의 산책인지 프로필을 먼저 골라 주세요."
 NOT_YOUR_RECORD = "만든 프로필이나 대표 프로필만 고칠 수 있어요."
+# 테스트 로그인으로 만든 계정의 google_sub. 실제 Google의 sub는 숫자뿐이라 겹치지 않는다.
+E2E_SUB_PREFIX = "e2e:"
 
 
 def current_session(request: Request, db: Session = Depends(get_db)) -> AuthSession | None:
@@ -172,13 +174,7 @@ def _account(db: Session, user: User | None, profile_id: int | None = None) -> s
         return account
     profiles = profile_service.profiles_of(db, user)
     current = profile_service.selected_profile(db, user.id, profile_id)
-    account.user = schemas.AccountUser(
-        id=user.id,
-        name=user.name,
-        login_id=user.login_id,
-        email=user.email or user.google_email,
-        provider="google" if user.google_sub else "password",
-    )
+    account.user = schemas.AccountUser(id=user.id, name=user.name, email=user.google_email)
     account.profiles = [schemas.ProfileRead.model_validate(profile) for profile in profiles]
     account.current_profile = schemas.ProfileRead.model_validate(current) if current else None
     account.profile_required = current is None
@@ -218,24 +214,6 @@ def _renew_after_reauth(request: Request, response: Response, db: Session, sessi
     _set_session_cookie(request, response, token, session.expires_at - now)
 
 
-@router.post("/auth/signup", response_model=schemas.AccountRead, status_code=status.HTTP_201_CREATED, tags=["계정"])
-def signup(body: schemas.SignupRequest, request: Request, response: Response, db: Session = Depends(get_db)) -> schemas.AccountRead:
-    try:
-        user = auth_service.signup(db, body.login_id, body.password, body.name, body.email)
-    except auth_service.AuthError as error:
-        raise HTTPException(error.status_code, error.message) from error
-    return _account(db, user, _start_session(request, response, db, user))
-
-
-@router.post("/auth/login", response_model=schemas.AccountRead, tags=["계정"])
-def login(body: schemas.LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)) -> schemas.AccountRead:
-    try:
-        user = auth_service.login(db, body.login_id, body.password)
-    except auth_service.AuthError as error:
-        raise HTTPException(error.status_code, error.message) from error
-    return _account(db, user, _start_session(request, response, db, user))
-
-
 @router.post("/auth/logout", response_model=schemas.AccountRead, tags=["계정"])
 def logout(request: Request, response: Response, db: Session = Depends(get_db)) -> schemas.AccountRead:
     token = request.cookies.get(auth_service.SESSION_COOKIE)
@@ -243,6 +221,23 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)) 
         auth_service.end_session(db, token)
     response.delete_cookie(auth_service.SESSION_COOKIE, path="/", httponly=True, samesite="lax")
     return _account(db, None)
+
+
+# 테스트 전용 로그인. main.py가 E2E_LOGIN이 참일 때만 붙이므로 운영 서버에는 이 경로가 없다.
+e2e_router = APIRouter(prefix="/api/e2e", tags=["테스트"])
+
+
+@e2e_router.post("/login", response_model=schemas.AccountRead)
+def e2e_login(body: schemas.E2ELoginRequest, request: Request, response: Response, db: Session = Depends(get_db)) -> schemas.AccountRead:
+    """Google 화면을 지날 수 없는 테스트가 쓴다. Google로 처음 로그인한 것과 같은 계정을 만들고, 같은 key면 그 계정으로 다시 로그인한다."""
+    sub = f"{E2E_SUB_PREFIX}{body.key}"
+    user = db.scalar(select(User).where(User.google_sub == sub))
+    if user is None:
+        user = User(name=body.name, google_sub=sub, google_email=f"{body.key}@e2e.test", **new_user_defaults())
+        profile_service.new_default_profile(user)
+        db.add(user)
+        db.commit()
+    return _account(db, user, _start_session(request, response, db, user))
 
 
 @router.get("/auth/google/start", tags=["계정"])
@@ -346,23 +341,6 @@ def update_account(body: schemas.AccountUpdate, db: Session = Depends(get_db), s
     return _account(db, user, session.profile_id)
 
 
-@router.post("/auth/reauth", response_model=schemas.ReauthRead, tags=["계정"])
-def reauth_with_password(
-    body: schemas.ReauthRequest,
-    request: Request,
-    response: Response,
-    db: Session = Depends(get_db),
-    session: AuthSession = Depends(signed_in_session),
-) -> schemas.ReauthRead:
-    """비밀번호로 본인을 다시 확인한다. 쿠키의 토큰이 바뀌고, 탈퇴처럼 되돌릴 수 없는 작업이 잠시 열린다."""
-    try:
-        auth_service.confirm_password(db.get(User, session.user_id), body.password)
-    except auth_service.AuthError as error:
-        raise HTTPException(error.status_code, error.message) from error
-    _renew_after_reauth(request, response, db, session)
-    return schemas.ReauthRead(reauth_required=False)
-
-
 @router.get("/auth/account", response_model=schemas.AccountSummary, tags=["계정"])
 def account_summary(db: Session = Depends(get_db), session: AuthSession = Depends(signed_in_session)) -> schemas.AccountSummary:
     """탈퇴하면 지워질 데이터와 로그인 유지 기간."""
@@ -370,7 +348,6 @@ def account_summary(db: Session = Depends(get_db), session: AuthSession = Depend
     settings = get_settings()
     backups_on = settings.backup_enabled and backup_service.sqlite_path(settings.database_url) is not None
     return schemas.AccountSummary(
-        provider="google" if user.google_sub else "password",
         reauth_required=auth_service.needs_reauth(session, now_local()),
         session_expires_at=session.expires_at,
         session_idle_days=auth_service.SESSION_IDLE_DAYS,

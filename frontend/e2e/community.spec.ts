@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { buildRoute, pointAt, type LatLng } from '../src/lib/navigation';
+import { signIn } from './login';
 
-const PASSWORD = 'walk-with-dubu-1';
 const SECRET_TITLE = '우리집 앞 비밀 이름';
 const SECRET_MEMO = '현관에서 출발한 비밀 메모';
 const PET = {
@@ -20,9 +20,8 @@ const PET = {
 
 const unique = () => `${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
-async function signIn(page: Page, name = '앨리스') {
-  const response = await page.request.post('/api/auth/signup', { data: { login_id: `user${unique()}`, password: PASSWORD, name } });
-  expect(response.status()).toBe(201);
+async function signInAs(page: Page, name = '앨리스') {
+  await signIn(page, `user${unique()}`, name);
 }
 
 /** 북쪽으로 곧게 걷는 경로. 지점 간격은 약 55m다. */
@@ -51,7 +50,7 @@ async function shareTrail(page: Page, overrides: Record<string, unknown> = {}, w
 
 async function asNewMember(browser: Browser, name = '밥'): Promise<Page> {
   const page = await (await browser.newContext()).newPage();
-  await signIn(page, name);
+  await signInAs(page, name);
   return page;
 }
 
@@ -80,7 +79,7 @@ async function expectNoSideScroll(page: Page, width: number, where: string) {
 
 test.describe('산책길 공유', () => {
   test('내 산책길 상세에서 공유하면 가린 경로로 커뮤니티와 상세에 나온다', async ({ page, browser }) => {
-    await signIn(page);
+    await signInAs(page);
     const walk = await makeWalk(page);
     const title = `양재천 그늘길 ${unique()}`;
 
@@ -136,7 +135,7 @@ test.describe('산책길 공유', () => {
   });
 
   test('공유 화면에서 직접 기록과 GPX 경로를 골라 공유한다', async ({ page }) => {
-    await signIn(page);
+    await signInAs(page);
     const recorded = await makeWalk(page, { title: `기록한 길 ${unique()}` });
     const imported = await makeWalk(page, { title: `가져온 길 ${unique()}`, source_type: 'imported', points: line(40, 37.55, 126.92) });
 
@@ -157,7 +156,7 @@ test.describe('산책길 공유', () => {
   });
 
   test('대표 이미지를 올려 고르면 카드와 상세에 나온다', async ({ page }) => {
-    await signIn(page);
+    await signInAs(page);
     const walk = await makeWalk(page);
     await page.goto(`/community/share?walk=${walk.id}`);
     await page.getByLabel('대표 이미지 올리기').setInputFiles({ name: 'cover.jpg', mimeType: 'image/jpeg', buffer: await makeJpeg(page) });
@@ -174,7 +173,7 @@ test.describe('산책길 공유', () => {
   });
 
   test('원본이 링크 공유 상태면 가리지 않은 경로가 열린다고 경고한다', async ({ page }) => {
-    await signIn(page);
+    await signInAs(page);
     const walk = await makeWalk(page, { visibility: 'link' });
     await page.goto(`/community/share?walk=${walk.id}`);
     await expect(page.getByText('가리지 않은 경로가 열려요')).toBeVisible();
@@ -185,7 +184,7 @@ test.describe('산책길 공유', () => {
   });
 
   test('사진이 있어도 직접 고르기 전에는 대표 이미지로 공개하지 않는다', async ({ page, browser }) => {
-    await signIn(page);
+    await signInAs(page);
     const walk = await makeWalk(page);
     expect((await page.request.post(`/api/my-walks/${walk.id}/photos`, { data: await makeJpeg(page), headers: { 'Content-Type': 'image/jpeg' } })).status()).toBe(201);
     await page.goto(`/community/share?walk=${walk.id}`);
@@ -200,7 +199,7 @@ test.describe('산책길 공유', () => {
   });
 
   test('자동 생성 경로는 공유 대상에 없고, 주소로 들어와도 공유할 수 없다', async ({ page }) => {
-    await signIn(page);
+    await signInAs(page);
     const generated = await makeWalk(page, { title: `자동 생성 길 ${unique()}`, source_type: 'generated' });
     await page.goto(`/my-walks/${generated.id}`);
     const panel = page.getByTestId('community-panel');
@@ -218,7 +217,7 @@ test.describe('산책길 공유', () => {
   });
 
   test('가리고 나면 너무 짧은 길은 이유를 알리고 공유를 막는다', async ({ page }) => {
-    await signIn(page);
+    await signInAs(page);
     const walk = await makeWalk(page, { points: line(14) });
     await page.goto(`/community/share?walk=${walk.id}`);
     await expect(page.getByTestId('trail-preview-summary')).toBeVisible();
@@ -241,12 +240,12 @@ test.describe('로그인하지 않은 사용자', () => {
 
     await page.getByTestId('like-button').click();
     await expect(page).toHaveURL(/\/login$/);
-    await page.getByRole('button', { name: '회원가입' }).click();
-    await page.getByLabel('아이디').fill(`user${unique()}`);
-    await page.getByLabel('비밀번호').fill(PASSWORD);
-    await page.getByLabel('이름').fill('새 보호자');
-    await page.getByRole('button', { name: '가입하고 시작하기' }).click();
-    // 가입하면 대표 프로필을 정한 뒤 원래 보던 산책길로 돌아온다.
+    // Google 로그인이 끝나면 원래 보던 산책길로 돌아오도록 주소를 넘긴다.
+    const next = `/community/trails/${trail.id}`;
+    await expect(page.getByRole('link', { name: 'Google로 계속하기' })).toHaveAttribute('href', `/api/auth/google/start?next=${encodeURIComponent(next)}`);
+    // 처음 로그인한 보호자는 서버가 대표 프로필 설정을 거쳐 그 주소로 보낸다.
+    await signIn(page, `user${unique()}`);
+    await page.goto(`/profiles/setup?next=${encodeURIComponent(next)}`);
     await page.getByRole('button', { name: '시작하기', exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/community/trails/${trail.id}$`));
     await expect(page.getByTestId('review-form')).toBeVisible();
@@ -405,7 +404,7 @@ test.describe('좋아요와 저장', () => {
     const author = await asNewMember(browser, '작성자');
     const trail = await shareTrail(author);
     await author.context().close();
-    await signIn(page, '밥');
+    await signInAs(page, '밥');
     await page.goto(`/community/trails/${trail.id}`);
     const like = page.getByTestId('like-button');
     const bookmark = page.getByTestId('bookmark-button');
@@ -462,7 +461,7 @@ test.describe('후기', () => {
   test('별점과 사진을 남기고 수정, 삭제하면 평균이 함께 바뀐다', async ({ page, browser }) => {
     const author = await asNewMember(browser, '작성자');
     const trail = await shareTrail(author);
-    await signIn(page, '밥');
+    await signInAs(page, '밥');
     await page.goto(`/community/trails/${trail.id}`);
     await expect(page.getByText('아직 후기가 없어요')).toBeVisible();
 
@@ -515,7 +514,7 @@ test.describe('후기', () => {
       const author = await asNewMember(browser, '작성자');
       const trail = await shareTrail(author);
       await author.context().close();
-      await signIn(page, '밥');
+      await signInAs(page, '밥');
       expect((await page.request.post('/api/pets', { data: PET })).status()).toBe(201);
 
       await page.goto(`/community/trails/${trail.id}`);
@@ -559,7 +558,7 @@ test.describe('후기', () => {
       const author = await asNewMember(browser, '작성자');
       const trail = await shareTrail(author);
       await author.context().close();
-      await signIn(page, '밥');
+      await signInAs(page, '밥');
       const pet = await (await page.request.post('/api/pets', { data: PET })).json();
       const { course_id: courseId } = await (await page.request.post(`/api/community/trails/${trail.id}/start`)).json();
       const created = await page.request.post('/api/walks', { data: { pet_id: pet.id, course_id: courseId, duration_min: 20, tracking_source: 'simulation' } });
@@ -573,7 +572,7 @@ test.describe('후기', () => {
 
 test.describe('내 산책길 관리와 권한', () => {
   test('조회수는 보는 사람별로 한 번 세고, 같은 탭에서 작성자가 먼저 열어도 다음 보호자를 센다', async ({ page, context }) => {
-    await signIn(page);
+    await signInAs(page);
     const trail = await shareTrail(page);
     const views = async () => (await (await page.request.get(`/api/community/trails/${trail.id}`)).json()).view_count;
     await page.goto(`/community/trails/${trail.id}`);
@@ -582,7 +581,7 @@ test.describe('내 산책길 관리와 권한', () => {
     expect(await views()).toBe(0);
 
     await context.clearCookies();
-    await signIn(page, '밥');
+    await signInAs(page, '밥');
     await page.reload();
     await expect(page.getByTestId('trail-title')).toHaveText(trail.title);
     await expect(async () => expect(await views()).toBe(1)).toPass();
@@ -593,7 +592,7 @@ test.describe('내 산책길 관리와 권한', () => {
   });
 
   test('공개 상태를 바꾸면 다른 사람에게서 닫히고, 해제해도 원본은 남는다', async ({ page, browser }) => {
-    await signIn(page);
+    await signInAs(page);
     const walk = await makeWalk(page);
     const trail = await shareTrail(page, {}, { points: line(40, 37.55, 126.93) });
     const other = await asNewMember(browser, '밥');
@@ -635,7 +634,7 @@ test.describe('내 산책길 관리와 권한', () => {
   });
 
   test('공유한 길을 수정한다', async ({ page }) => {
-    await signIn(page);
+    await signInAs(page);
     const trail = await shareTrail(page, { features: ['park'] });
     await page.goto(`/community/trails/${trail.id}`);
     await page.getByRole('link', { name: '수정' }).click();
@@ -656,7 +655,7 @@ test.describe('내 산책길 관리와 권한', () => {
     const author = await asNewMember(browser, '작성자');
     const trail = await shareTrail(author);
     await author.context().close();
-    await signIn(page, '밥');
+    await signInAs(page, '밥');
     await page.goto(`/community/trails/${trail.id}`);
     await expect(page.getByTestId('trail-title')).toHaveText(trail.title);
     await expect(page.getByRole('button', { name: '공유 해제' })).toHaveCount(0);
@@ -674,7 +673,7 @@ test.describe('내 산책길 관리와 권한', () => {
   });
 
   test('원본 산책길을 지우면 커뮤니티 글도 함께 사라진다고 묻고 지운다', async ({ page }) => {
-    await signIn(page);
+    await signInAs(page);
     const trail = await shareTrail(page);
     const walks = await (await page.request.get('/api/my-walks')).json();
     await page.goto(`/my-walks/${walks[0].id}`);
@@ -716,7 +715,7 @@ test.describe('개인정보와 보안', () => {
     const author = await asNewMember(browser, '작성자');
     const trail = await shareTrail(author, { title: `<img src=x onerror="window.__xss=1"> ${unique()}`, description: payload });
     await author.context().close();
-    await signIn(page, payload.slice(0, 20));
+    await signInAs(page, payload.slice(0, 20));
     const review = await page.request.post(`/api/community/trails/${trail.id}/reviews`, { data: { rating: 5, content: payload } });
     expect(review.status()).toBe(201);
 
@@ -749,7 +748,7 @@ test.describe('모바일 화면', () => {
   for (const width of [320, 390, 768]) {
     test(`${width}px에서 가로로 넘치지 않고 메뉴가 모두 보인다`, async ({ page }) => {
       await page.setViewportSize({ width, height: 800 });
-      await signIn(page);
+      await signInAs(page);
       const walk = await makeWalk(page);
       const longTitle = `긴제목`.repeat(25);
       const trail = await shareTrail(page, { title: longTitle, description: '가'.repeat(400), features: ['park', 'shade', 'flat', 'paved', 'waterside', 'forest', 'quiet', 'lit'], suitable_for: ['small', 'medium', 'large', 'senior'] }, { points: line(40, 37.55, 126.94) });

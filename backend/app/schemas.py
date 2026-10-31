@@ -675,44 +675,21 @@ class TrailCourseRead(BaseModel):
 
 
 # 계정
-def _normalize_login_id(value: object) -> object:
-    """형식을 검사하기 전에 공백을 지우고 소문자로 바꾼다. Alice와 alice는 같은 아이디다."""
-    return value.strip().lower() if isinstance(value, str) else value
-
-
-LoginId = Annotated[str, BeforeValidator(_normalize_login_id), StringConstraints(min_length=3, max_length=30, pattern=r"^[a-z0-9][a-z0-9_.-]*$")]
-EmailAddress = Annotated[str, BeforeValidator(_normalize_login_id), StringConstraints(max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")]
 PersonName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=30)]
-
-
-class SignupRequest(BaseModel):
-    """대표 계정 가입. 이메일이나 아이디 중 하나로 로그인한다."""
-
-    login_id: LoginId | None = None
-    email: EmailAddress | None = None
-    password: str = Field(min_length=8, max_length=128)
-    name: PersonName
-
-    @model_validator(mode="after")
-    def one_identifier(self) -> "SignupRequest":
-        if (self.login_id is None) == (self.email is None):
-            raise ValueError("이메일이나 아이디 중 하나만 입력해 주세요.")
-        return self
-
-
-class LoginRequest(BaseModel):
-    # 아이디나 이메일.
-    login_id: Annotated[str, BeforeValidator(_normalize_login_id), StringConstraints(min_length=1, max_length=254)]
-    password: str = Field(min_length=1, max_length=128)
 
 
 class AccountUser(BaseModel):
     id: int
     name: str
-    # Google 로그인 사용자는 아이디가 없다.
-    login_id: str | None
+    # Google이 확인한 이메일. 확인되지 않았으면 비어 있다.
     email: str | None = None
-    provider: Literal["password", "google"]
+
+
+class E2ELoginRequest(BaseModel):
+    """테스트 전용 로그인. 같은 key는 같은 계정이다."""
+
+    key: str = Field(pattern=r"^[A-Za-z0-9_-]{1,40}$")
+    name: PersonName
 
 
 # 프로필
@@ -796,14 +773,6 @@ class AccountUpdate(BaseModel):
     name: PersonName
 
 
-class ReauthRequest(BaseModel):
-    password: str = Field(min_length=1, max_length=128)
-
-
-class ReauthRead(BaseModel):
-    reauth_required: bool
-
-
 class AccountDataCounts(BaseModel):
     profiles: int
     pets: int
@@ -819,7 +788,6 @@ class AccountDataCounts(BaseModel):
 
 
 class AccountSummary(BaseModel):
-    provider: Literal["password", "google"]
     # 참이면 탈퇴 전에 본인을 다시 확인해야 한다.
     reauth_required: bool
     session_expires_at: datetime

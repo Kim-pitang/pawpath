@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
+import { signIn } from './login';
 
-const PASSWORD = 'walk-with-dubu-1';
 const PET = {
   name: '콩',
   breed: '시바견',
@@ -16,16 +16,10 @@ const PET = {
 const POINTS = Array.from({ length: 4 }, (_, index) => ({ latitude: 37.55 + index * 0.0003, longitude: 126.91, segment: 0 }));
 const newId = () => `fam${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
-/** 이메일로 가입해 대표 프로필을 정하고 홈으로 들어간다. */
-async function signUpFamily(page: Page, email: string) {
-  await page.goto('/login');
-  await page.getByRole('link', { name: '로그인하지 않고 시연 보호자로 둘러보기' }).waitFor();
-  await page.getByRole('button', { name: '회원가입' }).click();
-  await page.getByLabel('아이디 또는 이메일').fill(email);
-  await page.getByLabel('비밀번호').fill(PASSWORD);
-  await page.getByLabel('이름', { exact: true }).fill('우리 가족');
-  await page.getByRole('button', { name: '가입하고 시작하기' }).click();
-
+/** Google로 처음 로그인한 것처럼 들어가 대표 프로필을 정하고 홈으로 들어간다. */
+async function signUpFamily(page: Page, key: string) {
+  await signIn(page, key, '우리 가족');
+  await page.goto('/profiles/setup?next=%2F');
   await expect(page.getByRole('heading', { name: '내 프로필을 정해 주세요' })).toBeVisible();
   await page.getByLabel('프로필 이름').fill('엄마');
   await page.getByRole('button', { name: '하트' }).click();
@@ -44,9 +38,9 @@ async function addProfile(page: Page, name: string, avatar: string) {
 }
 
 test.describe('가족 프로필', () => {
-  test('이메일로 가입하고 프로필을 더 만들어 넷플릭스처럼 고르고 바꾼다', async ({ page }) => {
-    const email = `${newId()}@example.com`;
-    await signUpFamily(page, email);
+  test('처음 로그인하고 프로필을 더 만들어 넷플릭스처럼 고르고 바꾼다', async ({ page }) => {
+    const key = newId();
+    await signUpFamily(page, key);
     expect((await page.request.post('/api/pets', { data: PET })).status()).toBe(201);
     // 엄마 프로필로 산책길을 하나 남긴다.
     expect((await page.request.post('/api/my-walks', { data: { title: '엄마 아침 길', points: POINTS } })).status()).toBe(201);
@@ -58,9 +52,9 @@ test.describe('가족 프로필', () => {
     // 로그아웃 후 다시 로그인하면 누구의 산책인지 먼저 고른다.
     await page.getByRole('button', { name: '로그아웃' }).click();
     await expect(page).toHaveURL(/\/login$/);
-    await page.getByLabel('아이디 또는 이메일').fill(email.toUpperCase());
-    await page.getByLabel('비밀번호').fill(PASSWORD);
-    await page.getByRole('button', { name: '로그인하기' }).click();
+    // Google에서 돌아오면 서버가 원래 가려던 곳(여기서는 홈)으로 보내고, 화면이 프로필 선택으로 넘긴다.
+    await signIn(page, key, '우리 가족');
+    await page.goto('/');
     await expect(page).toHaveURL(/\/profiles$/);
     await expect(page.getByRole('heading', { name: '누구의 산책을 기록할까요?' })).toBeVisible();
     await expect(page.getByRole('button', { name: '엄마 (대표)' })).toBeVisible();
@@ -91,7 +85,7 @@ test.describe('가족 프로필', () => {
   });
 
   test('프로필을 고치고 지우며, 대표 프로필은 지울 수 없다', async ({ page }) => {
-    await signUpFamily(page, `${newId()}@example.com`);
+    await signUpFamily(page, newId());
     await page.goto('/profiles');
     await addProfile(page, '지우', '별');
 
@@ -116,7 +110,7 @@ test.describe('가족 프로필', () => {
   });
 
   test('다섯 개를 채우면 더 만들 수 없다고 알린다', async ({ page }) => {
-    await signUpFamily(page, `${newId()}@example.com`);
+    await signUpFamily(page, newId());
     for (const name of ['아빠', '할머니', '지우', '민우']) {
       expect((await page.request.post('/api/profiles', { data: { name } })).status()).toBe(201);
     }
@@ -128,7 +122,7 @@ test.describe('가족 프로필', () => {
   });
 
   test('가족 산책 기록에서 구성원별 통계를 본다', async ({ page }) => {
-    await signUpFamily(page, `${newId()}@example.com`);
+    await signUpFamily(page, newId());
     const pet = await (await page.request.post('/api/pets', { data: PET })).json();
     const courseId = (await (await page.request.get('/api/courses')).json())[0].id;
     const walk = () => page.request.post('/api/walks', { data: { pet_id: pet.id, course_id: courseId, duration_min: 20 } });
@@ -153,11 +147,11 @@ test.describe('가족 프로필', () => {
 test.describe('프로필을 고르기 전과 바꿀 때', () => {
   /** 프로필 둘을 만들고 다시 로그인해, 아직 프로필을 고르지 않은 세션을 만든다. */
   async function loginWithTwoProfiles(page: Page) {
-    const email = `${newId()}@example.com`;
-    expect((await page.request.post('/api/auth/signup', { data: { email, password: PASSWORD, name: '엄마' } })).status()).toBe(201);
+    const key = newId();
+    await signIn(page, key, '엄마');
     expect((await page.request.post('/api/profiles', { data: { name: '아빠', avatar_key: 'moon' } })).status()).toBe(201);
     await page.request.post('/api/auth/logout');
-    const account = await (await page.request.post('/api/auth/login', { data: { login_id: email, password: PASSWORD } })).json();
+    const account = await signIn(page, key, '엄마');
     expect(account.profile_required).toBe(true);
   }
 
@@ -178,7 +172,7 @@ test.describe('프로필을 고르기 전과 바꿀 때', () => {
   });
 
   test('저장하지 않은 기록이 있으면 프로필을 바꾸기 전에 묻고, 바꾸면 지운다', async ({ page }) => {
-    await signUpFamily(page, `${newId()}@example.com`);
+    await signUpFamily(page, newId());
     expect((await page.request.post('/api/profiles', { data: { name: '아빠', avatar_key: 'moon' } })).status()).toBe(201);
     await page.reload();
     await expect(page.getByTestId('current-profile')).toContainText('엄마');

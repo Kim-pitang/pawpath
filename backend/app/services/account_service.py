@@ -31,7 +31,7 @@ from app.models import (
     WalkHistory,
     WalkingCourse,
 )
-from app.services import auth_service, community_service
+from app.services import community_service
 
 LEDGER_NAME = "deletions.jsonl"
 logger = logging.getLogger(__name__)
@@ -134,7 +134,7 @@ def replay_deletions(db: Session, entries: list[dict]) -> int:
 
 def delete_account(db: Session, user: User, settings: Settings, now: datetime) -> None:
     """탈퇴 처리. 탈퇴 기록을 먼저 남기고 커밋해, 지워졌는데 기록이 없어 복구 때 되살아나는 일을 막는다."""
-    login_id, user_id, created_at = user.login_id or user.email, user.id, user.created_at
+    user_id, created_at = user.id, user.created_at
     delete_user_data(db, user_id)
     try:
         record_deletion(Path(settings.backup_dir), user_id, created_at, now)
@@ -145,6 +145,3 @@ def delete_account(db: Session, user: User, settings: Settings, now: datetime) -
             raise AccountError("탈퇴를 처리하지 못했어요. 지운 데이터는 없으니 잠시 뒤 다시 시도해 주세요.") from error
         logger.warning("백업을 쓰지 않아 탈퇴 기록 없이 진행함: %s", type(error).__name__)
     db.commit()
-    if login_id:
-        auth_service.throttle.clear(login_id)
-    auth_service.throttle.clear(f"reauth:{user_id}")

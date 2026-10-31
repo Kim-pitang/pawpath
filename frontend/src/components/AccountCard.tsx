@@ -24,15 +24,14 @@ export default function AccountCard() {
 
   if (account.authenticated && account.user) {
     const { user } = account;
-    const google = user.provider === 'google';
     return (
       <Card className="flex flex-col gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <UserRound size={20} className="shrink-0 text-mango-700" aria-hidden />
           <div className="min-w-0">
-            <p className="text-xs text-ink-muted">{google ? 'Google 계정으로 로그인' : '로그인 계정'}</p>
+            <p className="text-xs text-ink-muted">Google 계정으로 로그인</p>
             <p className="truncate font-bold" data-testid="account-name">
-              {user.name} <span className="font-normal text-ink-soft">({google ? (user.email ?? 'Google') : (user.login_id ?? user.email)})</span>
+              {user.name} <span className="font-normal text-ink-soft">({user.email ?? 'Google'})</span>
             </p>
           </div>
         </div>

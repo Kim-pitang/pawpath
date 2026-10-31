@@ -112,7 +112,7 @@ export default function AccountArea() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-ink">{user.name}</p>
                   <p className="truncate text-xs text-ink-soft">
-                    {user.provider === 'google' ? `Google · ${user.email ?? '계정'}` : `아이디 ${user.login_id}`}
+                    {`Google · ${user.email ?? '계정'}`}
                   </p>
                 </div>
                 <button

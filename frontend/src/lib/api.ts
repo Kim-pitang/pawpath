@@ -145,13 +145,9 @@ const scopeQuery = (scope: WalkScope) => (scope === 'family' ? '&scope=family' :
 
 export const api = {
   authMe: () => request<Account>('/auth/me'),
-  /** 아이디나 이메일 중 하나로 가입한다. 대표 프로필이 함께 만들어진다. */
-  signup: (body: { login_id?: string; email?: string; password: string; name: string }) => post<Account>('/auth/signup', body),
   updateAccount: (name: string) => patch<Account>('/auth/account', { name }),
-  login: (body: { login_id: string; password: string }) => post<Account>('/auth/login', body),
   logout: () => post<Account>('/auth/logout', {}),
   accountSummary: () => request<AccountSummary>('/auth/account'),
-  reauthenticate: (password: string) => post<{ reauth_required: boolean }>('/auth/reauth', { password }),
   deleteAccount: () => request<void>('/auth/account', { method: 'DELETE' }),
   /** 페이지 이동으로 여는 주소. 본인 확인이 끝나면 계정 화면으로 돌아온다. */
   googleReauthUrl: () => `${BASE}/auth/google/start?reauth=true`,

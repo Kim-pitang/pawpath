@@ -8,24 +8,17 @@ from sqlalchemy.exc import IntegrityError
 from app.database import SessionLocal, engine
 from app.migrations import ensure_schema
 from app.models import CommunityTrail, Pet, SavedWalk, SavedWalkPoint, TrailBookmark, TrailLike, TrailReview, TrailReviewPhoto, WalkHistory, WalkingCourse
-from app.services import account_service, auth_service, community_service
+from app.services import account_service, community_service
 from app.services.gpx_service import GpxPoint, parse_gpx
 from app.services.saved_walk_service import haversine_m
 from tests.test_api_e2e import PET_BODY, dubu_id
-from tests.test_auth import JPEG, other_client, signup
+from tests.test_auth import JPEG, other_client, sign_in
 from tests.test_enhancement import _old_schema_engine
 
 BASE = datetime(2026, 10, 30, 8, 0, 0)
 SECRET_MEMO = "우리집 현관 앞에서 출발"
 _EXIF = b"Exif\x00\x00GPSLatitude=37.4882"
 EXIF_JPEG = JPEG[:2] + b"\xff\xe1" + (len(_EXIF) + 2).to_bytes(2, "big") + _EXIF + JPEG[2:]
-
-
-@pytest.fixture(autouse=True)
-def reset_throttle():
-    auth_service.throttle.clear()
-    yield
-    auth_service.throttle.clear()
 
 
 def line(count=40, lat=37.55, lng=126.91, step=0.0005, altitude=None):
@@ -43,10 +36,10 @@ def line(count=40, lat=37.55, lng=126.91, step=0.0005, altitude=None):
     ]
 
 
-def member(login_id="alice", name="앨리스"):
+def member(key="alice", name="앨리스"):
     """로그인한 다른 브라우저."""
     browser = other_client()
-    signup(browser, login_id=login_id, name=name)
+    sign_in(browser, key=key, name=name)
     return browser
 
 

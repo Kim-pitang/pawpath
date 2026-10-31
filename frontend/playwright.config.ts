@@ -41,6 +41,8 @@ export default defineConfig({
         GOOGLE_CLIENT_ID: 'e2e-client.apps.googleusercontent.com',
         GOOGLE_CLIENT_SECRET: 'e2e-google-secret',
         GOOGLE_REDIRECT_URI: `http://127.0.0.1:${WEB_PORT}/api/auth/google/callback`,
+        // 로그인은 Google로만 하므로, 계정이 필요한 테스트는 테스트 전용 로그인(e2e/login.ts)으로 들어간다.
+        E2E_LOGIN: 'true',
         BACKUP_ENABLED: 'false',
         BACKUP_DIR: `${dbDir}/backups`,
       },

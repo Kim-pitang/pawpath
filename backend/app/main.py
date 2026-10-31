@@ -86,3 +86,7 @@ async def limit_request_size(request: Request, call_next):
 
 app.include_router(api.router)
 app.include_router(recommendation_api.router)
+if get_settings().e2e_login:
+    # 끈 서버에는 경로 자체가 없다. 켠 채로 떴으면 로그에 보이게 남긴다.
+    logger.warning("E2E_LOGIN이 켜져 있어 테스트 전용 로그인(/api/e2e/login)이 열려 있어요. 운영 서버라면 끄세요.")
+    app.include_router(api.e2e_router)

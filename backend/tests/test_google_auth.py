@@ -160,7 +160,7 @@ def test_callback_exchanges_the_code_on_the_server_and_logs_in(client, google):
     assert b64(hashlib.sha256(sent["code_verifier"].encode()).digest()) == params["code_challenge"]
     me = client.get("/api/auth/me").json()
     assert me["authenticated"] is True
-    assert me["user"] == {"id": me["user"]["id"], "name": "두부 보호자", "login_id": None, "email": "dubu@example.com", "provider": "google"}
+    assert me["user"] == {"id": me["user"]["id"], "name": "두부 보호자", "email": "dubu@example.com"}
     with SessionLocal() as db:
         assert db.scalar(select(func.count()).select_from(OAuthState)) == 0
 
@@ -198,12 +198,6 @@ def test_unverified_email_is_not_stored_and_name_falls_back(client, google):
     me = client.get("/api/auth/me").json()["user"]
     assert me["email"] is None
     assert me["name"] == "maybe"
-
-
-def test_google_account_cannot_be_used_for_password_login(client, google):
-    login(client, google)
-    response = TestClient(app).post("/api/auth/login", json={"login_id": "dubu", "password": "anything-at-all"})
-    assert response.status_code == 401
 
 
 # ---------- 실패

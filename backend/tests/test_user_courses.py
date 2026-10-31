@@ -22,7 +22,6 @@ from tests.test_api_e2e import PET_BODY, dubu_id
 
 START = (37.5545, 126.9065)
 PARK = (37.5512, 126.9034)  # 망원정마당 음수대 옆
-PASSWORD = "walk-with-dubu-1"
 
 
 def line(a, b, step_m=10.0):
@@ -57,8 +56,8 @@ def register(client, walk_id):
     return client.post(f"/api/my-walks/{walk_id}/course")
 
 
-def signup(client, login_id):
-    assert client.post("/api/auth/signup", json={"login_id": login_id, "password": PASSWORD, "name": login_id}).status_code == 201
+def sign_in(client, key):
+    assert client.post("/api/e2e/login", json={"key": key, "name": key}).status_code == 200
 
 
 def course_of(client, course_id):
@@ -238,7 +237,7 @@ def test_deleting_the_walk_turns_the_course_off(client):
 # ---------- 권한
 def test_other_accounts_and_guests_cannot_see_or_use_my_course(client):
     alice = TestClient(app)
-    signup(alice, "alice")
+    sign_in(alice, "alice")
     alice_pet = alice.post("/api/pets", json=PET_BODY).json()
     walk = make_walk(alice, route=out_and_back((37.5410, 126.9065)), title="앨리스의 길")
     course_id = register(alice, walk["id"]).json()["course"]["id"]
@@ -246,7 +245,7 @@ def test_other_accounts_and_guests_cannot_see_or_use_my_course(client):
     assert alice.get(f"/api/courses/{course_id}/nearby").status_code == 200
 
     bob = TestClient(app)
-    signup(bob, "bob")
+    sign_in(bob, "bob")
     bob_pet = bob.post("/api/pets", json=PET_BODY).json()
     for intruder, pet_id in ((bob, bob_pet["id"]), (client, dubu_id(client))):
         assert course_of(intruder, course_id) is None
@@ -269,7 +268,7 @@ def test_other_accounts_and_guests_cannot_see_or_use_my_course(client):
 
 def test_alternatives_during_a_walk_never_offer_someone_elses_course(client):
     alice = TestClient(app)
-    signup(alice, "alice")
+    sign_in(alice, "alice")
     walk = make_walk(alice)
     course_id = register(alice, walk["id"]).json()["course"]["id"]
     seed = client.get("/api/courses").json()[0]

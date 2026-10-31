@@ -24,7 +24,7 @@ from app.services.recommendation_service import load_behavior
 from app.services.weather_providers import scenario_forecast
 from tests.conftest import EMPTY_STATE, NOW, default_schedule, make_course, make_forecast, make_pet, seed_course_data
 from tests.test_api_e2e import FIVE_STARS, PET_BODY, dubu_id
-from tests.test_auth import signup
+from tests.test_auth import sign_in
 
 COURSES = seed_course_data()
 GREAT = FeedbackInput(5, 5, "just_right", 5, True)
@@ -403,7 +403,7 @@ def test_events_are_recorded_once_and_only_for_recommended_courses(client):
 def test_other_accounts_cannot_log_events_or_read_metrics(client):
     pet_id = dubu_id(client)
     body = client.post("/api/recommendations", json={"pet_id": pet_id}).json()
-    signup(client, login_id="stranger")
+    sign_in(client, key="stranger")
     assert client.post(f"/api/recommendations/{body['id']}/events", json={"course_id": body["courses"][0]["course_id"], "event": "start"}).status_code == 404
     assert client.get(f"/api/recommendations/{body['id']}/candidates").status_code == 404
     assert client.get(f"/api/pets/{pet_id}/recommendation-metrics").status_code == 404
@@ -411,7 +411,7 @@ def test_other_accounts_cannot_log_events_or_read_metrics(client):
 
 def test_signed_in_users_do_not_inherit_the_demo_neighborhood_assumption(client):
     """시드 코스의 '집 근처' 표시는 시연 보호자 기준이다. 다른 보호자에게 '익숙한 코스'라고 하지 않는다."""
-    signup(client, login_id="newbie")
+    sign_in(client, key="newbie")
     pet = client.post("/api/pets", json={**PET_BODY, "personality": "timid", "path_preference": "familiar", "novelty_reaction": "anxious"}).json()
     body = client.post("/api/recommendations", json={"pet_id": pet["id"], "weather_scenario": "rain_later"}).json()
     assert body["courses"]
