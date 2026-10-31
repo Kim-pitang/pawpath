@@ -19,6 +19,12 @@ const GPX = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" xmlns="htt
 
 const newId = () => `user${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
+/** 머리글 계정 메뉴를 열고 로그인 화면으로 간다. */
+async function openLogin(page: Page) {
+  await page.locator('header').getByRole('button', { name: /계정 메뉴/ }).click();
+  await page.locator('header').getByRole('link', { name: '로그인 또는 회원가입' }).click();
+}
+
 async function signUpInBrowser(page: Page, loginId: string, name = '새 보호자') {
   await page.goto('/login');
   // 계정 정보를 읽으면 Google 버튼이 생겨 화면이 밀리므로, 그 뒤에 눌러야 빗나가지 않는다.
@@ -69,14 +75,14 @@ test.describe('계정', () => {
   test('가입하면 빈 계정으로 시작하고, 시연 보호자의 데이터와 섞이지 않는다', async ({ page, request }) => {
     const demo = await guestWalk(request);
     await page.goto('/');
-    await page.locator('header').getByRole('link', { name: '로그인' }).click();
+    await openLogin(page);
     await expect(page).toHaveURL(/\/login$/);
     await expect(page.getByRole('link', { name: '로그인하지 않고 시연 보호자로 둘러보기' })).toBeVisible();
     await signUpInBrowser(page, newId());
 
     await expect(page).toHaveURL(/\/$/);
     await expect(page.getByText('아직 등록된 반려동물이 없어요')).toBeVisible();
-    await expect(page.locator('header').getByRole('link', { name: '로그인' })).toHaveCount(0);
+    await expect(page.locator('header').getByRole('button', { name: '계정 메뉴, 새 보호자' })).toBeVisible();
     expect(await (await page.request.get('/api/pets')).json()).toEqual([]);
     expect((await page.request.get(`/api/my-walks/${demo.id}`)).status()).toBe(404);
 
@@ -89,8 +95,8 @@ test.describe('계정', () => {
     await page.getByRole('button', { name: '로그아웃' }).click();
     await expect(page).toHaveURL(/\/$/);
     // 로그아웃하면 다시 시연 보호자로 돌아간다.
-    await expect(page.locator('header').getByRole('link', { name: '두부' })).toBeVisible();
-    await expect(page.locator('header').getByRole('link', { name: '로그인' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('두부');
+    await expect(page.locator('header').getByRole('button', { name: '계정 메뉴, 시연 보호자' })).toBeVisible();
   });
 
   test('비밀번호가 틀리면 알리고, 맞으면 원래 가려던 화면으로 간다', async ({ page }) => {
@@ -99,7 +105,7 @@ test.describe('계정', () => {
     await page.request.post('/api/auth/logout');
 
     await page.goto('/my-walks');
-    await page.locator('header').getByRole('link', { name: '로그인' }).click();
+    await openLogin(page);
     await page.getByLabel('아이디').fill(loginId.toUpperCase());
     await page.getByLabel('비밀번호').fill('wrong-password');
     await page.getByRole('button', { name: '로그인하기' }).click();
@@ -145,7 +151,7 @@ async function signUpWithPet(page: Page, loginId: string) {
   await expect(page).toHaveURL(/\/$/);
   expect((await page.request.post('/api/pets', { data: PET })).status()).toBe(201);
   await page.reload();
-  await expect(page.locator('header').getByRole('link', { name: '콩' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('콩');
 }
 
 const expiredDialog = (page: Page) => page.getByRole('dialog', { name: '로그인이 만료되었어요' });
@@ -246,10 +252,10 @@ test.describe('세션 만료와 다시 로그인', () => {
     await expiredDialog(page).getByRole('button', { name: '시연 보호자로 둘러보기' }).click();
     await expect(expiredDialog(page)).toHaveCount(0);
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.locator('header').getByRole('link', { name: '두부' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('두부');
     // 고른 뒤에는 다시 묻지 않는다.
     await page.reload();
-    await expect(page.locator('header').getByRole('link', { name: '두부' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('두부');
     await expect(expiredDialog(page)).toHaveCount(0);
   });
 
@@ -289,9 +295,10 @@ test.describe('세션 만료와 다시 로그인', () => {
     await signUpWithPet(page, newId());
     await page.goto('/my');
     await page.getByRole('button', { name: '로그아웃' }).click();
-    await expect(page.locator('header').getByRole('link', { name: '로그인' })).toBeVisible();
+    await page.getByRole('button', { name: '계정 메뉴, 시연 보호자' }).click();
+    await expect(page.getByRole('link', { name: '로그인 또는 회원가입' })).toBeVisible();
     await page.reload();
-    await expect(page.locator('header').getByRole('link', { name: '두부' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('두부');
     await expect(expiredDialog(page)).toHaveCount(0);
   });
 
@@ -364,7 +371,7 @@ test.describe('계정 탈퇴', () => {
 
     // 만료 대화상자 없이 시연 보호자로 돌아간다.
     await page.getByRole('link', { name: '처음으로' }).click();
-    await expect(page.locator('header').getByRole('link', { name: '두부' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('두부');
     await expect(expiredDialog(page)).toHaveCount(0);
 
     const visitor = await browser.newContext();
@@ -562,7 +569,7 @@ test.describe('Google 로그인', () => {
 
   test('Google로 계속하기는 PKCE와 state를 붙여 Google 로그인 화면으로 보낸다', async ({ page }) => {
     await page.goto('/my-walks');
-    await page.locator('header').getByRole('link', { name: '로그인' }).click();
+    await openLogin(page);
     const button = page.getByRole('link', { name: 'Google로 계속하기' });
     await expect(button).toHaveAttribute('href', '/api/auth/google/start?next=%2Fmy-walks');
 
@@ -574,7 +581,7 @@ test.describe('Google 로그인', () => {
     expect(`${location.origin}${location.pathname}`).toBe('https://accounts.google.com/o/oauth2/v2/auth');
     const params = location.searchParams;
     expect(params.get('client_id')).toBe('e2e-client.apps.googleusercontent.com');
-    expect(params.get('redirect_uri')).toBe('http://127.0.0.1:5183/api/auth/google/callback');
+    expect(params.get('redirect_uri')).toBe(`${new URL(page.url()).origin}/api/auth/google/callback`);
     expect(params.get('response_type')).toBe('code');
     expect(params.get('scope')).toBe('openid email profile');
     expect(params.get('code_challenge_method')).toBe('S256');

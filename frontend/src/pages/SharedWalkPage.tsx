@@ -1,7 +1,7 @@
 import { Download } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { PawPathMark, Wordmark } from '../components/Logo';
+import { MungoMark, Wordmark } from '../components/Logo';
 import { Card, EmptyState, Loading } from '../components/ui';
 import WalkRouteMap from '../components/WalkRouteMap';
 import { api } from '../lib/api';
@@ -24,7 +24,7 @@ export default function SharedWalkPage() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-4 p-4">
       <header className="flex items-center gap-2">
-        <PawPathMark />
+        <MungoMark />
         <Wordmark compact />
       </header>
 
@@ -38,10 +38,10 @@ export default function SharedWalkPage() {
       {!walk && !error && <Loading />}
       {walk && (
         <>
-          <h1 className="font-brand text-2xl text-leaf-800" data-testid="shared-title">
+          <h1 className="text-2xl font-bold text-ink" data-testid="shared-title">
             {walk.title}
           </h1>
-          <div className="h-80 overflow-hidden rounded-3xl border border-line md:h-[28rem]">
+          <div className="h-80 overflow-hidden rounded-xl border border-line md:h-[28rem]">
             <WalkRouteMap segments={route} />
           </div>
           <Card>
@@ -57,7 +57,7 @@ export default function SharedWalkPage() {
             </dl>
             <p className="mt-3 text-center text-xs text-ink-muted">지도에서 출발과 도착 지점을 볼 수 있어요.</p>
             {walk.memo && (
-              <p className="mt-3 whitespace-pre-wrap rounded-2xl bg-cream p-3 text-sm text-ink-soft" data-testid="shared-memo">
+              <p className="mt-3 whitespace-pre-wrap rounded-lg bg-cream p-3 text-sm text-ink-soft" data-testid="shared-memo">
                 {walk.memo}
               </p>
             )}
@@ -65,13 +65,13 @@ export default function SharedWalkPage() {
           <a
             href={api.sharedWalkGpxUrl(token)}
             download
-            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-line bg-white px-5 text-sm font-bold text-ink hover:bg-cream"
+            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border border-line bg-white px-5 text-sm font-bold text-ink hover:bg-cream"
           >
             <Download size={18} aria-hidden />
             GPX 다운로드
           </a>
           <p className="text-center text-xs text-ink-muted">
-            Every Paw Deserves a Perfect Path. <Link to="/" className="underline">PawPath 둘러보기</Link>
+            <Link to="/" className="underline">mungo 둘러보기</Link>
           </p>
         </>
       )}

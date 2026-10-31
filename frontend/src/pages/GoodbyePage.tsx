@@ -1,5 +1,5 @@
 import { useLocation } from 'react-router-dom';
-import { PawPathMark, Wordmark } from '../components/Logo';
+import { MungoMark, Wordmark } from '../components/Logo';
 import { Card, LinkButton } from '../components/ui';
 
 export default function GoodbyePage() {
@@ -8,7 +8,7 @@ export default function GoodbyePage() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col gap-4 p-4">
       <header className="flex items-center gap-2">
-        <PawPathMark />
+        <MungoMark />
         <Wordmark compact />
       </header>
       <h1 className="font-brand text-2xl text-leaf-800">탈퇴가 끝났어요</h1>

@@ -24,7 +24,7 @@ export default function HBarChart({ items, ariaLabel }: { items: HBarItem[]; ari
           </div>
           <div className="relative h-2.5 rounded-full bg-cream-deep">
             <div
-              className={`h-full rounded-r ${item.muted ? 'bg-leaf-100' : 'bg-leaf-500'}`}
+              className={`h-full rounded-r ${item.muted ? 'bg-cream-deep' : 'bg-mango-500'}`}
               style={{ width: `${Math.max(1, Math.min(100, item.value))}%` }}
             />
             <div className="absolute inset-y-[-2px] left-1/2 w-px bg-ink-muted/50" aria-hidden />

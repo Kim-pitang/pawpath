@@ -426,7 +426,7 @@ function NavigationView({ courseId, recommendationId }: { courseId: number; reco
           aria-pressed={placesOn}
           onClick={togglePlaces}
           className={`absolute top-3 left-3 z-10 flex min-h-10 items-center gap-1.5 rounded-full px-3.5 text-sm font-bold shadow-md ${
-            placesOn ? 'bg-leaf-500 text-white' : 'bg-white text-ink'
+            placesOn ? 'bg-mango-500 text-ink' : 'bg-white text-ink'
           }`}
         >
           <MapPin size={16} aria-hidden />
@@ -445,7 +445,7 @@ function NavigationView({ courseId, recommendationId }: { courseId: number; reco
 
       <section
         aria-live="polite"
-        className="z-10 flex max-h-[62dvh] flex-col gap-3 overflow-y-auto rounded-t-3xl border-t border-line bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgb(120_90_40/0.12)]"
+        className="z-10 flex max-h-[62dvh] flex-col gap-3 overflow-y-auto rounded-t-xl border-t border-line bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgb(120_90_40/0.12)]"
       >
         {error && <ErrorNotice message={error} />}
 
@@ -463,7 +463,7 @@ function NavigationView({ courseId, recommendationId }: { courseId: number; reco
                 type="button"
                 onClick={() => setCheckOpen(true)}
                 data-testid="risk-banner"
-                className="flex items-start gap-2 rounded-2xl bg-carrot-50 p-3 text-left text-sm font-semibold text-carrot-700"
+                className="flex items-start gap-2 rounded-lg bg-[#fffbeb] p-3 text-left text-sm font-semibold text-[#92400e]"
               >
                 <CloudRain size={18} className="mt-0.5 shrink-0" aria-hidden />
                 <span>{CHECK_HEADLINES[check.status]}. 눌러서 복귀 경로와 대체 코스를 확인하세요.</span>
@@ -536,7 +536,7 @@ function NavigationView({ courseId, recommendationId }: { courseId: number; reco
                   href={kakaoDirectionsUrl(course)}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-leaf-500 px-5 text-sm font-bold text-white"
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-mango-500 px-5 text-sm font-bold text-ink"
                 >
                   <ExternalLink size={16} aria-hidden />
                   카카오맵에서 출발점 길찾기
@@ -571,7 +571,7 @@ function NavigationView({ courseId, recommendationId }: { courseId: number; reco
                   </Button>
                   <Link
                     to={`/walk?course=${course.id}${recommendationId ? `&recommendation=${recommendationId}` : ''}`}
-                    className="inline-flex min-h-12 items-center justify-center rounded-2xl border border-line bg-white px-2 text-sm font-bold text-ink"
+                    className="inline-flex min-h-12 items-center justify-center rounded-lg border border-line bg-white px-2 text-sm font-bold text-ink"
                   >
                     GPS 없이 기록하기
                   </Link>
@@ -618,7 +618,7 @@ function CheckPanel({
       {check.weather.notice && <InfoNotice>{check.weather.notice}</InfoNotice>}
       {check.location_notice && <ErrorNotice message={check.location_notice} />}
       {check.action === 'finish_course' && (
-        <p className="rounded-2xl bg-leaf-50 p-3 text-sm text-leaf-800">남은 코스를 마저 걷는 편이 출발점으로 되돌아가는 것보다 짧아요.</p>
+        <p className="rounded-lg bg-cream-deep p-3 text-sm text-ink">남은 코스를 마저 걷는 편이 출발점으로 되돌아가는 것보다 짧아요.</p>
       )}
       {check.action === 'no_walking_route' && <ErrorNotice message="출발점이 멀어 도보 경로를 안내할 수 없어요. 지도 앱을 이용해 주세요." />}
       {route?.notice && <InfoNotice>{route.notice}</InfoNotice>}
@@ -639,7 +639,7 @@ function CheckPanel({
                 <button
                   type="button"
                   onClick={() => onChooseCourse(option.course_id)}
-                  className="w-full rounded-2xl border border-line p-3 text-left"
+                  className="w-full rounded-lg border border-line p-3 text-left"
                 >
                   <span className="block text-sm font-bold">{option.name}</span>
                   <span className="block text-xs text-ink-soft">{option.reason}</span>
@@ -675,7 +675,7 @@ function Instruction({
   return (
     <div className="flex items-center gap-3" data-testid="nav-instruction">
       <span
-        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white ${tone === 'warning' ? 'bg-carrot-500' : 'bg-leaf-500'}`}
+        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg ${tone === 'warning' ? 'bg-[#b42318] text-white' : 'bg-mango-500 text-ink'}`}
       >
         <Icon size={26} aria-hidden />
       </span>
@@ -715,9 +715,9 @@ function WalkStats({ percent, remaining, minutes, elapsed }: { percent: number; 
         aria-valuemin={0}
         aria-valuemax={100}
         data-testid="walk-progress"
-        className="h-2.5 overflow-hidden rounded-full bg-leaf-100"
+        className="h-2.5 overflow-hidden rounded-full bg-cream-deep"
       >
-        <div className="h-full rounded-full bg-leaf-500 transition-[width] duration-500" style={{ width: `${percent}%` }} />
+        <div className="h-full rounded-full bg-mango-500 transition-[width] duration-500" style={{ width: `${percent}%` }} />
       </div>
       <dl className="mt-2 grid grid-cols-3 text-center">
         <Stat label="진행률" value={`${percent}%`} />

@@ -30,6 +30,16 @@ PawPath는 반려동물의 나이, 크기, 활동량, 성격, 산책 선호도�
 
 필요 도구: Python 3.12 이상, [uv](https://docs.astral.sh/uv/), Node.js 20 이상. API 키는 필요 없습니다.
 
+Windows PowerShell에서는 다음 명령으로 실행합니다. `uv`가 Python도 자동으로 준비합니다.
+
+```powershell
+.\dev.ps1
+```
+
+스크립트 실행 정책 때문에 차단되면 `powershell -ExecutionPolicy Bypass -File .\dev.ps1`로 실행하세요.
+
+macOS / Linux / Git Bash에서는 다음 명령으로 실행합니다.
+
 ```bash
 ./dev.sh
 ```

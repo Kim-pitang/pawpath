@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import Layout from './components/Layout';
 import AccountPage from './pages/AccountPage';
 import CommunityPage from './pages/CommunityPage';
@@ -37,6 +37,11 @@ export default function App() {
       <Route path="record" element={<RequireProfile><RecordPage /></RequireProfile>} />
       <Route path="shared/:token" element={<SharedWalkPage />} />
       <Route path="login" element={<LoginPage />} />
+      <Route path="prototypes/best-times" element={<Navigate to="/recommend" replace />} />
+      <Route path="prototypes/duration.html" element={<Navigate to="/recommend" replace />} />
+      <Route path="prototypes/courses.html" element={<Navigate to="/recommend" replace />} />
+      <Route path="prototypes/taste.html" element={<Navigate to="/my" replace />} />
+      <Route path="prototypes/time-preference.html" element={<Navigate to="/my" replace />} />
       <Route path="goodbye" element={<GoodbyePage />} />
       {/* 프로필 선택은 넷플릭스처럼 메뉴 없이 전체 화면으로 띄운다. */}
       <Route path="profiles" element={<ProfilesPage />} />

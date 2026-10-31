@@ -1,7 +1,7 @@
 import { Check, LogOut, Pencil, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { PawPathMark, Wordmark } from '../components/Logo';
+import { MungoMark, Wordmark } from '../components/Logo';
 import ProfileAvatar from '../components/ProfileAvatar';
 import { Button, ErrorNotice, Loading } from '../components/ui';
 import { useApp } from '../context/AppContext';
@@ -49,7 +49,7 @@ export default function ProfilesPage() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-3xl flex-col items-center gap-6 p-4 pb-10">
       <header className="flex w-full items-center gap-2">
-        <PawPathMark />
+        <MungoMark />
         <Wordmark compact />
       </header>
       <div className="mt-4 text-center md:mt-12">

@@ -1,0 +1,27 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "design-api",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "--directory", "backend", "uvicorn", "app.main:app", "--port", "8020"],
+      "env": {
+        "DATABASE_URL": "sqlite:///./design-preview.db",
+        "WEATHER_PROVIDER": "mock",
+        "ROUTING_PROVIDER": "none",
+        "LLM_PROVIDER": "none"
+      },
+      "port": 8020
+    },
+    {
+      "name": "design-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "frontend", "run", "dev", "--", "--host", "127.0.0.1"],
+      "env": {
+        "PAWPATH_WEB_PORT": "5193",
+        "PAWPATH_API_TARGET": "http://127.0.0.1:8020"
+      },
+      "port": 5193
+    }
+  ]
+}

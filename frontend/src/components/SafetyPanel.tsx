@@ -4,14 +4,14 @@ import type { SafetyAssessment, SafetyItem } from '../lib/types';
 
 const LEVELS = {
   good: { label: '양호', icon: ShieldCheck, tone: 'bg-leaf-50 text-leaf-800' },
-  caution: { label: '주의', icon: AlertTriangle, tone: 'bg-carrot-50 text-carrot-700' },
-  danger: { label: '위험', icon: AlertOctagon, tone: 'bg-carrot-100 text-carrot-700' },
-  blocked: { label: '추천 제외', icon: AlertOctagon, tone: 'bg-carrot-100 text-carrot-700' },
+  caution: { label: '주의', icon: AlertTriangle, tone: 'bg-[#fffbeb] text-[#92400e]' },
+  danger: { label: '위험', icon: AlertOctagon, tone: 'bg-[#ffedea] text-[#831c1e]' },
+  blocked: { label: '추천 제외', icon: AlertOctagon, tone: 'bg-[#ffedea] text-[#831c1e]' },
 };
 
 const STATUS_ICON = { ok: ShieldCheck, caution: AlertTriangle, danger: AlertOctagon, unverified: HelpCircle };
 const STATUS_TEXT = { ok: '양호', caution: '주의', danger: '위험', unverified: '확인 불가' };
-const STATUS_COLOR = { ok: 'text-leaf-600', caution: 'text-carrot-500', danger: 'text-carrot-700', unverified: 'text-ink-muted' };
+const STATUS_COLOR = { ok: 'text-mango-700', caution: 'text-[#92400e]', danger: 'text-[#b42318]', unverified: 'text-ink-muted' };
 const SOURCE_TEXT: Record<SafetyItem['source'], string> = {
   forecast: '예보',
   demo: '모의',
@@ -54,7 +54,7 @@ export function SafetyBadge({ assessment }: { assessment: SafetyAssessment }) {
 export default function SafetyPanel({ assessment }: { assessment: SafetyAssessment }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="rounded-2xl border border-line p-3" data-testid="safety-panel">
+    <div className="rounded-lg border border-line p-3" data-testid="safety-panel">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <SafetyBadge assessment={assessment} />
         <button

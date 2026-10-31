@@ -3,11 +3,11 @@ import { useEffect, useRef } from 'react';
 import type { Course } from '../lib/types';
 
 export const RANK_COLORS: Record<number, string> = {
-  1: 'var(--color-leaf-500)',
-  2: 'var(--color-carrot-500)',
+  1: 'var(--color-mango-700)',
+  2: 'var(--color-leaf-500)',
   3: 'var(--color-sky-500)',
 };
-const RANK_HEX: Record<number, string> = { 1: '#2e8b62', 2: '#d9661a', 3: '#3f7cc4' };
+const RANK_HEX: Record<number, string> = { 1: '#9e4c0c', 2: '#2e8b62', 3: '#3f7cc4' };
 const OTHER_COURSE_HEX = '#a39d8d';
 const SELECTED_COURSE_HEX = '#25784f';
 

@@ -771,14 +771,16 @@ test.describe('모바일 화면', () => {
       if (width < 768) {
         await page.goto('/community');
         const nav = page.locator('nav.fixed');
-        await expect(nav.getByRole('link')).toHaveCount(6);
+        await expect(nav.getByRole('link')).toHaveCount(4);
+        await expect(nav.getByRole('button', { name: '산책', exact: true })).toBeVisible();
         for (const link of await nav.getByRole('link').all()) {
           const box = await link.boundingBox();
           expect(box!.x).toBeGreaterThanOrEqual(0);
           expect(box!.x + box!.width).toBeLessThanOrEqual(width + 0.5);
           expect(box!.height).toBeGreaterThanOrEqual(44);
         }
-        await expect(nav.getByRole('link', { name: '커뮤니티' })).toHaveClass(/text-leaf-600/);
+        await nav.getByRole('link', { name: '커뮤니티', exact: true }).click();
+        await expect(page).toHaveURL(/\/community$/);
         await nav.getByRole('link', { name: '마이' }).click();
         await expect(page).toHaveURL(/\/my$/);
       }

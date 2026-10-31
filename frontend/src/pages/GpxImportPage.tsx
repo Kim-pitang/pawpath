@@ -114,12 +114,12 @@ export default function GpxImportPage() {
           setDragging(false);
           void check(event.dataTransfer.files[0]);
         }}
-        className={`flex min-h-36 cursor-pointer flex-col items-center justify-center gap-2 rounded-3xl border-2 border-dashed p-6 text-center transition ${
-          dragging ? 'border-leaf-500 bg-leaf-50' : 'border-line bg-white'
+        className={`flex min-h-36 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-6 text-center transition ${
+          dragging ? 'border-ink bg-cream' : 'border-line bg-white'
         }`}
         data-testid="gpx-dropzone"
       >
-        <FileUp size={28} className="text-leaf-500" aria-hidden />
+        <FileUp size={28} className="text-mango-700" aria-hidden />
         <span className="text-sm font-bold">{preview ? '다른 파일 선택' : 'GPX 파일 선택'}</span>
         <span className="text-xs text-ink-muted">여기로 끌어다 놓아도 돼요. {MAX_GPX_BYTES / (1024 * 1024)}MB, 10만 지점까지 가져올 수 있어요.</span>
         <input
@@ -135,8 +135,8 @@ export default function GpxImportPage() {
       {progress !== null && (
         <div role="status" className="flex flex-col gap-1.5">
           <p className="text-sm font-semibold text-ink-soft">{progress < 100 ? `파일을 올리는 중이에요 ${progress}%` : '파일을 검증하는 중이에요'}</p>
-          <div role="progressbar" aria-label="업로드 진행률" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} className="h-2.5 overflow-hidden rounded-full bg-leaf-100">
-            <div className="h-full rounded-full bg-leaf-500 transition-[width]" style={{ width: `${progress}%` }} />
+          <div role="progressbar" aria-label="업로드 진행률" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} className="h-2.5 overflow-hidden rounded-full bg-cream-deep">
+            <div className="h-full rounded-full bg-mango-500 transition-[width]" style={{ width: `${progress}%` }} />
           </div>
         </div>
       )}
@@ -147,7 +147,7 @@ export default function GpxImportPage() {
           <Card>
             <SectionTitle>
               <span className="flex items-center gap-1.5">
-                <CheckCircle2 size={18} className="text-leaf-500" aria-hidden />
+                <CheckCircle2 size={18} className="text-mango-700" aria-hidden />
                 파일 검증 결과
               </span>
             </SectionTitle>
@@ -171,14 +171,14 @@ export default function GpxImportPage() {
             {preview.duplicate_of && (
               <div className="mt-3" data-testid="gpx-duplicate">
                 <ErrorNotice message={`같은 경로가 이미 저장되어 있어요: ${preview.duplicate_of.title}. 그래도 저장하면 따로 하나 더 생겨요.`} />
-                <Link to={`/my-walks/${preview.duplicate_of.id}`} className="mt-1 inline-block min-h-8 text-sm font-semibold text-leaf-800 underline">
+                <Link to={`/my-walks/${preview.duplicate_of.id}`} className="mt-1 inline-block min-h-8 text-sm font-semibold text-mango-700 underline">
                   저장된 산책길 보기
                 </Link>
               </div>
             )}
           </Card>
 
-          <div className="h-64 overflow-hidden rounded-3xl border border-line">
+          <div className="h-64 overflow-hidden rounded-xl border border-line">
             <WalkRouteMap segments={segments} />
           </div>
 

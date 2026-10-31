@@ -9,21 +9,26 @@ async function chooseScenario(page: Page, name: string) {
 
 test.describe.configure({ mode: 'serial' });
 
-test('메인 화면에 브랜드와 핵심 정보가 표시된다', async ({ page }) => {
+test('메인 화면이 오늘의 산책 시간과 코스를 먼저 보여 준다', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'PawPath', level: 1 })).toBeVisible();
-  await expect(page.getByText('Every Paw Deserves a Perfect Path.')).toBeVisible();
-  await expect(page.getByText('AI-Powered Personalized Pet Walking Recommendation')).toBeVisible();
-  await expect(page.getByText('말티즈 · 5세 · 4.2kg')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'mungo 홈' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('두부 산책은');
+  await expect(page.getByRole('link', { name: '두부 프로필 보기: 말티즈, 5세, 4.2kg, 소심함' })).toBeVisible();
   await expect(page.getByText('16시 ~ 20시')).toBeVisible();
-  await expect(page.getByText('출처: 모의 날씨')).toBeVisible();
-  await expect(page.getByRole('link', { name: '추천 시작' })).toBeVisible();
+  await expect(page.getByRole('group', { name: '시간대별 산책 점수' })).toBeVisible();
+  await page.getByRole('button', { name: '모의 날씨' }).click();
+  await expect(page.getByRole('dialog', { name: '날씨 데이터 안내' })).toContainText('모의 날씨 데이터를 사용 중이에요.');
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('link', { name: '이 코스로 산책' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '다른 코스와 추천 근거 보기' })).toBeVisible();
 });
 
 test('최종 검증 시나리오: 추천, 산책, 5점 피드백, 다음 추천 반영', async ({ page }) => {
   // 1~5. 날씨, 코스, 점수, TOP 3, 추천 이유
   await chooseScenario(page, '곧 비');
-  await expect(page.getByText('시연용 시나리오: 곧 비가 오는 날')).toBeVisible();
+  await page.getByRole('button', { name: '시연용 곧 비' }).click();
+  await expect(page.getByRole('dialog', { name: '날씨 데이터 안내' })).toContainText('시연용 시나리오: 곧 비가 오는 날');
+  await page.keyboard.press('Escape');
   await expect(page.getByTestId('course-card-1')).toBeVisible();
   await expect(page.getByTestId('course-card-3')).toBeVisible();
   await expect(page.getByTestId('course-card-1').getByTestId('reason-summary')).toHaveText(EXPECTED_SENTENCE);
@@ -73,9 +78,7 @@ test('최종 검증 시나리오: 추천, 산책, 5점 피드백, 다음 추천 
 
   // 8. 다음 추천에 반영: 점수가 오르지만 피드백 1건으로는 순위를 뒤집지 않는다.
   await page.getByRole('button', { name: '달라진 추천 보기' }).click();
-  await expect(page.getByText(/피드백 1건을 학습해/)).toBeVisible();
   const updated = page.getByRole('article').filter({ hasText: secondName });
-  await expect(updated.getByText(/학습 효과 \+/)).toBeVisible();
   await expect(updated.getByTestId('reason-summary')).toContainText('지난번 만족도가 높았던');
 
   // 같은 코스에 5점을 한 번 더 남기면 1위로 오른다.
@@ -90,9 +93,10 @@ test('최종 검증 시나리오: 추천, 산책, 5점 피드백, 다음 추천 
   await page.getByRole('button', { name: '또 갈래요' }).click();
   await page.getByRole('button', { name: '피드백 남기기' }).click();
   await page.getByRole('button', { name: '달라진 추천 보기' }).click();
-  await expect(page.getByText(/피드백 2건을 학습해/)).toBeVisible();
+  // 학습 안내 태그는 숨겨도 개인화 결과는 유지한다.
+  await expect(page.getByText(/학습 효과/)).toHaveCount(0);
   await expect(page.getByTestId('course-card-1').getByRole('heading')).toHaveText(secondName);
-  await expect(page.getByTestId('course-card-1').getByText('학습 전보다 1계단 상승')).toBeVisible();
+  await expect(page.getByTestId('course-card-1').getByText('학습 전보다 1계단 상승')).toHaveCount(0);
 
   // 마이페이지 분석
   await page.getByRole('navigation', { name: '주요 메뉴' }).getByRole('link', { name: '마이' }).click();
@@ -100,8 +104,7 @@ test('최종 검증 시나리오: 추천, 산책, 5점 피드백, 다음 추천 
   await expect(page.getByText('2번').first()).toBeVisible();
   await expect(page.getByLabel('코스별 선호도').getByText(secondName)).toBeVisible();
   await expect(page.getByText('두부의 취향 분석')).toBeVisible();
-  await expect(page.getByText('추천 결과 변화')).toBeVisible();
-  await expect(page.getByRole('img', { name: '추천 회차별 코스 점수 변화' })).toBeVisible();
+  await expect(page.getByText('추천 결과 변화')).toHaveCount(0);
 });
 
 test('지도에 코스 경로와 시설이 표시된다', async ({ page }) => {
@@ -141,7 +144,7 @@ test('반려동물을 등록하고 수정하면 추천이 달라진다', async (
   await expect(page.getByText('보더콜리 · 3세 · 19.5kg')).toBeVisible();
 
   await chooseScenario(page, '실제 날씨');
-  await expect(page.getByRole('heading', { name: '바람의 오늘의 산책각' })).toBeVisible();
+  await expect(page.getByText('바람의 오늘의 산책각')).toBeVisible();
   await expect(page.getByTestId('course-card-1').getByTestId('reason-summary')).toContainText('바람');
   await expect(page.getByTestId('course-card-1').getByTestId('reason-summary')).not.toContainText('낯선 길을 싫어하는');
 });
@@ -153,12 +156,15 @@ test('보호자 일정을 바꾸면 추천 시간이 그 안으로 들어온다'
   await page.getByRole('button', { name: '저장하기' }).click();
   await expect(page.getByText('7시 ~ 11시')).toBeVisible();
 
-  await page.goto('/recommend');
-  await expect(page.getByTestId('course-card-1')).toBeVisible();
-  const columns = await page.getByRole('list', { name: '시간대별 산책 점수' }).getByRole('listitem').all();
+  // 시간대별 점수는 메인 화면의 산책 시간표에만 있다.
+  await page.goto('/');
+  const strip = page.getByRole('group', { name: '시간대별 산책 점수' });
+  await expect(strip.getByRole('button').first()).toBeVisible();
+  const columns = await strip.getByRole('button').all();
   expect(columns.length).toBeGreaterThan(0);
   for (const column of columns) {
-    const hour = Number((await column.getAttribute('aria-label'))!.match(/(\d+)시/)![1]);
+    const [, half, clock] = (await column.getAttribute('aria-label'))!.match(/(오전|오후) (\d+)시/)!;
+    const hour = (Number(clock) % 12) + (half === '오후' ? 12 : 0);
     expect(hour).toBeGreaterThanOrEqual(7);
     expect(hour).toBeLessThan(11);
   }
@@ -175,7 +181,9 @@ test('보호자 일정을 바꾸면 추천 시간이 그 안으로 들어온다'
 
 test('폭우 시나리오에서는 코스 대신 실내 대안을 안내한다', async ({ page }) => {
   await page.goto('/pets');
-  await page.getByRole('button', { name: '이 아이로 추천받기' }).first().click();
+  const firstPet = page.getByRole('button', { name: /지금 산책할 아이|이 아이로 추천받기/ }).first();
+  await expect(firstPet).toBeVisible();
+  if (await firstPet.isEnabled()) await firstPet.click();
   await chooseScenario(page, '폭우');
   await expect(page.getByText('오늘은 실내 놀이를 추천해요')).toBeVisible();
   await expect(page.getByText(/노즈워크/)).toBeVisible();

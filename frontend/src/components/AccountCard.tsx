@@ -4,18 +4,23 @@ import { useApp } from '../context/AppContext';
 import { clearDraft, loadDraft } from '../lib/recording';
 import { Button, Card, LinkButton } from './ui';
 
-export default function AccountCard() {
-  const { account, signOut } = useApp();
+/** 로그아웃하고 홈으로 간다. 머리글 계정 메뉴와 마이 화면이 함께 쓴다. */
+export function useLogout() {
+  const { signOut } = useApp();
   const navigate = useNavigate();
-  if (!account) return null;
-
-  const logout = async () => {
+  return async () => {
     // 같은 기기를 다른 사람이 쓸 수 있으므로, 저장하지 않은 기록도 함께 지운다.
     if (loadDraft() && !window.confirm('저장하지 않은 산책 기록이 있어요. 로그아웃하면 이 기기에서 지워져요.')) return;
     clearDraft();
     await signOut();
     navigate('/');
   };
+}
+
+export default function AccountCard() {
+  const { account } = useApp();
+  const logout = useLogout();
+  if (!account) return null;
 
   if (account.authenticated && account.user) {
     const { user } = account;
@@ -23,7 +28,7 @@ export default function AccountCard() {
     return (
       <Card className="flex flex-col gap-3">
         <div className="flex min-w-0 items-center gap-2">
-          <UserRound size={20} className="shrink-0 text-leaf-500" aria-hidden />
+          <UserRound size={20} className="shrink-0 text-mango-700" aria-hidden />
           <div className="min-w-0">
             <p className="text-xs text-ink-muted">{google ? 'Google 계정으로 로그인' : '로그인 계정'}</p>
             <p className="truncate font-bold" data-testid="account-name">

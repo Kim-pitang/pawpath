@@ -27,7 +27,7 @@ export default function DailyColumns({ days }: { days: Day[] }) {
               className="flex h-full min-w-0 flex-1 flex-col items-center justify-end"
             >
               {day.walk_count > 0 && <span className="mb-0.5 text-[11px] font-semibold tabular-nums text-ink">{day.distance_km.toFixed(1)}</span>}
-              <span className={`block w-full max-w-6 rounded-t ${shown?.date === day.date ? 'bg-leaf-600' : 'bg-leaf-500'}`} style={{ height }} />
+              <span className={`block w-full max-w-6 rounded-t ${shown?.date === day.date ? 'bg-mango-700' : 'bg-mango-500'}`} style={{ height }} />
             </button>
           );
         })}
@@ -42,7 +42,7 @@ export default function DailyColumns({ days }: { days: Day[] }) {
       <p className="mt-1 text-right text-[11px] text-ink-muted">막대 위 숫자는 km</p>
 
       {shown && (
-        <div className="mt-2 rounded-2xl bg-cream px-3 py-2 text-sm" aria-live="polite">
+        <div className="mt-2 rounded-lg bg-cream px-3 py-2 text-sm" aria-live="polite">
           <p className="font-semibold text-ink">
             {shown.date.slice(5).replace('-', '/')} ({shown.weekday}) · {shown.walk_count}번 · {shown.distance_km.toFixed(1)}km · {shown.minutes}분
           </p>

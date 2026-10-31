@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
-import DivergingBars from '../components/charts/DivergingBars';
+import { useEffect, useState } from 'react';
+import PreferenceRanking from '../components/charts/PreferenceRanking';
 import HBarChart from '../components/charts/HBarChart';
-import ScoreTrendChart from '../components/charts/ScoreTrendChart';
+import TimePreferenceCards from '../components/charts/TimePreferenceCards';
 import AccountCard from '../components/AccountCard';
 import FamilyMenu from '../components/FamilyMenu';
 import { Card, ChoiceGroup, EmptyState, ErrorNotice, InfoNotice, LinkButton, Loading, PageTitle, SectionTitle } from '../components/ui';
@@ -33,13 +33,6 @@ export default function MyPage() {
       active = false;
     };
   }, [petId, scope]);
-
-  // 날씨가 다르면 점수 변화의 원인을 알 수 없으므로, 최신 추천과 같은 날씨 조건끼리만 비교한다.
-  const trend = useMemo(() => {
-    const history = insights?.recommendation_history ?? [];
-    const latest = history[history.length - 1];
-    return latest ? history.filter((record) => record.scenario === latest.scenario) : [];
-  }, [insights]);
 
   if (petsLoaded && !selectedPet) {
     return (
@@ -150,55 +143,22 @@ export default function MyPage() {
         {insights.attributes_learned && (
           <Card>
             <SectionTitle>{insights.pet_name}의 취향 분석</SectionTitle>
-            <DivergingBars
-              ariaLabel="학습된 코스 특성 선호"
-              items={insights.attributes.map((attribute) => ({
-                key: attribute.key,
-                label: attribute.label,
-                value: attribute.weight,
-              }))}
-            />
-            <p className="mt-2 text-xs text-ink-muted">피드백에서 학습한 값이에요. +는 좋아하는 특성, −는 덜 좋아하는 특성이에요.</p>
+            <PreferenceRanking key={insights.pet_id} insights={insights} />
           </Card>
         )}
 
         {hasFeedback && (
           <Card>
             <SectionTitle>시간대 선호</SectionTitle>
-            <HBarChart
-              ariaLabel="시간대별 선호"
-              items={insights.time_preferences.map((time) => ({
-                key: time.key,
-                label: time.label,
-                value: time.score,
-                note: time.samples ? `${time.samples}회` : '기록 없음',
-                muted: time.samples === 0,
-              }))}
-            />
+            <TimePreferenceCards key={insights.pet_id} items={insights.time_preferences} />
           </Card>
-        )}
-
-        {trend.length >= 2 ? (
-          <Card>
-            <SectionTitle>추천 결과 변화</SectionTitle>
-            <ScoreTrendChart history={trend} />
-            <p className="mt-2 text-xs text-ink-muted">같은 날씨 조건에서 받은 추천끼리 비교했어요.</p>
-          </Card>
-        ) : (
-          hasFeedback && (
-            <Card>
-              <SectionTitle>추천 결과 변화</SectionTitle>
-              <p className="text-sm text-ink-soft">같은 날씨 조건에서 추천을 두 번 이상 받으면 변화가 그려져요.</p>
-              <LinkButton to="/recommend" variant="ghost" className="mt-3 w-full">다시 추천받기</LinkButton>
-            </Card>
-          )
         )}
 
         {hasFeedback && (
           <Card>
             <SectionTitle>피드백 기록</SectionTitle>
             <ul className="flex flex-col divide-y divide-line">
-              {[...insights.affinity_history].reverse().slice(0, 6).map((item) => (
+              {[...insights.affinity_history].reverse().slice(0, 5).map((item) => (
                 <li key={item.feedback_id} className="py-2.5 first:pt-0 last:pb-0">
                   <div className="flex items-center justify-between gap-2 text-sm">
                     <span className="min-w-0 truncate font-semibold">{item.course_name}</span>
@@ -221,7 +181,7 @@ export default function MyPage() {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-3xl border border-line bg-white p-4">
+    <div className="rounded-xl border border-line bg-white p-4">
       <p className="text-xs text-ink-muted">{label}</p>
       <p className="mt-1 text-xl font-bold">{value}</p>
     </div>

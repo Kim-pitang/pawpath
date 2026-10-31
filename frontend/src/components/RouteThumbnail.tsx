@@ -1,10 +1,11 @@
-const SIZE = 72;
-const PADDING = 8;
-
-/** 목록용 경로 그림. 지도 타일을 받지 않아 카드가 많아도 가볍다. */
-export default function RouteThumbnail({ segments, label, size = SIZE }: { segments: number[][][]; label: string; size?: number }) {
+/** 목록용 경로 그림. 지도 타일을 받지 않아 카드가 많아도 가볍다. 목록은 72px, 추천 카드는 더 크게 쓴다. */
+export default function RouteThumbnail({ segments, label, size = 72 }: { segments: number[][][]; label: string; size?: number }) {
+  const SIZE = size;
+  const PADDING = size / 9;
+  const STROKE = Math.max(2.5, size / 32);
+  const DOT = Math.max(3.5, size / 24);
   const points = segments.flat();
-  if (points.length === 0) return <div style={{ width: size, height: size }} className="shrink-0 rounded-2xl bg-cream-deep" />;
+  if (points.length === 0) return <div style={{ width: SIZE, height: SIZE }} className="shrink-0 rounded-lg bg-cream-deep" />;
 
   const lats = points.map((point) => point[0]);
   const lngs = points.map((point) => point[1]);
@@ -22,20 +23,20 @@ export default function RouteThumbnail({ segments, label, size = SIZE }: { segme
   const [endX, endY] = project(points[points.length - 1]);
 
   return (
-    <svg viewBox={`0 0 ${SIZE} ${SIZE}`} width={size} height={size} role="img" aria-label={label} className="shrink-0 rounded-2xl bg-leaf-50" data-testid="route-thumbnail">
+    <svg viewBox={`0 0 ${SIZE} ${SIZE}`} width={SIZE} height={SIZE} role="img" aria-label={label} className="shrink-0 rounded-lg bg-cream-deep" data-testid="route-thumbnail">
       {segments.map((segment, index) => (
         <polyline
           key={index}
           points={segment.map((point) => project(point).map((value) => value.toFixed(1)).join(',')).join(' ')}
           fill="none"
-          stroke="#2e8b62"
-          strokeWidth={2.5}
+          stroke="#9e4c0c"
+          strokeWidth={STROKE}
           strokeLinecap="round"
           strokeLinejoin="round"
         />
       ))}
-      <circle cx={endX} cy={endY} r={3.5} fill="#d9661a" stroke="#fff" strokeWidth={1.5} />
-      <circle cx={startX} cy={startY} r={3.5} fill="#175239" stroke="#fff" strokeWidth={1.5} />
+      <circle cx={endX} cy={endY} r={DOT} fill="#f28b38" stroke="#fff" strokeWidth={1.5} />
+      <circle cx={startX} cy={startY} r={DOT} fill="#422d21" stroke="#fff" strokeWidth={1.5} />
     </svg>
   );
 }

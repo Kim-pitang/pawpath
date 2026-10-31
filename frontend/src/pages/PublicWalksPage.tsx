@@ -28,7 +28,7 @@ export default function PublicWalksPage() {
         <ul className="flex flex-col gap-3" aria-label="공개된 산책길 목록">
           {walks.map((walk) => (
             <li key={walk.token}>
-              <Link to={`/shared/${walk.token}`} className="flex items-center gap-3 rounded-3xl border border-line bg-white p-3 transition hover:bg-leaf-50">
+              <Link to={`/shared/${walk.token}`} className="flex items-center gap-3 rounded-xl border border-line bg-white p-3 transition hover:bg-cream">
                 <RouteThumbnail segments={walk.preview} label={`${walk.title} 경로`} />
                 <div className="min-w-0 flex-1">
                   <h2 className="truncate font-bold">{walk.title}</h2>

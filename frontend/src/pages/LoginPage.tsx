@@ -2,7 +2,7 @@ import { LogIn, UserPlus } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import GoogleMark from '../components/GoogleMark';
-import { PawPathMark, Wordmark } from '../components/Logo';
+import { MungoMark, Wordmark } from '../components/Logo';
 import { Button, Card, ChoiceGroup, ErrorNotice, InfoNotice } from '../components/ui';
 import { useApp } from '../context/AppContext';
 import { api } from '../lib/api';
@@ -14,7 +14,7 @@ const MODE_OPTIONS: { value: Mode; label: string }[] = [
   { value: 'login', label: '로그인' },
   { value: 'signup', label: '회원가입' },
 ];
-const INPUT_CLASS = 'mt-1.5 min-h-12 w-full rounded-2xl border border-line bg-white px-4 text-base outline-none focus:border-leaf-500';
+const INPUT_CLASS = 'mt-1.5 min-h-12 w-full rounded-lg border border-line bg-white px-4 text-base outline-none focus:border-ink';
 const LOGIN_ID_PATTERN = /^[a-z0-9][a-z0-9_.-]{2,29}$/;
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const isEmail = (value: string) => value.includes('@');
@@ -73,10 +73,10 @@ export default function LoginPage() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col gap-4 p-4">
       <header className="flex items-center gap-2">
-        <PawPathMark />
+        <MungoMark />
         <Wordmark compact />
       </header>
-      <h1 className="font-brand text-2xl text-leaf-800">{mode === 'login' ? '로그인' : '회원가입'}</h1>
+      <h1 className="text-2xl font-bold text-ink">{mode === 'login' ? '로그인' : '회원가입'}</h1>
       {account?.auth_required && <InfoNotice>이 서버는 로그인해야 쓸 수 있어요.</InfoNotice>}
       {googleError && !error && <ErrorNotice message={googleError} />}
 
@@ -85,7 +85,7 @@ export default function LoginPage() {
           <div className="mb-4 flex flex-col gap-4">
             <a
               href={api.googleStartUrl(from)}
-              className="inline-flex min-h-12 items-center justify-center gap-3 rounded-2xl border border-line bg-white px-5 text-sm font-bold text-ink transition hover:bg-cream"
+              className="inline-flex min-h-12 items-center justify-center gap-3 rounded-lg border border-line bg-white px-5 text-sm font-bold text-ink transition hover:bg-cream"
             >
               <GoogleMark />
               Google로 계속하기

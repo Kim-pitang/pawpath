@@ -30,7 +30,9 @@ async function openWithNewPet(page: Page, request: APIRequestContext) {
 test('다른 시각에 다녀온 산책을 기록하고, 남은 피드백 항목을 알려 준다', async ({ page, request }) => {
   const { petId } = await openWithNewPet(page, request);
   await page.goto('/walk');
-  await expect(page.getByRole('link', { name: '보리' })).toBeVisible();
+  await page.getByRole('button', { name: /계정 메뉴/ }).click();
+  await expect(page.getByRole('dialog', { name: '반려동물과 계정' }).getByRole('button', { name: /보리/ })).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('Escape');
 
   await page.getByLabel('다녀온 코스').selectOption({ index: 1 });
   await page.getByRole('button', { name: '다른 시각에 다녀왔어요' }).click();

@@ -21,10 +21,10 @@ export default function PetsPage() {
         {pets.map((pet) => {
           const selected = selectedPet?.id === pet.id;
           return (
-            <Card key={pet.id} className={selected ? 'border-leaf-300' : ''}>
+            <Card key={pet.id} className={selected ? 'border-mango-500' : ''}>
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-3">
-                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-carrot-50 text-carrot-500">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-cream-deep text-ink-soft">
                     <PawPrint size={24} aria-hidden />
                   </span>
                   <div>
@@ -54,8 +54,8 @@ export default function PetsPage() {
                 type="button"
                 disabled={selected}
                 onClick={() => selectPet(pet.id)}
-                className={`mt-4 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-2xl text-sm font-bold ${
-                  selected ? 'bg-leaf-50 text-leaf-800' : 'border border-line text-ink-soft hover:bg-cream'
+                className={`mt-4 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg text-sm font-bold ${
+                  selected ? 'bg-cream-deep text-ink' : 'border border-line text-ink-soft hover:bg-cream'
                 }`}
               >
                 {selected && <Check size={16} aria-hidden />}

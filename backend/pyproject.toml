@@ -10,6 +10,7 @@ dependencies = [
     "pydantic>=2.8",
     "pydantic-settings>=2.4",
     "httpx>=0.27",
+    "tzdata>=2026.6",
 ]
 
 [project.optional-dependencies]

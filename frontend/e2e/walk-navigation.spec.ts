@@ -255,7 +255,9 @@ test.describe('추천과 리포트 고도화', () => {
   test('날씨 조건에 따라 위험 코스를 제외하고 이유를 보여 준다', async ({ page }) => {
     await page.goto('/recommend');
     await page.getByRole('button', { name: '폭염', exact: true }).click();
-    await expect(page.getByText('시연용 시나리오: 폭염')).toBeVisible();
+    await page.getByRole('button', { name: '시연용 폭염' }).click();
+    await expect(page.getByRole('dialog', { name: '날씨 데이터 안내' })).toContainText('시연용 시나리오: 폭염');
+    await page.keyboard.press('Escape');
     await expect(page.getByTestId('course-card-1')).toBeVisible();
     const excluded = page.getByTestId('excluded-courses');
     await expect(excluded).toContainText('위험 조건으로 제외한 코스');

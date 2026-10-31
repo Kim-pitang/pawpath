@@ -85,8 +85,8 @@ export default function MapPage() {
                   type="button"
                   aria-pressed={active}
                   onClick={() => select(course.id)}
-                  className={`flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition ${
-                    active ? 'border-leaf-500 bg-leaf-50' : 'border-line bg-white'
+                  className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition ${
+                    active ? 'border-ink bg-cream' : 'border-line bg-white'
                   }`}
                 >
                   <span
