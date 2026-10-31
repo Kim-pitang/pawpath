@@ -373,6 +373,7 @@ docs/                아키텍처, API 명세, 고도화 보고서, 검증 결�
 - [추천 알고리즘 v2](docs/RECOMMENDER.md): 기존 엔진 분석, 4단계 구조, 가중치, 피드백 학습, 평가 지표와 결과, 검증하지 못한 항목
 - [검증 결과](docs/VALIDATION.md): 시나리오 12개, 나만의 산책길 14개 항목, 산책길 커뮤니티, GPX 호환성, 실제 환경 확인
 - [백업 및 복구 정책](docs/BACKUP.md): 기준, 절차, 복구하면 달라지는 것, 탈퇴와 백업, 한계
+- [배포](docs/DEPLOY.md): 서버에서 DB, API, 웹, 길찾기를 모두 컨테이너로 돌리는 방법(`compose.prod.yaml`)
 - [PostgreSQL 운영](docs/POSTGRES.md): 띄우기, Alembic, SQLite 데이터 옮기기, pg_dump 백업과 복구, SQLite와 다른 점, 한계
 - [외부 자원 활용 내역](docs/EXTERNAL_RESOURCES.md): 발표자료용 표
 - [개발 계획](docs/PLAN.md)

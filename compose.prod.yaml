@@ -1,0 +1,75 @@
+# 배포용. DB, API, 웹(nginx), 길찾기(OSRM)를 모두 컨테이너로 돌린다. 개발용 DB만 띄우려면 docker-compose.yml을 쓰세요.
+#   docker compose -f compose.prod.yaml up -d --build --wait
+# 설정은 저장소 최상위 .env에서 읽는다. 필요한 값은 docs/DEPLOY.md에 있다.
+name: pawpath-prod
+
+services:
+  db:
+    image: postgres:18.6-bookworm
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pawpath}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?.env에 POSTGRES_PASSWORD를 정하세요}
+      POSTGRES_DB: ${POSTGRES_DB:-pawpath}
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C.UTF-8
+    # 밖으로 열지 않는다. 직접 들어가려면 docker compose -f compose.prod.yaml exec db psql -U pawpath
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    mem_limit: 1g
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    env_file: .env
+    environment:
+      # .env의 DATABASE_URL과 상관없이 이 compose의 DB를 쓴다.
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-pawpath}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-pawpath}
+      BACKUP_DIR: /app/backups
+      # 컨테이너 안의 localhost는 이 컨테이너다. 서버(호스트)의 Ollama는 host.docker.internal로 부른다.
+      LLM_BASE_URL: ${PROD_LLM_BASE_URL:-http://host.docker.internal:11434}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    volumes:
+      # 탈퇴 기록(deletions.jsonl)과 SQLite 이전 백업이 남는다. 컨테이너 사용자가 쓸 수 있게 이름 있는 볼륨을 쓴다.
+      - backups:/app/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    mem_limit: 1g
+    restart: unless-stopped
+
+  web:
+    build: ./frontend
+    ports:
+      # 지금처럼 이 서버 안에서만 연다. 바깥에 열려면 앞에 https 프록시를 두세요.
+      - "127.0.0.1:${WEB_PORT:-5173}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    mem_limit: 256m
+    restart: unless-stopped
+
+  # 길찾기 서버. 데이터(.osrm)는 scripts/deploy_osrm_cloud.sh 방식으로 미리 만들어 OSRM_DATA_DIR에 둔다.
+  # COMPOSE_PROFILES=osrm 일 때만 뜬다. 앱이 쓰게 하려면 ROUTING_BASE_URL=http://osrm:5000 으로 바꾸세요.
+  osrm:
+    profiles: [osrm]
+    image: ghcr.io/project-osrm/osrm-backend@sha256:55dbfd47d984c2cacd64e32901b4321c86b5ec761438e69aa053dc78698a786f
+    command: osrm-routed --algorithm mld -t 2 /data/${OSRM_DATASET:-gyeonggi}.osrm
+    volumes:
+      - ${OSRM_DATA_DIR:-./osrm-data}:/data:ro
+    ports:
+      - "127.0.0.1:${OSRM_PORT:-5002}:5000"
+    mem_limit: 2g
+    cpus: 1
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+    # 이미 있는 볼륨을 쓰려면 PG_VOLUME에 그 이름을 넣는다(예: pawpath-postgres-data).
+    name: ${PG_VOLUME:-pawpath-prod-pgdata}
+  backups:
+    name: pawpath-prod-backups
