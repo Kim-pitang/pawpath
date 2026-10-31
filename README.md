@@ -1,10 +1,10 @@
-# PawPath 댕댕 산책각
+<p align="center"><img src="frontend/public/mungo-logo.webp" width="96" alt="mungo 로고" /></p>
 
-**Every Paw Deserves a Perfect Path.**
+# mungo
 
-AI-Powered Personalized Pet Walking Recommendation
+**Every Paw Deserves a Perfect Path.** 우리 강아지 맞춤 산책 시간과 코스 추천
 
-PawPath는 반려동물의 나이, 크기, 활동량, 성격, 산책 선호도와 보호자의 일정을 분석하고, 실시간 날씨와 동네 환경의 위험을 평가해 오늘 가장 좋은 산책 시간과 코스를 추천하는 서비스입니다. 산책 후 남긴 피드백을 학습해 반려동물이 실제로 좋아하는 코스와 시간대를 다음 추천에 반영합니다.
+mungo(저장소 이름 PawPath)는 반려동물의 나이, 크기, 활동량, 성격, 산책 선호도와 보호자의 일정을 분석하고, 실시간 날씨와 동네 환경의 위험을 평가해 오늘 가장 좋은 산책 시간과 코스를 추천하는 서비스입니다. 산책 후 남긴 피드백을 학습해 반려동물이 실제로 좋아하는 코스와 시간대를 다음 추천에 반영합니다.
 
 > 낯선 길을 싫어하는 두부를 위해 익숙한 공원 코스를 골랐어요. 비가 오기 전 짧게 다녀올 수 있어요.
 
@@ -26,26 +26,48 @@ PawPath는 반려동물의 나이, 크기, 활동량, 성격, 산책 선호도�
 - **보호자 계정 (선택):** 아이디, 이메일, Google 계정으로 로그인하면 반려동물, 추천, 산책 기록, 산책길이 계정별로 나뉩니다. 가족은 한 계정에서 넷플릭스처럼 프로필을 최대 5개 만들어 다시 로그인하지 않고 바꿔 쓰며, 반려동물은 함께 쓰고 산책 기록은 프로필마다 남습니다. 로그인하지 않으면 지금처럼 시연 보호자로 씁니다. 세션이 끝나면 보던 화면에서 다시 로그인해 이어서 쓰고, 탈퇴하면 데이터를 바로 지웁니다.
 - **주간 리포트:** 거리, 시간, 만족도 변화, 지난주 대비, 추천과 실제 선택을 비교합니다. 시연용 산책은 통계에서 뺍니다.
 
+## 화면 구성
+
+모바일 웹을 먼저 생각하고 만들었습니다. 폰에서는 아래 메뉴, 넓은 화면에서는 머리글 메뉴로 이동합니다.
+
+| 메뉴 | 화면 | 하는 일 |
+|---|---|---|
+| 홈 | `/` | 반려동물 이름표, "내일 두부 산책은 오전 7시가 좋아요" 같은 한 줄 답, 시간대별 산책 점수 막대와 날씨 지표, 오늘의 추천 코스, 다른 코스 |
+| 커뮤니티 | `/community` | 다른 보호자가 공유한 산책길 탐색, 저장, 후기 |
+| 산책 (가운데 버튼) | 시트 | 추천 코스로 산책(`/recommend`), 내 길로 GPS 기록(`/record`), 다녀온 산책 기록(`/walk`), 산책길 자동 만들기(`/generate`) |
+| 지도 | `/map` | 조건(오늘 추천, 30분 이하, 공원, 그늘 많음)으로 코스를 거르고 거리·시간·그늘을 표로 비교. 줄을 누르면 지도와 상세가 펼쳐지고, 왼쪽으로 밀면 바로 길 안내 시작 |
+| 마이 | `/my` | 산책 리포트, 코스 선호도, 학습된 취향, 시간대 선호, 피드백 기록, 계정·가족 프로필 |
+
+추천 화면(`/recommend`)은 날씨 조건 고르기, 코스 TOP 3(경로 모양, 안전 평가, 점수 근거, 출발 시각)를 보여 주고, 길 안내(`/navigate`)는 전체 화면 지도로 따로 열립니다. 브랜드 색과 디자인 원칙은 [PRODUCT.md](PRODUCT.md)에 있습니다.
+
+## 기술 스택
+
+| 영역 | 사용 |
+|---|---|
+| 프론트엔드 | React 19, TypeScript, Vite, Tailwind CSS v4, React Router 7, Leaflet(OpenStreetMap), lucide-react |
+| 백엔드 | Python 3.12, FastAPI, SQLAlchemy 2, Pydantic, Alembic, uv |
+| DB | PostgreSQL 18(`docker compose`), Docker 없이 돌릴 때는 SQLite |
+| 외부 데이터 | Open-Meteo(날씨), OSRM(도보 길찾기), OpenStreetMap·Overpass(코스 환경과 시설) |
+| 선택 | Ollama 로컬 LLM(추천 문장), Google OAuth(로그인) |
+| 테스트 | pytest(백엔드), Playwright(브라우저 E2E, 모바일 Pixel 7 기준) |
+| 배포 | `compose.prod.yaml`(PostgreSQL, API, nginx 웹, 선택 OSRM) |
+
+추천 엔진은 외부 AI를 부르지 않고 직접 구현한 규칙 기반 개인화 모델입니다. 구조와 가중치는 [추천 알고리즘](docs/RECOMMENDER.md)에 있습니다.
+
 ## 빠른 시작
 
 필요 도구: Python 3.12 이상, [uv](https://docs.astral.sh/uv/), Node.js 20 이상, Docker(PostgreSQL용). API 키는 필요 없습니다.
 
-Windows PowerShell에서는 다음 명령으로 실행합니다. `uv`가 Python도 자동으로 준비합니다.
-
-```powershell
-.\dev.ps1
-```
-
-스크립트 실행 정책 때문에 차단되면 `powershell -ExecutionPolicy Bypass -File .\dev.ps1`로 실행하세요.
-
-macOS / Linux / Git Bash에서는 다음 명령으로 실행합니다.
+macOS에서는 다음 명령으로 실행합니다. `uv`가 Python도 자동으로 준비합니다.
 
 ```bash
 cp .env.example .env   # POSTGRES_PASSWORD와 DATABASE_URL의 비밀번호를 같은 값으로 바꾸세요
 ./dev.sh
 ```
 
-PostgreSQL을 `docker compose`로 띄워 접속을 받을 때까지 기다린 뒤, 의존성을 설치하고 백엔드와 프론트엔드를 함께 띄웁니다. `Ctrl+C`로 백엔드와 프론트엔드를 함께 종료합니다(DB는 계속 돎. 멈추려면 `docker compose stop`). macOS와 Linux용 스크립트이므로 Windows에서는 아래 **따로 실행하기**를 따르세요. `.env`가 없거나 `DATABASE_URL`을 지우면 Docker 없이 SQLite 파일(`backend/pawpath.db`)로 돕니다. 운영 방법은 [PostgreSQL 운영](docs/POSTGRES.md)에 있습니다.
+PostgreSQL을 `docker compose`로 띄워 접속을 받을 때까지 기다린 뒤, 의존성을 설치하고 백엔드와 프론트엔드를 함께 띄웁니다. `Ctrl+C`로 백엔드와 프론트엔드를 함께 종료합니다(DB는 계속 돎. 멈추려면 `docker compose stop`). `.env`가 없거나 `DATABASE_URL`을 지우면 Docker 없이 SQLite 파일(`backend/pawpath.db`)로 돕니다. 운영 방법은 [PostgreSQL 운영](docs/POSTGRES.md)에 있습니다.
+
+Windows에서는 PowerShell에서 `.\dev.ps1`을 실행합니다. 실행 정책 때문에 막히면 `powershell -ExecutionPolicy Bypass -File .\dev.ps1`로 실행하세요.
 
 - 앱: http://localhost:5173
 - API 문서(Swagger): http://localhost:8000/docs
@@ -214,12 +236,12 @@ uv run python -m app.backup restore latest    # 복구
 
 ## 시연 순서
 
-1. **홈:** 두부 정보, 현재 날씨, 산책 가능 시간을 확인하고 **추천 시작**을 누릅니다.
-2. **추천:** 날씨 조건에서 **곧 비**를 고릅니다. 위의 추천 문장과 TOP 3, 안전 평가, 점수 근거를 볼 수 있습니다. 피드백을 남기기 전이라면 어느 시각에 시연해도 같은 문장이 나옵니다. AI 문장을 켜면 이 문장 대신 AI 문장이 표시됩니다.
-3. **지도:** 코스를 고르면 경로, 코스 주변 시설, 데이터 출처를 볼 수 있습니다.
-4. **산책:** 2위 코스에서 **이 코스로 산책**을 누르면 길 안내 지도가 열립니다. 망원동이 아닌 곳에서 시연한다면 **시연용 위치로 걷기**를 누르세요. 코스를 따라 움직이며 안내가 바뀝니다. **산책 끝내기**를 누르고 만족도 5점 피드백을 남깁니다.
-5. **달라진 추천 보기:** 피드백한 코스의 점수가 오르고 "학습 효과"가 표시됩니다. 추천 v2는 피드백 1건을 보수적으로 반영해 이 조건에서는 순위가 그대로입니다. 같은 코스로 한 번 더 산책하고 5점을 남기면 1위로 오르고 순위 변화가 표시됩니다. (`RECOMMENDER_VERSION=v1`이면 1건으로 1위가 됩니다.)
-6. **마이페이지와 주간 리포트:** 코스 선호도, 학습된 취향, 추천 결과 변화를 확인합니다. 주간 리포트에서는 시연용 산책이 통계에서 빠진 것도 볼 수 있습니다.
+1. **홈:** 두부 이름표와 "두부 산책은 ○시가 좋아요" 한 줄 답, 시간대별 점수 막대를 봅니다. 막대를 누르면 그 시간의 강수·습도·바람·자외선이 바뀝니다. **다른 코스와 추천 근거 보기**로 추천 화면으로 갑니다.
+2. **추천:** 날씨 조건에서 **곧 비**를 고릅니다. 추천 문장과 코스 TOP 3, 안전 평가, **점수 근거 보기**를 볼 수 있습니다. 피드백을 남기기 전이라면 어느 시각에 시연해도 같은 문장이 나옵니다. AI 문장을 켜면 이 문장 대신 AI 문장이 표시됩니다.
+3. **지도:** **30분 이하**, **그늘 많음** 같은 조건으로 코스를 거르고 표로 비교합니다. 줄을 누르면 경로, 주변 시설, 데이터 출처가 펼쳐집니다. 줄을 왼쪽으로 밀면 바로 산책을 시작합니다.
+4. **산책:** 추천 화면 2위 코스에서 **이 코스로 산책**을 누르면 길 안내 지도가 열립니다. 서비스 지역이 아닌 곳에서 시연한다면 **시연용 위치로 걷기**를 누르세요. 코스를 따라 움직이며 안내가 바뀝니다. **산책 끝내기**를 누르고 만족도 5점 피드백을 남깁니다.
+5. **달라진 추천 보기:** 5점을 준 코스가 1위로 올라오고, 추천 이유에 "지난번 만족도가 높았던"이 붙습니다.
+6. **마이와 주간 리포트:** 코스 선호도, 학습된 취향, 시간대 선호, 최근 피드백 5건을 확인합니다. 주간 리포트에서는 시연용 산책이 통계에서 빠진 것도 볼 수 있습니다.
 
 **실제 날씨** 외의 조건(곧 비, 폭염, 한파, 폭우)은 시연용 시나리오이며 화면에 그렇게 표시됩니다. 폭염에서는 더운 시간과 그늘을 확인할 수 없는 긴 코스가 제외되고, 폭우에서는 실내 대안을 안내합니다.
 
@@ -360,23 +382,26 @@ frontend/
   src/components/    지도, 차트, 안전 평가, 공통 UI
   src/lib/           API 호출, 길 안내 계산, 위치 수집, 산책 기록 계산
   e2e/               브라우저 E2E
-scripts/             코스 경로 구축(build_courses.py), OSM 환경값 계산(enrich_courses.py)
-docs/                아키텍처, API 명세, 고도화 보고서, 검증 결과, 백업 정책, 외부 자원, 개발 계획
+scripts/             코스 경로 구축(build_courses.py), OSM 환경값 계산(enrich_courses.py), 지역 OSM 자료 수집(collect_osm_area.py), 테스트 DB 초기화(postgres-init/)
+docs/                아키텍처, API 명세, 추천 알고리즘, 검증 결과, 백업, PostgreSQL, 배포, GPX 코스, 외부 자원
+docker-compose.yml   개발용 PostgreSQL
+compose.prod.yaml    배포용 DB, API, 웹(nginx), 길찾기
+dev.ps1, dev.sh      개발 서버를 한 번에 띄우는 스크립트 (Windows, macOS/Linux)
+PRODUCT.md           제품 정의, 사용자, 브랜드(mungo)와 디자인 원칙
 ```
 
 ## 문서
 
 - [기능 정리](docs/FEATURES.md): 구현 완료, 구현 중, 미구현 기능
-- [시스템 아키텍처](docs/ARCHITECTURE.md): 구성, 추천 알고리즘, 데이터 모델, 장애 대응
+- [시스템 아키텍처](docs/ARCHITECTURE.md): 구성, 추천 파이프라인, 안전 지수, AI 추천 문장, 산책길 자동 생성, 데이터 모델, 장애 대응
 - [API 명세](docs/API.md)
-- [고도화 보고서](docs/ENHANCEMENT.md): 추천 알고리즘, 안전 지수, DB 변경, 미구현 기능과 한계
 - [추천 알고리즘 v2](docs/RECOMMENDER.md): 기존 엔진 분석, 4단계 구조, 가중치, 피드백 학습, 평가 지표와 결과, 검증하지 못한 항목
 - [검증 결과](docs/VALIDATION.md): 시나리오 12개, 나만의 산책길 14개 항목, 산책길 커뮤니티, GPX 호환성, 실제 환경 확인
 - [백업 및 복구 정책](docs/BACKUP.md): 기준, 절차, 복구하면 달라지는 것, 탈퇴와 백업, 한계
 - [배포](docs/DEPLOY.md): 서버에서 DB, API, 웹, 길찾기를 모두 컨테이너로 돌리는 방법(`compose.prod.yaml`)
 - [PostgreSQL 운영](docs/POSTGRES.md): 띄우기, Alembic, SQLite 데이터 옮기기, pg_dump 백업과 복구, SQLite와 다른 점, 한계
+- [GPX 후보 코스](docs/GPX_COURSES.md): 공개 GPX 20개를 추천 후보로 적재한 방법과 결과
 - [외부 자원 활용 내역](docs/EXTERNAL_RESOURCES.md): 발표자료용 표
-- [개발 계획](docs/PLAN.md)
 
 ## 데이터와 안전에 관한 안내
 

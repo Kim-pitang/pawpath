@@ -1,6 +1,6 @@
 # PostgreSQL 운영
 
-개발과 배포 모두 PostgreSQL 18(`postgres:18.6-bookworm`)을 씁니다. 개발 DB는 저장소 최상위의 `docker-compose.yml`로 띄우고, 배포 서버는 `scripts/deploy_postgres_cloud.sh`와 같은 이미지를 씁니다. SQLite는 Docker 없이 돌리는 경우와 기본 테스트용으로 남아 있습니다.
+개발과 배포 모두 PostgreSQL 18(`postgres:18.6-bookworm`)을 씁니다. 개발 DB는 저장소 최상위의 `docker-compose.yml`로 띄우고, 배포 서버는 `compose.prod.yaml`에서 같은 이미지를 씁니다([배포](DEPLOY.md)). SQLite는 Docker 없이 돌리는 경우와 기본 테스트용으로 남아 있습니다.
 
 ## 처음 띄우기
 
@@ -105,5 +105,5 @@ docker compose exec -T db psql -U pawpath -d pawpath_test -c "drop schema public
 
 - 탈퇴한 보호자의 데이터가 지운 직후 디스크에서 사라지는지는 보장하지 않습니다. PostgreSQL은 지운 행을 VACUUM이 공간을 재사용할 때까지 데이터 파일에 남기고, WAL 파일에도 남습니다. SQLite에서 확인하던 "파일에 남지 않음" 테스트는 PostgreSQL에서 건너뜁니다.
 - 자동 백업, 보존 기간 정리, 복구 뒤 처리(`deletions.jsonl` 재적용 등)는 PostgreSQL에서 자동화하지 않았습니다.
-- 배포 서버에 실제 데이터를 옮기는 일은 하지 않았습니다. 배포 서버의 DB는 `scripts/deploy_postgres_cloud.sh`로 만들고, 위 "SQLite 데이터 옮기기"를 그 서버의 `DATABASE_URL`로 실행하면 됩니다.
+- 배포 서버에 실제 데이터를 옮기는 일은 하지 않았습니다. 배포 서버의 DB는 `compose.prod.yaml`로 띄우고, 데이터 이전 절차는 [배포](DEPLOY.md#처음-배포하기-sqlite-데이터가-있을-때)를 따르면 됩니다.
 - 백엔드는 컨테이너로 띄우지 않습니다. `docker compose`는 DB만 띄우고, 백엔드는 지금처럼 `./dev.sh` 또는 `uv run uvicorn`으로 띄웁니다.

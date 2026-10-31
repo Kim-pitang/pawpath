@@ -69,8 +69,7 @@ web
 
 - 실제 코스 데이터: `backend/app/data/courses.json`(망원동 10개), `courses_gaepo.json`(개포동 6개), 주변 시설 `places*.json`. OpenStreetMap 기준이며 혼잡도와 그늘은 현장 확인값이 아닌 추정.
 - 시연용 반려동물 "두부"와 기본 일정(16~20시) 시드.
-- 검증 기록: `docs/VALIDATION.md`, 고도화 보고서 `docs/ENHANCEMENT.md`, 외부 자원 내역 `docs/EXTERNAL_RESOURCES.md`.
-- 디자인 참고 자료 모음: `docs/design-md/`(타사 DESIGN.md 레퍼런스). 사용자가 구속력 있는 방향으로 지정한 것은 아니다.
+- 검증 기록: `docs/VALIDATION.md`, 추천 알고리즘 `docs/RECOMMENDER.md`, 외부 자원 내역 `docs/EXTERNAL_RESOURCES.md`.
 - 없음: 실사용자 후기, 사용자 수, 수상·보도, 제휴. 만들어 넣지 않는다.
 
 ## Product Principles
