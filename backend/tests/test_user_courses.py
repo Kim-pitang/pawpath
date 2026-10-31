@@ -1,6 +1,6 @@
 """내 산책길을 추천 후보 코스로 쓰기."""
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import httpx
 import pytest
@@ -98,7 +98,9 @@ def test_imported_walk_is_not_treated_as_familiar(client):
     assert course["description"] == "GPX로 가져온 내 산책길이에요."
 
 
-def test_unknown_values_are_never_shown_as_team_estimates_or_safe(client):
+def test_unknown_values_are_never_shown_as_team_estimates_or_safe(client, monkeypatch):
+    # 해가 지면 그늘은 평가하지 않으므로, 테스트를 언제 돌려도 같도록 낮으로 고정한다.
+    monkeypatch.setattr("app.api.now_local", lambda: datetime(2026, 10, 31, 14, 0))
     walk = make_walk(client)
     course_id = register(client, walk["id"]).json()["course"]["id"]
     body = client.get("/api/safety", params={"pet_id": dubu_id(client), "course_id": course_id, "scenario": "heatwave"}).json()
