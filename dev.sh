@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # PawPath 개발 서버 실행: 백엔드(8000)와 프론트엔드(5173)를 함께 띄운다. Ctrl+C로 함께 종료한다.
 set -euo pipefail
+for tool in uv node npm; do
+  command -v "$tool" >/dev/null 2>&1 || {
+    echo "Required tool '$tool' was not found. Install uv and Node.js 20+ first." >&2
+    exit 1
+  }
+done
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 (cd "$ROOT/backend" && uv sync --quiet)
