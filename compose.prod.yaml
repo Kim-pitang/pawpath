@@ -45,7 +45,7 @@ services:
   web:
     build: ./frontend
     ports:
-      # 지금처럼 이 서버 안에서만 연다. 바깥에 열려면 앞에 https 프록시를 두세요.
+      # 이 서버 안에서만 연다. 바깥 공개는 아래 cloudflared가 맡는다.
       - "127.0.0.1:${WEB_PORT:-5173}:80"
     depends_on:
       backend:
@@ -75,6 +75,21 @@ services:
     network_mode: host
     command: TCP-LISTEN:11434,bind=172.17.0.1,fork,reuseaddr TCP:127.0.0.1:11434
     mem_limit: 64m
+    restart: unless-stopped
+
+  # 바깥 공개. Cloudflare Tunnel이 대시보드에 정한 주소(예: pawpath.ficklebobo.dev)로 들어온 요청을 web으로 넘긴다.
+  # 서버는 인바운드를 열 필요가 없고, 아웃바운드 7844만 있으면 된다. 대시보드의 Service URL은 http://web:80 이다.
+  # COMPOSE_PROFILES에 tunnel을 넣고 .env에 CLOUDFLARE_TUNNEL_TOKEN을 정할 때만 뜬다.
+  cloudflared:
+    profiles: [tunnel]
+    image: cloudflare/cloudflared:2026.5.2
+    command: tunnel --no-autoupdate --metrics 127.0.0.1:20241 run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      web:
+        condition: service_healthy
+    mem_limit: 256m
     restart: unless-stopped
 
 volumes:
