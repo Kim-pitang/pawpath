@@ -272,6 +272,7 @@ docs/                아키텍처, API 명세, 고도화 보고서, 검증 결�
 
 ## 문서
 
+- [기능 정리](docs/FEATURES.md): 구현 완료, 구현 중, 미구현 기능
 - [시스템 아키텍처](docs/ARCHITECTURE.md): 구성, 추천 알고리즘, 데이터 모델, 장애 대응
 - [API 명세](docs/API.md)
 - [고도화 보고서](docs/ENHANCEMENT.md): 추천 알고리즘, 안전 지수, DB 변경, 미구현 기능과 한계
