@@ -125,6 +125,7 @@ def recommend(
     now: datetime,
     config: ScoringConfig = DEFAULT_CONFIG,
     weather_source: str = FORECAST,
+    top_n: int = TOP_N,
 ) -> RecommendationResult:
     course_list = list(courses)
     features = build_features(pet)
@@ -141,7 +142,7 @@ def recommend(
     ranked_courses = [item[0] for item in ranked]
 
     recommendations = []
-    for position, (course, total, slot, factors, preference) in enumerate(ranked[:TOP_N], start=1):
+    for position, (course, total, slot, factors, preference) in enumerate(ranked[:top_n], start=1):
         baseline_rank, baseline_score = baseline_lookup.get(course.id, (position, total))
         assessment = assessments[course.id]
         alternative = None
