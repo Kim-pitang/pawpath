@@ -149,7 +149,7 @@ def score_personality(
         evidence.append("익숙한 코스" if known >= 0.5 else "아직 낯선 코스")
     elif novelty > 0.6:
         evidence.append("새로운 경험을 주는 코스" if known < 0.5 else "이미 익숙한 코스")
-    evidence.append(f"혼잡도: {CROWD_TEXT[course.crowd_level]}")
+    evidence.append("혼잡도: 확인 불가" if "crowd_level" in course.unknown else f"혼잡도: {CROWD_TEXT[course.crowd_level]}")
 
     return _clip(0.45 * path_score + 0.3 * crowd_score + 0.25 * temperament), tuple(evidence)
 

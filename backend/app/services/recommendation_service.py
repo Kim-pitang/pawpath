@@ -4,7 +4,7 @@ from collections import Counter
 from datetime import datetime
 from functools import lru_cache
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -61,10 +61,18 @@ def to_profile(pet: Pet) -> PetProfile:
     )
 
 
-def active_courses(db: Session) -> list[WalkingCourse]:
-    """지금 서비스 지역의 코스. 멀리 떨어진 지역의 코스가 추천에 섞이지 않게 한다."""
+def visible_to(user: User | None):
+    """공용 코스와, 이 보호자의 내 산책길 코스. 다른 보호자의 코스는 보이지 않는다."""
+    if user is None:
+        return WalkingCourse.owner_user_id.is_(None)
+    return or_(WalkingCourse.owner_user_id.is_(None), WalkingCourse.owner_user_id == user.id)
+
+
+def active_courses(db: Session, user: User | None) -> list[WalkingCourse]:
+    """지금 서비스 지역에서 추천 후보로 쓰는 코스. 멀리 떨어진 지역의 코스가 추천에 섞이지 않게 한다."""
     area = get_settings().service_area_label
-    return list(db.scalars(select(WalkingCourse).where(WalkingCourse.area == area).order_by(WalkingCourse.id)))
+    query = select(WalkingCourse).where(WalkingCourse.area == area, WalkingCourse.is_active.is_not(False), visible_to(user))
+    return list(db.scalars(query.order_by(WalkingCourse.id)))
 
 
 def to_course_data(course: WalkingCourse) -> CourseData:
@@ -85,6 +93,7 @@ def to_course_data(course: WalkingCourse) -> CourseData:
         scenery_tags=tuple(course.scenery_tags),
         facility_counts=dict(Counter(facility["type"] for facility in course.facilities)),
         environment=course.environment or {},
+        unknown=frozenset((course.data_sources or {}).get("unknown", [])),
     )
 
 
@@ -163,6 +172,8 @@ def _safety_payload(course: WalkingCourse) -> dict:
         "pet_allowed": course.pet_allowed,
         "pet_rule_note": course.pet_rule_note,
         "verified_facilities": dict(counts),
+        "is_personal": course.is_personal,
+        "unknown": list((course.data_sources or {}).get("unknown", [])),
     }
 
 
@@ -180,6 +191,7 @@ def _course_payload(item: CourseRecommendation, course: WalkingCourse, state: Pr
         "code": course.code,
         "name": course.name,
         "description": course.description,
+        "is_personal": course.is_personal,
         "distance_km": course.distance_km,
         "duration_min": course.duration_min,
         "total_score": item.total_score,
@@ -273,7 +285,7 @@ def create_recommendation(db: Session, pet: Pet, user: User, scenario: str, now:
     schedule = to_schedule(user)
     weather = get_weather(db, now, schedule.windows, scenario)
     state = load_state(db, pet)
-    courses = active_courses(db)
+    courses = active_courses(db, user)
 
     result = recommend(
         pet=to_profile(pet),

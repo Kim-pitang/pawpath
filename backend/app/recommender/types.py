@@ -81,6 +81,8 @@ class CourseData:
     facility_counts: dict[str, int] = field(default_factory=dict)
     # OSM에서 수집한 실측값. 없으면 안전 평가에서 '확인 불가'로 다룬다.
     environment: dict = field(default_factory=dict)
+    # 측정도 팀 추정도 없는 속성 이름. 내 산책길처럼 값을 알 수 없을 때 중립값으로 계산하고 '확인 불가'로 표시한다.
+    unknown: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)

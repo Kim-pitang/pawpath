@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, inspect, text
 
 from app.config import Settings
 from app.database import Base, SessionLocal
-from app.migrations import ADDED_COLUMNS, ADDED_UNIQUE_INDEXES, ensure_schema
+from app.migrations import ADDED_COLUMNS, ensure_schema
 from app.models import Pet, User, WalkingCourse
 from app.recommender.config import BASE_WEIGHTS, DEFAULT_CONFIG, ScoringConfig, parse_scoring_config
 from app.recommender.engine import recommend
@@ -219,11 +219,13 @@ def _old_schema_engine(tmp_path):
     engine = create_engine(f"sqlite:///{tmp_path}/old.db")
     Base.metadata.create_all(engine)
     with engine.begin() as connection:
-        for index, _, _ in ADDED_UNIQUE_INDEXES:
-            connection.execute(text(f"DROP INDEX {index}"))
         for table, columns in ADDED_COLUMNS.items():
-            for name, _ in columns:
-                connection.execute(text(f"ALTER TABLE {table} DROP COLUMN {name}"))
+            # SQLite는 외래 키가 걸린 컬럼을 지울 수 없어, 새 컬럼을 뺀 표를 새로 만든다. 색인도 함께 사라진다.
+            added = {name for name, _ in columns}
+            kept = [row[1] for row in connection.execute(text(f"PRAGMA table_info({table})")) if row[1] not in added]
+            connection.execute(text(f"CREATE TABLE {table}_old AS SELECT {', '.join(kept)} FROM {table}"))
+            connection.execute(text(f"DROP TABLE {table}"))
+            connection.execute(text(f"ALTER TABLE {table}_old RENAME TO {table}"))
         connection.execute(text("INSERT INTO users (id, name, available_windows, preferred_duration_min, walks_per_day, created_at, updated_at) VALUES (1, '보호자', '[]', 40, 1, '2026-10-30', '2026-10-30')"))
         connection.execute(text("INSERT INTO pets (id, user_id, name, breed, age_years, weight_kg, size, activity_level, personality, path_preference, heat_sensitivity, novelty_reaction, learned_attribute_weights, learned_time_buckets, feedback_total, created_at, updated_at) VALUES (1, 1, '옛날두부', '말티즈', 5, 4, 'small', 'medium', 'timid', 'familiar', 'medium', 'anxious', '{}', '{}', 3, '2026-10-30', '2026-10-30')"))
     return engine
@@ -238,6 +240,7 @@ def test_old_database_gets_new_columns_and_keeps_its_data(tmp_path):
     assert "walking_courses.environment" in added
     assert "users.login_id" in added
     assert "users.google_sub" in added
+    assert {"walking_courses.owner_user_id", "walking_courses.saved_walk_id", "walking_courses.is_active"} <= set(added)
     with engine.connect() as connection:
         row = connection.execute(text("SELECT name, feedback_total, preferred_distance_km FROM pets")).one()
         assert connection.execute(text("SELECT login_id, password_hash FROM users WHERE id = 1")).one() == (None, None)

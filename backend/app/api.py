@@ -1,7 +1,7 @@
 """REST API 라우터."""
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -22,6 +22,7 @@ from app.services.gpx_service import MAX_GPX_BYTES, GpxError, build_gpx, content
 from app.services.llm_service import enhance_recommendation
 from app.services.photo_service import MAX_PHOTO_BYTES, MAX_PHOTOS_PER_WALK, PhotoError, clean_image
 from app.services.places_service import PLACE_LABELS, nearby_places
+from app.services import user_course_service
 from app.services.recommendation_service import active_courses, create_recommendation, load_state, to_course_data, to_profile, windows_of
 from app.services.report_service import build_report, is_simulated, walked_km
 from app.services.routing_service import Approach, plan_approach
@@ -50,6 +51,24 @@ def current_user(request: Request, db: Session = Depends(get_db)) -> User:
     if user is None:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "초기 데이터가 준비되지 않았습니다")
     return user
+
+
+def viewer(request: Request, db: Session = Depends(get_db)) -> User | None:
+    """로그인 없이도 열리는 코스 화면의 보는 사람. 내 산책길 코스를 주인에게만 보이려고 쓴다. 오류를 내지 않는다."""
+    token = request.cookies.get(auth_service.SESSION_COOKIE)
+    if token:
+        return auth_service.user_for_token(db, token, now_local())
+    if get_settings().auth_required:
+        return None
+    return db.get(User, DEFAULT_USER_ID)
+
+
+def _visible_course(db: Session, course_id: int, user: User | None) -> WalkingCourse:
+    """공용 코스이거나 내 코스일 때만 돌려준다. 다른 보호자의 코스는 없는 것과 같다."""
+    course = db.get(WalkingCourse, course_id)
+    if course is None or (course.owner_user_id is not None and (user is None or course.owner_user_id != user.id)):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "코스를 찾을 수 없습니다")
+    return course
 
 
 def _get_pet(db: Session, pet_id: int, user: User) -> Pet:
@@ -325,24 +344,25 @@ def weather_forecast(
 
 # 산책 코스
 @router.get("/courses", response_model=list[schemas.CourseDetail], tags=["산책 코스"])
-def list_courses(db: Session = Depends(get_db)) -> list[WalkingCourse]:
-    return active_courses(db)
+def list_courses(db: Session = Depends(get_db), user: User | None = Depends(viewer)) -> list[WalkingCourse]:
+    """지금 지역의 추천 후보 코스. 로그인했거나 시연 보호자라면 내 산책길 코스도 함께 돌려준다."""
+    return active_courses(db, user)
 
 
 @router.get("/courses/{course_id}", response_model=schemas.CourseDetail, tags=["산책 코스"])
-def get_course(course_id: int, db: Session = Depends(get_db)) -> WalkingCourse:
-    course = db.get(WalkingCourse, course_id)
-    if course is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "코스를 찾을 수 없습니다")
-    return course
+def get_course(course_id: int, db: Session = Depends(get_db), user: User | None = Depends(viewer)) -> WalkingCourse:
+    return _visible_course(db, course_id, user)
 
 
 @router.post("/courses/{course_id}/approach", response_model=schemas.ApproachRead, tags=["산책 코스"])
-def course_approach(course_id: int, body: schemas.ApproachRequest, db: Session = Depends(get_db)) -> Approach:
+def course_approach(
+    course_id: int,
+    body: schemas.ApproachRequest,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(viewer),
+) -> Approach:
     """현재 위치에서 코스 출발점까지의 도보 경로. 위치는 저장하지 않으며, 로그에 남지 않도록 본문으로 받는다."""
-    course = db.get(WalkingCourse, course_id)
-    if course is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "코스를 찾을 수 없습니다")
+    course = _visible_course(db, course_id, user)
     return plan_approach((body.latitude, body.longitude), (course.start_lat, course.start_lng))
 
 
@@ -352,11 +372,10 @@ def course_nearby(
     radius_m: int = Query(default=300, ge=50, le=1000),
     types: str | None = Query(default=None, description="쉼표로 구분. 비우면 전체"),
     db: Session = Depends(get_db),
+    user: User | None = Depends(viewer),
 ) -> dict:
     """코스 경로 주변 시설. 미리 수집한 OSM 자료에서 찾으며 사용자 위치는 받지 않는다."""
-    course = db.get(WalkingCourse, course_id)
-    if course is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "코스를 찾을 수 없습니다")
+    course = _visible_course(db, course_id, user)
     wanted = {item.strip() for item in types.split(",") if item.strip()} if types else None
     if wanted and wanted - set(PLACE_LABELS):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "지원하지 않는 시설 종류입니다")
@@ -378,9 +397,7 @@ def route_alternative(
 ) -> dict:
     """산책 중 날씨를 다시 평가해 계속 걸을지, 줄일지, 돌아갈지와 대체 코스를 알려 준다."""
     pet = _get_pet(db, body.pet_id, user)
-    course = db.get(WalkingCourse, body.course_id)
-    if course is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "코스를 찾을 수 없습니다")
+    course = _visible_course(db, body.course_id, user)
     if (body.latitude is None) != (body.longitude is None):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "위도와 경도를 함께 보내 주세요")
     position = (body.latitude, body.longitude) if body.latitude is not None else None
@@ -407,9 +424,7 @@ def safety(
     if course_id is None:
         return {"course_id": None, "checked_at": now, "weather": weather, "assessment": assessment_payload(assess_conditions(result.hours[0], features, source))}
 
-    course = db.get(WalkingCourse, course_id)
-    if course is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "코스를 찾을 수 없습니다")
+    course = _visible_course(db, course_id, user)
     forecast = {hour.time: hour for hour in result.hours}
     slot = evaluate_slot(now, course.duration_min, ALL_DAY, forecast, features, load_state(db, pet), now)
     if slot is None:
@@ -494,9 +509,7 @@ def _walk_response(walk: WalkHistory) -> dict:
 @router.post("/walks", response_model=schemas.WalkRead, status_code=status.HTTP_201_CREATED, tags=["산책 기록"])
 def post_walk(body: schemas.WalkCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
     pet = _get_pet(db, body.pet_id, user)
-    course = db.get(WalkingCourse, body.course_id)
-    if course is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "코스를 찾을 수 없습니다")
+    course = _visible_course(db, body.course_id, user)
     if body.recommendation_id is not None:
         recommendation = db.get(Recommendation, body.recommendation_id)
         if recommendation is None or recommendation.pet_id != pet.id:
@@ -601,9 +614,37 @@ def _walk_summary(walk: SavedWalk) -> schemas.SavedWalkSummary:
     return summary
 
 
+def _personal_course(walk: SavedWalk) -> schemas.PersonalCourseRead | None:
+    course = walk.course
+    if course is None:
+        return None
+    sources = course.data_sources or {}
+    in_area = course.area == get_settings().service_area_label
+    measurement = user_course_service.measurement_status(course, now_local())
+    notes = {
+        "pending": ["주변 도로, 조명, 노면, 나무, 공원을 OpenStreetMap에서 측정하고 있어요. 보통 30초 안팎 걸리고, 그동안은 확인 불가로 계산해요."],
+        "failed": ["OpenStreetMap 응답을 받지 못해 차량 노출, 조명, 노면, 그늘, 공원을 확인 불가로 계산해요. 다시 측정해 보세요."],
+        "off": ["서버 설정으로 주변 환경을 측정하지 않아 차량 노출, 조명, 노면, 그늘, 공원을 확인 불가로 계산해요."],
+    }.get(measurement, [])
+    notes.append("혼잡도와 경사는 측정할 수 없어 확인 불가로 표시돼요.")
+    if course.is_active and not in_area:
+        notes.append(f"지금 서버 지역({get_settings().service_area_label})과 달라 추천에는 나오지 않아요.")
+    return schemas.PersonalCourseRead(
+        id=course.id,
+        active=course.is_active,
+        area=course.area,
+        in_current_area=in_area,
+        environment_measured=bool(course.environment),
+        measurement=measurement,
+        unknown=list(sources.get("unknown", [])),
+        notes=notes,
+    )
+
+
 def _walk_detail(walk: SavedWalk) -> schemas.SavedWalkDetail:
     return schemas.SavedWalkDetail(
         **_walk_summary(walk).model_dump(),
+        course=_personal_course(walk),
         memo=walk.memo,
         share_token=walk.share_token,
         share_expires_at=walk.share_expires_at,
@@ -698,8 +739,37 @@ def update_saved_walk(
 
 @router.delete("/my-walks/{walk_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["나만의 산책길"])
 def delete_saved_walk(walk_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> None:
-    db.delete(_get_saved_walk(db, walk_id, user))
+    walk = _get_saved_walk(db, walk_id, user)
+    # 이 코스로 남긴 산책 기록이 있을 수 있어 코스는 지우지 않고 추천에서만 뺀다.
+    user_course_service.detach(db, walk)
+    db.delete(walk)
     db.commit()
+
+
+@router.post("/my-walks/{walk_id}/course", response_model=schemas.SavedWalkDetail, tags=["나만의 산책길"])
+def register_course(
+    walk_id: int,
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> schemas.SavedWalkDetail:
+    """산책길을 내 추천 후보 코스로 등록한다. 주변 환경은 응답을 보낸 뒤 측정하며, 다시 부르면 다시 측정한다."""
+    walk = _get_saved_walk(db, walk_id, user)
+    try:
+        course, token = user_course_service.register(db, user, walk, get_settings(), now_local())
+    except user_course_service.CourseError as error:
+        raise HTTPException(422, str(error)) from error
+    if token:
+        background.add_task(user_course_service.measure, course.id, token)
+    return _walk_detail(walk)
+
+
+@router.delete("/my-walks/{walk_id}/course", response_model=schemas.SavedWalkDetail, tags=["나만의 산책길"])
+def unregister_course(walk_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> schemas.SavedWalkDetail:
+    """추천 후보에서 뺀다. 이 코스로 남긴 산책 기록과 피드백은 그대로 둔다."""
+    walk = _get_saved_walk(db, walk_id, user)
+    user_course_service.unregister(db, walk)
+    return _walk_detail(walk)
 
 
 @router.get("/my-walks/{walk_id}/gpx", tags=["나만의 산책길"])

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button, Card, Chip, ChoiceGroup, ErrorNotice, InfoNotice, Loading, PageTitle, SectionTitle } from '../components/ui';
 import WalkDetailsForm, { PRIVACY_WARNING, type WalkDetailsValue } from '../components/WalkDetailsForm';
+import CourseCandidatePanel from '../components/CourseCandidatePanel';
 import WalkPhotos from '../components/WalkPhotos';
 import WalkRouteMap from '../components/WalkRouteMap';
 import { api } from '../lib/api';
@@ -103,6 +104,8 @@ export default function MyWalkDetailPage() {
       </Card>
 
       <WalkPhotos walk={walk} onChange={setWalk} />
+
+      <CourseCandidatePanel walk={walk} onChange={setWalk} />
 
       <a
         href={api.savedWalkGpxUrl(id)}

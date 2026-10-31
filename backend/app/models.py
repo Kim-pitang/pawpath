@@ -104,6 +104,15 @@ class WalkingCourse(Base):
     data_sources: Mapped[dict] = mapped_column(JSON, default=dict)
     # OSM에서 경로별로 측정한 값: 도로 유형, 조명, 노면, 나무 기록 비율
     environment: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # 내 산책길로 만든 코스는 주인에게만 보인다. 시드 코스는 비어 있다.
+    owner_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    saved_walk_id: Mapped[int | None] = mapped_column(ForeignKey("saved_walks.id"), nullable=True)
+    # 추천 후보에서 뺀 코스. 산책 기록이 코스를 가리키므로 지우지 않고 끈다.
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    @property
+    def is_personal(self) -> bool:
+        return self.owner_user_id is not None
 
 
 class WeatherRecord(Base):
@@ -252,6 +261,7 @@ class SavedWalk(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_local, onupdate=now_local)
 
     pet: Mapped[Pet | None] = relationship()
+    course: Mapped[WalkingCourse | None] = relationship(uselist=False, viewonly=True)
     points: Mapped[list["SavedWalkPoint"]] = relationship(
         back_populates="walk", cascade="all, delete-orphan", order_by="SavedWalkPoint.sequence"
     )

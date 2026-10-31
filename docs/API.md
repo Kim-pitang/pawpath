@@ -151,6 +151,8 @@ Google이 돌려보내는 주소이며 콘솔의 리디렉션 URI와 같아야 �
 
 ### `GET /courses` · `GET /courses/{course_id}`
 
+로그인 없이 열리며, 공용 코스와 보는 사람의 내 산책길 코스(`is_personal: true`)를 돌려줍니다. 다른 보호자의 내 산책길 코스는 번호로 조회해도 `404`입니다. 출발점 길찾기, 주변 시설, 안전 평가, 산책 기록, 대체 경로도 같은 기준으로 막습니다. 내 산책길 코스의 `data_sources.unknown`에는 측정도 추정도 없어 "확인 불가"로 다루는 속성이 들어갑니다.
+
 코스 정보, 경로(`route`: `[위도, 경도]` 배열), 시설(`facilities`), 출처(`data_sources`)를 돌려줍니다. 목록은 서버 설정 `SERVICE_AREA` 지역의 코스만 돌려주고, 번호로 조회하면 지역과 관계없이 돌려줍니다.
 
 ### `POST /courses/{course_id}/approach`
@@ -465,6 +467,18 @@ GPX 파일 원본을 요청 본문으로 보냅니다(`Content-Type: application
 사진 원본을 요청 본문으로 보냅니다. 형식은 `Content-Type`이 아니라 파일 내용으로 판단하며 JPG와 PNG만 받습니다. JPEG는 EXIF(촬영 위치), XMP, IPTC, 주석과 끝 표시 뒤에 붙은 보조 이미지를, PNG는 `eXIf`, `tEXt`, `zTXt`, `iTXt`, `tIME` 조각을 지우고 저장합니다. 산책길마다 5장, 장당 5MB까지이며 넘으면 `409`, `413`입니다. 손상된 파일은 `422`입니다.
 
 `GET`은 사진 파일을 `Cache-Control: private`, `X-Content-Type-Options: nosniff`와 함께 돌려줍니다. 상세 응답의 `photos`에는 `id`, `content_type`, `size_bytes`, `created_at`만 담습니다. 사진은 공유 응답과 공개 목록에 나오지 않습니다.
+
+### `POST /my-walks/{walk_id}/course` · `DELETE /my-walks/{walk_id}/course`
+
+산책길을 내 추천 후보 코스로 등록하거나 뺍니다. 응답은 산책길 상세이며 `course`에 상태가 들어갑니다.
+
+```json
+{ "id": 17, "active": true, "area": "서울 마포구 망원동 일대", "in_current_area": true, "environment_measured": false, "measurement": "pending", "unknown": ["crowd_level", "difficulty", "has_park", "is_paved", "shade_level", "traffic_exposure"], "notes": ["주변 도로, 조명, 노면, 나무, 공원을 OpenStreetMap에서 측정하고 있어요. ..."] }
+```
+
+- 등록은 바로 응답하고, 주변 환경은 응답을 보낸 뒤 Overpass로 측정합니다. `measurement`는 `pending`(측정 중), `done`, `failed`, `off`(`ENVIRONMENT_PROVIDER=none`)이고, 5분이 지나도 끝나지 않으면 `failed`로 봅니다. 다시 `POST`하면 다시 측정합니다.
+- 서비스 지역 5km 밖, 0.1km 미만 또는 10km 초과, 구간 사이가 100m 넘게 떨어진 산책길은 이유와 함께 `422`입니다.
+- `DELETE`는 추천 후보에서만 빼고, 이 코스로 남긴 산책 기록과 피드백은 그대로 둡니다. 산책길을 지워도 코스는 추천에서만 빠집니다.
 
 ### `POST /my-walks/{walk_id}/share` · `DELETE /my-walks/{walk_id}/share`
 

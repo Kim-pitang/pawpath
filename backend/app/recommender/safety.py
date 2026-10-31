@@ -175,6 +175,10 @@ def shade_item(course: CourseData, hour: HourWeather, features: PetFeatures, is_
         status = CAUTION if hot and trees < 0.3 and not is_dark else OK
         return _item("shade", "그늘", status, score, f"나무 기록 근접 구간 {trees:.0%}", OBSERVED, "나무 기록으로 짐작한 값이며 실제 그늘은 시간대에 따라 달라요." if status == CAUTION else None)
 
+    if "shade_level" in course.unknown:
+        if hot and not is_dark:
+            return _item("shade", "그늘", CAUTION, UNKNOWN_SCORE, "확인 불가", UNKNOWN, "그늘 기록이 없어요. 더운 시간에는 그늘을 직접 확인해 주세요.")
+        return _item("shade", "그늘", UNVERIFIED, UNKNOWN_SCORE, "확인 불가", UNKNOWN, "그늘 기록이 없어 확인할 수 없어요.")
     level = course.shade_level
     score = 40 + level * 40
     text = "많음" if level >= 0.6 else ("적음" if level <= 0.3 else "보통")
@@ -197,6 +201,8 @@ def traffic_item(course: CourseData, is_dark: bool) -> SafetyItem:
             return _item("traffic", "차량 노출", CAUTION, score, value, OBSERVED, "큰 도로를 따라 걷는 구간이 있어요.")
         return _item("traffic", "차량 노출", OK, score, value, OBSERVED)
 
+    if "traffic_exposure" in course.unknown:
+        return _item("traffic", "차량 노출", UNVERIFIED, UNKNOWN_SCORE, "확인 불가", UNKNOWN, "도로 기록이 부족해 확인할 수 없어요.")
     estimate = TRAFFIC_ESTIMATE_TEXT[course.traffic_exposure]
     score = TRAFFIC_ESTIMATE_SCORE[course.traffic_exposure]
     status = CAUTION if course.traffic_exposure == "high" else UNVERIFIED
@@ -212,6 +218,10 @@ def surface_item(course: CourseData, wet: bool) -> SafetyItem:
             status = CAUTION if unpaved >= 0.3 and wet else OK
             return _item("surface", "노면", status, 100 - unpaved * 50, f"기록된 구간의 {1 - unpaved:.0%} 포장", OBSERVED, "젖으면 미끄러울 수 있어요." if status == CAUTION else None)
 
+    if "is_paved" in course.unknown:
+        if wet:
+            return _item("surface", "노면", CAUTION, UNKNOWN_SCORE, "확인 불가", UNKNOWN, "노면 정보가 없어요. 비포장 구간이 있으면 미끄러울 수 있어요.")
+        return _item("surface", "노면", UNVERIFIED, UNKNOWN_SCORE, "확인 불가", UNKNOWN, "노면 기록이 부족해 확인할 수 없어요.")
     if course.is_paved:
         return _item("surface", "노면", UNVERIFIED, 70, "확인 불가 (추정: 포장)", ESTIMATED, "노면 기록이 부족해 확인할 수 없어요.")
     status = CAUTION if wet else UNVERIFIED
@@ -228,6 +238,8 @@ def facilities_item(course: CourseData) -> SafetyItem:
 
 
 def park_item(course: CourseData) -> SafetyItem:
+    if "has_park" in course.unknown:
+        return _item("park", "공원", UNVERIFIED, UNKNOWN_SCORE, "확인 불가", UNKNOWN, "공원 기록을 받지 못했어요.")
     if course.has_park:
         return _item("park", "공원", OK, 100, "공원 포함", OBSERVED if course.environment else ESTIMATED)
     return _item("park", "공원", OK, 60, "공원 없음", OBSERVED if course.environment else ESTIMATED)

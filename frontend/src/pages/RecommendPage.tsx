@@ -225,6 +225,11 @@ function CourseCard({
           </span>
           <div className="min-w-0 flex-1">
             <h3 className="font-bold leading-snug">{course.name}</h3>
+            {course.is_personal && (
+              <span className="mt-0.5 inline-block">
+                <Chip tone="carrot">내 산책길</Chip>
+              </span>
+            )}
             <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-ink-soft">
               <span className="flex items-center gap-0.5"><Route size={13} aria-hidden />{course.distance_km.toFixed(1)}km</span>
               <span className="flex items-center gap-0.5"><Footprints size={13} aria-hidden />약 {course.duration_min}분</span>
@@ -265,11 +270,7 @@ function CourseCard({
             {time.weather.wind_speed.toFixed(1)}m/s
           </InfoRow>
           <InfoRow icon={<ShieldCheck size={15} />} label="코스 정보">
-            {[
-              course.safety.has_park ? '공원 포함' : '공원 없음',
-              `노면: ${course.safety.surface_note}(추정)`,
-              `혼잡도 ${CROWD_LABELS[course.safety.crowd_level]}(추정)`,
-            ].join(' · ')}
+            {courseInfo(course).join(' · ')}
           </InfoRow>
           {facilities.length > 0 && (
             <InfoRow icon={<MapIcon size={15} />} label="확인된 시설">
@@ -346,6 +347,20 @@ function CourseCard({
       </article>
     </Card>
   );
+}
+
+/** 코스 정보 한 줄. 내 산책길은 팀 추정값이 없으므로 측정값이나 '확인 불가'로 보여 준다. */
+function courseInfo(course: RecommendedCourse): string[] {
+  const { safety } = course;
+  const unknown = new Set(safety.unknown ?? []);
+  if (!safety.is_personal) {
+    return [safety.has_park ? '공원 포함' : '공원 없음', `노면: ${safety.surface_note}(추정)`, `혼잡도 ${CROWD_LABELS[safety.crowd_level]}(추정)`];
+  }
+  return [
+    unknown.has('has_park') ? '공원 확인 불가' : safety.has_park ? '공원 포함' : '공원 없음',
+    `노면: ${safety.surface_note}`,
+    '혼잡도 확인 불가',
+  ];
 }
 
 function InfoRow({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {

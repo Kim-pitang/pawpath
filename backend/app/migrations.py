@@ -10,7 +10,7 @@ from app.database import Base
 
 ADDED_COLUMNS = {
     "pets": (("preferred_distance_km", "FLOAT"), ("preferred_time_bucket", "VARCHAR(10)")),
-    "walking_courses": (("environment", "JSON"),),
+    "walking_courses": (("environment", "JSON"), ("owner_user_id", "INTEGER"), ("saved_walk_id", "INTEGER"), ("is_active", "BOOLEAN DEFAULT TRUE")),
     "walk_histories": (("tracking_source", "VARCHAR(12)"), ("distance_km", "FLOAT")),
     "users": (("login_id", "VARCHAR(30)"), ("password_hash", "VARCHAR(200)"), ("google_sub", "VARCHAR(64)"), ("google_email", "VARCHAR(254)")),
 }

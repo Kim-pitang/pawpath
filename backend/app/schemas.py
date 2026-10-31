@@ -125,6 +125,8 @@ class CourseSummary(BaseModel):
     facilities: list[dict]
     data_sources: dict
     environment: dict | None = None
+    # 내 산책길로 만든 코스. 주인에게만 보인다.
+    is_personal: bool = False
 
 
 class CourseDetail(CourseSummary):
@@ -289,7 +291,22 @@ class PhotoRead(BaseModel):
     created_at: datetime
 
 
+class PersonalCourseRead(BaseModel):
+    """산책길을 추천 후보로 등록한 상태."""
+
+    id: int
+    active: bool
+    area: str
+    in_current_area: bool
+    environment_measured: bool
+    # 주변 환경 측정: pending(측정 중), done, failed, off(서버에서 꺼 둠)
+    measurement: Literal["pending", "done", "failed", "off"]
+    unknown: list[str]
+    notes: list[str]
+
+
 class SavedWalkDetail(SavedWalkSummary):
+    course: PersonalCourseRead | None = None
     memo: str
     share_token: str | None
     share_expires_at: datetime | None

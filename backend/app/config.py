@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     routing_timeout_seconds: float = 4.0
     routing_max_distance_km: float = 3.0
 
+    # 내 산책길을 추천 후보로 등록할 때 경로 주변 환경을 OSM에서 측정한다: overpass 또는 none(측정하지 않음)
+    environment_provider: str = "overpass"
+
     # 추천 가중치 JSON. 비워 두면 기본값. 예: {"weather": 0.3, "safety": 0.2}
     recommender_weights: str = ""
 

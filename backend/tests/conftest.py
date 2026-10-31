@@ -15,6 +15,8 @@ os.environ["LLM_PROVIDER"] = "none"
 os.environ["RECOMMENDER_WEIGHTS"] = "{}"
 os.environ["SERVICE_AREA"] = "mangwon"
 os.environ["AUTH_REQUIRED"] = "false"
+# 내 산책길 코스 등록 때 실제 Overpass를 부르지 않는다. 측정은 테스트가 가짜 서버로 따로 확인한다.
+os.environ["ENVIRONMENT_PROVIDER"] = "none"
 # 가짜 Google 클라이언트. 토큰 교환은 테스트가 가짜 Google 서버로 바꿔 끼우므로 실제 Google을 부르지 않는다.
 os.environ["GOOGLE_CLIENT_ID"] = "test-client.apps.googleusercontent.com"
 os.environ["GOOGLE_CLIENT_SECRET"] = "test-google-secret"

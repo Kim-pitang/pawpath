@@ -174,6 +174,8 @@ export const api = {
   previewGpx: uploadGpx,
   shareSavedWalk: (id: number, body: { expires_in_days: number | null; share_memo: boolean }) => post<SavedWalkDetail>(`/my-walks/${id}/share`, body),
   unshareSavedWalk: (id: number) => request<SavedWalkDetail>(`/my-walks/${id}/share`, { method: 'DELETE' }),
+  registerCourse: (id: number) => post<SavedWalkDetail>(`/my-walks/${id}/course`, {}),
+  unregisterCourse: (id: number) => request<SavedWalkDetail>(`/my-walks/${id}/course`, { method: 'DELETE' }),
   getSharedWalk: (token: string) => request<SharedWalk>(`/shared/${encodeURIComponent(token)}`),
   sharedWalkGpxUrl: (token: string) => `${BASE}/shared/${encodeURIComponent(token)}/gpx`,
   listPublicWalks: () => request<PublicWalk[]>('/public-walks'),

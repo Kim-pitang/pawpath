@@ -97,6 +97,7 @@ export default function MapPage() {
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-bold">{course.name}</span>
+                    {course.is_personal && <span className="mt-0.5 inline-block text-[11px] font-semibold text-carrot-700">내 산책길</span>}
                     <span className="block text-xs text-ink-soft">
                       {course.distance_km.toFixed(1)}km · 약 {course.duration_min}분
                     </span>
@@ -113,6 +114,7 @@ export default function MapPage() {
 
 function SelectedCourse({ course, recommendationId }: { course: Course; recommendationId?: number }) {
   const estimates = course.data_sources.team_estimates?.length;
+  const unknown = new Set(course.data_sources.unknown ?? []);
   const road = course.environment?.road;
   return (
     <Card>
@@ -123,10 +125,11 @@ function SelectedCourse({ course, recommendationId }: { course: Course; recommen
         <span className="flex items-center gap-1"><Footprints size={15} aria-hidden />약 {course.duration_min}분</span>
       </p>
       <div className="mt-2 flex flex-wrap gap-1.5">
+        {course.is_personal && <Chip tone="carrot">내 산책길</Chip>}
         {course.park_names.map((name) => <Chip key={name} tone="leaf">{name}</Chip>)}
-        <Chip>{DIFFICULTY_COURSE_LABELS[course.difficulty]}</Chip>
-        <Chip>혼잡도 {CROWD_LABELS[course.crowd_level]}</Chip>
-        {!road && <Chip>{TRAFFIC_LABELS[course.traffic_exposure]} (추정)</Chip>}
+        <Chip>{unknown.has('difficulty') ? '경사 확인 불가' : DIFFICULTY_COURSE_LABELS[course.difficulty]}</Chip>
+        <Chip>혼잡도 {unknown.has('crowd_level') ? '확인 불가' : CROWD_LABELS[course.crowd_level]}</Chip>
+        {!road && <Chip>{unknown.has('traffic_exposure') ? '차량 노출 확인 불가' : `${TRAFFIC_LABELS[course.traffic_exposure]} (추정)`}</Chip>}
       </div>
       {road && road.unknown <= 0.3 && (
         <p className="mt-2 text-xs text-ink-soft">
@@ -134,7 +137,8 @@ function SelectedCourse({ course, recommendationId }: { course: Course; recommen
         </p>
       )}
       <p className="mt-3 text-xs leading-relaxed text-ink-muted">
-        경로와 시설 위치는 OpenStreetMap 기준이에요.{estimates ? ' 혼잡도, 그늘, 노면, 난이도는 팀 추정값이고, 조명은 기록이 없으면 확인 불가예요. 현장에서 확인해 주세요.' : ''} {course.pet_rule_note}
+        {course.is_personal ? `내 산책길로 만든 코스예요(${course.data_sources.route ?? '내 경로'}). 주변 환경은 OpenStreetMap 기록으로 측정했고, 기록이 없는 항목은 확인 불가예요.` : '경로와 시설 위치는 OpenStreetMap 기준이에요.'}
+        {estimates ? ' 혼잡도, 그늘, 노면, 난이도는 팀 추정값이고, 조명은 기록이 없으면 확인 불가예요. 현장에서 확인해 주세요.' : ''} {course.pet_rule_note}
       </p>
       <LinkButton
         to={`/navigate?course=${course.id}${recommendationId ? `&recommendation=${recommendationId}` : ''}`}

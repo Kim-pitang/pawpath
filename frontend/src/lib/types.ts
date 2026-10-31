@@ -107,7 +107,11 @@ export interface Course {
     facilities?: string;
     team_estimates?: string[];
     observed?: string[];
+    /** 측정도 추정도 없어 '확인 불가'로 표시하는 속성. 내 산책길 코스에만 있다. */
+    unknown?: string[];
   };
+  /** 내 산책길로 만든 코스. 주인에게만 보인다. */
+  is_personal?: boolean;
   environment?: {
     collected_on?: string;
     road?: { pedestrian: number; local: number; major: number; unknown: number } | null;
@@ -172,6 +176,8 @@ export interface Safety {
   pet_allowed: boolean;
   pet_rule_note: string;
   verified_facilities: Record<string, number>;
+  is_personal?: boolean;
+  unknown?: string[];
 }
 
 export interface SafetyItem {
@@ -211,6 +217,7 @@ export interface RecommendedCourse {
   code: string;
   name: string;
   description: string;
+  is_personal?: boolean;
   distance_km: number;
   duration_min: number;
   total_score: number;
@@ -495,7 +502,19 @@ export interface WalkPhoto {
   created_at: string;
 }
 
+export interface PersonalCourse {
+  id: number;
+  active: boolean;
+  area: string;
+  in_current_area: boolean;
+  environment_measured: boolean;
+  measurement: 'pending' | 'done' | 'failed' | 'off';
+  unknown: string[];
+  notes: string[];
+}
+
 export interface SavedWalkDetail extends SavedWalkSummary {
+  course: PersonalCourse | null;
   memo: string;
   share_token: string | null;
   share_expires_at: string | null;

@@ -123,6 +123,8 @@ def non_environment_cautions(
         cautions.append(f"사람이 많은 코스라 {pet.name}{topic_particle(pet.name)} 긴장할 수 있어요.")
     if course.difficulty != "easy" and features.life_stage != "adult":
         cautions.append("오르막이 있어 관절에 부담이 될 수 있어요. 천천히 걸어 주세요.")
+    elif "difficulty" in course.unknown and features.life_stage != "adult":
+        cautions.append("경사 정보가 없는 코스예요. 오르막이 있으면 천천히 걸어 주세요.")
     return tuple(cautions)
 
 
