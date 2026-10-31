@@ -26,3 +26,8 @@ playwright-report/
 
 # 코스 빌더 캐시
 .osm_cache/
+
+# 로컬 디자인 검증 결과
+.taste-skill/
+artifacts/
+frontend/debug.log

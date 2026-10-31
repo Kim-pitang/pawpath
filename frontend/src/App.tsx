@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import Layout from './components/Layout';
 import GpxImportPage from './pages/GpxImportPage';
 import HomePage from './pages/HomePage';
@@ -26,6 +26,11 @@ export default function App() {
       <Route path="record" element={<RecordPage />} />
       <Route path="shared/:token" element={<SharedWalkPage />} />
       <Route path="login" element={<LoginPage />} />
+      <Route path="prototypes/best-times" element={<Navigate to="/recommend" replace />} />
+      <Route path="prototypes/duration.html" element={<Navigate to="/recommend" replace />} />
+      <Route path="prototypes/courses.html" element={<Navigate to="/recommend" replace />} />
+      <Route path="prototypes/taste.html" element={<Navigate to="/my" replace />} />
+      <Route path="prototypes/time-preference.html" element={<Navigate to="/my" replace />} />
       <Route element={<Layout />}>
         <Route index element={<HomePage />} />
         <Route path="pets" element={<PetsPage />} />

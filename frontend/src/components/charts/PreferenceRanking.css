@@ -1,0 +1,30 @@
+.taste-ranking { font-size: 13px; color: var(--color-ink); }
+.taste-ranked-list button[aria-pressed=true] { background: var(--color-cream); }
+.taste-mini-bar.taste-positive { background: var(--color-mango-500); }
+.taste-mini-bar.taste-negative { background: var(--color-ink-muted); }
+.taste-intro { font-size: 11px; color: var(--color-ink-soft); margin-bottom: 16px; }
+.taste-positive { color: var(--color-mango-700); }
+.taste-negative { color: var(--color-ink-soft); }
+.taste-neutral { color: var(--color-ink-muted); }
+.taste-scale { font-size: 10px; line-height: 1.7; color: var(--color-ink-soft); margin-top: 12px; }
+.taste-selection { padding: 12px; background: var(--color-cream); border-radius: 6px; margin-top: 14px; }
+.taste-selection p { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 5px; font-size: 12px; animation: taste-reveal 160ms ease-out; }
+.taste-selection strong { font-weight: 650; }
+.taste-selection span { font-size: 11px; color: var(--color-ink-soft); font-variant-numeric: tabular-nums; }
+.taste-selection b { font-weight: 650; }
+.taste-footnote { margin-top: 10px; font-size: 11px; line-height: 1.7; color: var(--color-ink-soft); }
+.taste-filters { display: flex; gap: 4px; padding: 3px; border-radius: 6px; background: var(--color-cream); margin-bottom: 10px; }
+.taste-filters button { flex: 1; min-height: 32px; border-radius: 4px; font-size: 11px; color: var(--color-ink-soft); }
+.taste-filters button[aria-pressed=true] { background: white; color: var(--color-ink); font-weight: 650; }
+.taste-ranked-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; }
+.taste-ranked-list button { width: 100%; text-align: left; padding: 10px; border: 1px solid var(--color-line); border-radius: 6px; }
+.taste-ranked-title { display: flex; align-items: center; justify-content: space-between; gap: 4px; font-size: 12px; }
+.taste-ranked-title strong { font-weight: 600; }
+.taste-ranked-title > span { font-variant-numeric: tabular-nums; font-weight: 600; }
+.taste-ranked-caption { margin-top: 7px; display: flex; align-items: center; justify-content: space-between; gap: 5px; font-size: 10px; color: var(--color-ink-soft); }
+.taste-mini-track { position: relative; width: 38%; height: 4px; background: var(--color-cream-deep); border-radius: 2px; }
+.taste-mini-bar { position: absolute; height: 100%; border-radius: 2px; }
+.taste-empty { padding: 20px 0; font-size: 12px; color: var(--color-ink-soft); }
+@keyframes taste-reveal { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .taste-selection p { animation: none; } }
+@media (max-width: 380px) { .taste-ranked-list { grid-template-columns: minmax(0,1fr); } }

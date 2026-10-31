@@ -1,6 +1,5 @@
 import {
   AlertTriangle,
-  ArrowUp,
   ChevronDown,
   ChevronRight,
   Clock,
@@ -9,20 +8,18 @@ import {
   Map as MapIcon,
   RefreshCw,
   ShieldCheck,
-  TrendingUp,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import HBarChart from '../components/charts/HBarChart';
-import SlotColumns from '../components/charts/SlotColumns';
 import RouteThumbnail from '../components/RouteThumbnail';
 import SafetyPanel from '../components/SafetyPanel';
-import { Button, Card, Chip, EmptyState, ErrorNotice, LinkButton, Loading, SectionTitle } from '../components/ui';
+import { Button, Card, EmptyState, ErrorNotice, LinkButton, Loading, SectionTitle } from '../components/ui';
 import WeatherScenarioPicker from '../components/WeatherScenarioPicker';
 import WeatherSourceTag from '../components/WeatherSourceTag';
 import { useApp } from '../context/AppContext';
 import { api } from '../lib/api';
-import { dayLabel, signed, slotRange } from '../lib/format';
+import { dayLabel } from '../lib/format';
 import { CROWD_LABELS, FACILITY_LABELS } from '../lib/labels';
 import type { Course, Recommendation, RecommendedCourse } from '../lib/types';
 
@@ -100,10 +97,14 @@ export default function RecommendPage() {
 
       {result && (
         <div className={`flex flex-col gap-4 transition-opacity ${loading ? 'opacity-60' : ''}`}>
-          <TimeSection result={result} />
           {result.walkable ? (
             <section aria-label="추천 코스 TOP 3" className="flex flex-col gap-4">
-              <h2 className="text-lg font-bold text-ink">추천 코스 TOP 3</h2>
+              <aside aria-label="산책 시간 기준" className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 py-1 text-sm text-ink-soft">
+                <Clock size={16} className="shrink-0" aria-hidden />
+                <span>권장 <strong className="font-semibold text-ink">약 {result.time_recommendation.recommended_duration_min}분</strong> 기준</span>
+                <span className="hidden h-3 w-px bg-line sm:block" aria-hidden />
+                <span className="text-xs">아래 코스를 고를 때 참고해 주세요.</span>
+              </aside>
               <div className="grid items-start gap-4 lg:grid-cols-3">
                 {result.courses.map((course) => (
                   <CourseCard
@@ -169,44 +170,6 @@ function clockPhrase(iso: string): string {
   return `${hours < 12 ? '오전' : '오후'} ${hours % 12 === 0 ? 12 : hours % 12}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
-function TimeSection({ result }: { result: Recommendation }) {
-  const { best_slots: best, slots, recommended_duration_min: duration } = result.time_recommendation;
-  if (slots.length === 0) {
-    return (
-      <Card>
-        <SectionTitle>추천 시간대</SectionTitle>
-        <p className="text-sm text-ink-soft">지금부터 24시간 안에 가능한 시간이 없어요. 산책 가능 시간을 확인해 주세요.</p>
-      </Card>
-    );
-  }
-  return (
-    <Card>
-      <SectionTitle>추천 시간대</SectionTitle>
-      {best.length > 0 ? (
-        <ul className="mb-4 flex flex-col gap-2">
-          {best.map((slot) => (
-            <li key={slot.start} className="rounded-lg bg-cream-deep p-3">
-              <p className="flex items-center gap-1.5 font-bold text-ink">
-                <Clock size={17} className="text-ink-soft" aria-hidden />
-                {slotRange(slot.start, slot.end)}
-              </p>
-              <p className="mt-1 text-sm text-ink-soft">
-                약 {slot.duration_min}분 · 체감 {slot.weather.apparent_temperature.toFixed(0)}°C · 강수 확률{' '}
-                {slot.weather.precipitation_probability.toFixed(0)}%
-                {slot.before_rain && ' · 비 오기 전'}
-              </p>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="mb-4 text-sm font-semibold text-carrot-700">오늘은 가능한 시간이 모두 산책에 좋지 않아요.</p>
-      )}
-      <SlotColumns slots={slots} bestSlots={best} />
-      <p className="mt-2 text-xs text-ink-muted">권장 산책 시간 약 {duration}분 기준 점수예요.</p>
-    </Card>
-  );
-}
-
 function ExcludedCourses({ result }: { result: Recommendation }) {
   if (result.excluded_courses.length === 0) return null;
   return (
@@ -249,8 +212,6 @@ function CourseCard({
   // 날씨와 환경 위험은 안전 패널에 있으므로 여기서는 그 밖의 주의사항만 보여 준다.
   const cautions = course.other_cautions;
   const disclaimer = course.cautions[course.cautions.length - 1];
-  // 다녀오지 않은 코스의 작은 감소는 가중치 이동에 따른 것이라 표시하지 않는다.
-  const showLearning = course.feedback_count > 0 ? course.learning_delta !== 0 : course.learning_delta >= 0.5;
   const primary = course.rank === 1;
 
   // 경로 티켓: 코스 모양이 카드의 얼굴이고, 아래 띠가 출발 시각을 표처럼 보여 준다.
@@ -269,28 +230,12 @@ function CourseCard({
             {course.rank}
           </span>
         </div>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 self-center">
           <h3 className="text-lg font-bold leading-snug text-ink">{course.name}</h3>
           <p className="mt-0.5 text-sm tabular-nums text-ink-soft">
             {course.distance_km.toFixed(2)}km · 약 {course.duration_min}분 ·{' '}
             <span className="font-semibold text-ink">{course.total_score.toFixed(1)}점</span>
           </p>
-          {(showLearning || course.rank_change > 0) && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {showLearning && (
-                <Chip tone={course.learning_delta > 0 ? 'leaf' : 'carrot'}>
-                  <TrendingUp size={13} aria-hidden />
-                  학습 효과 {signed(course.learning_delta)}점
-                </Chip>
-              )}
-              {course.rank_change > 0 && (
-                <Chip tone="leaf">
-                  <ArrowUp size={13} aria-hidden />
-                  학습 전보다 {course.rank_change}계단 상승
-                </Chip>
-              )}
-            </div>
-          )}
         </div>
       </div>
 

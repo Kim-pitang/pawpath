@@ -132,12 +132,15 @@ test('보호자 일정을 바꾸면 추천 시간이 그 안으로 들어온다'
   await page.getByRole('button', { name: '저장하기' }).click();
   await expect(page.getByText('7시 ~ 11시')).toBeVisible();
 
-  await page.goto('/recommend');
-  await expect(page.getByTestId('course-card-1')).toBeVisible();
-  const columns = await page.getByRole('list', { name: '시간대별 산책 점수' }).getByRole('listitem').all();
+  // 시간대별 점수는 메인 화면의 산책 시간표에만 있다.
+  await page.goto('/');
+  const strip = page.getByRole('group', { name: '시간대별 산책 점수' });
+  await expect(strip.getByRole('button').first()).toBeVisible();
+  const columns = await strip.getByRole('button').all();
   expect(columns.length).toBeGreaterThan(0);
   for (const column of columns) {
-    const hour = Number((await column.getAttribute('aria-label'))!.match(/(\d+)시/)![1]);
+    const [, half, clock] = (await column.getAttribute('aria-label'))!.match(/(오전|오후) (\d+)시/)!;
+    const hour = (Number(clock) % 12) + (half === '오후' ? 12 : 0);
     expect(hour).toBeGreaterThanOrEqual(7);
     expect(hour).toBeLessThan(11);
   }
