@@ -1,5 +1,7 @@
 """생성한 경로 후보를 반려동물·날씨·환경으로 평가해 순서를 매기는 부분."""
+import gzip
 import json
+import math
 
 import pytest
 
@@ -105,51 +107,77 @@ def test_unknown_pet_is_a_404_and_does_not_use_the_routing_server(install):
 
 @pytest.fixture
 def area_file(tmp_path, monkeypatch):
-    """작은 지역 자료 파일을 data 폴더 대신 쓴다. 저장 형식은 scripts/collect_osm_area.py가 쓰는 것과 같다."""
+    """작은 지역 폴더(manifest + 타일)를 data 폴더 대신 쓴다. 저장 형식은 scripts/extract_osm_tiles.py가 쓰는 것과 같다."""
 
-    def write(bbox):
-        data = {
-            "collected_on": "2026-10-30",
-            "source": "OpenStreetMap",
-            "center": [0, 0],
-            "bbox": bbox,
+    def write(bbox, tiles=None, region="test"):
+        folder = tmp_path / region
+        (folder / "tiles").mkdir(parents=True)
+        manifest = {"region": region, "source": "test", "collected_on": "2026-10-30", "bbox": bbox, "tile_lat": 0.02, "tile_lng": 0.025, "tile_count": 1}
+        (folder / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+        content = {
             "ways": [[{"highway": "footway", "lit": "yes", "surface": "asphalt"}, [[37.5560, 126.9100], [37.5570, 126.9120]]]],
             "tree_points": [],
             "trees": [],
             # 꼭짓점이 경로 상자 밖에 있는 큰 공원
             "parks": [[{"leisure": "park"}, [[37.5550, 126.9090], [37.5550, 126.9130], [37.5580, 126.9130], [37.5580, 126.9090], [37.5550, 126.9090]]]],
         }
-        (tmp_path / "osm_test.json").write_text(json.dumps(data), encoding="utf-8")
+        # 이 경로가 걸치는 타일 모두에 같은 내용을 둔다(실제 추출기는 걸치는 타일마다 넣는다)
+        for ix in range(math.floor(126.9090 / 0.025), math.floor(126.9130 / 0.025) + 1):
+            for iy in range(math.floor(37.5550 / 0.02), math.floor(37.5580 / 0.02) + 1):
+                (folder / "tiles" / f"{ix}_{iy}.json.gz").write_bytes(gzip.compress(json.dumps(content if tiles is None else tiles).encode("utf-8")))
         monkeypatch.setattr(osm_area_service, "DATA_DIR", tmp_path)
-        osm_area_service.load_areas.cache_clear()
+        osm_area_service.clear_cache()
 
     yield write
-    osm_area_service.load_areas.cache_clear()
+    osm_area_service.clear_cache()
 
 
 ROUTE = [[37.5560, 126.9100], [37.5565, 126.9110], [37.5570, 126.9120]]
 
 
-def test_measure_candidates_uses_the_collected_area_and_picks_up_a_big_park(area_file):
+def test_measure_candidates_uses_the_extracted_area_and_picks_up_a_big_park(area_file):
     area_file([37.54, 126.89, 37.57, 126.93])
     measured = route_fit_service.measure_candidates([ROUTE, ROUTE])
     assert measured[0]["park"] == 1.0
     assert measured[0]["road"]["pedestrian"] == 1.0
-    assert measured[0]["collected_on"] == "2026-10-30"  # 측정 날짜가 아니라 자료를 받은 날짜를 적는다
+    assert measured[0]["collected_on"] == "2026-10-30"  # 측정 날짜가 아니라 자료 날짜를 적는다
 
 
-def test_route_outside_the_collected_area_is_unknown_not_guessed(area_file):
-    area_file([37.54, 126.89, 37.5565, 126.93])  # 경로 일부가 상자 밖
+def test_route_outside_the_extracted_area_is_unknown_not_guessed(area_file):
+    area_file([37.54, 126.89, 37.5565, 126.93])  # 경로 일부가 범위 밖
     assert route_fit_service.measure_candidates([ROUTE]) == [None]
 
 
-def test_no_collected_area_files_means_unknown(tmp_path, monkeypatch):
+def test_candidates_are_measured_one_by_one_so_an_outside_route_does_not_hide_the_rest(area_file):
+    area_file([37.54, 126.89, 37.57, 126.93])
+    far = [[37.60, 126.99], [37.61, 126.99]]
+    measured = route_fit_service.measure_candidates([ROUTE, far])
+    assert measured[0] is not None and measured[1] is None
+
+
+def test_a_route_spanning_tiles_reads_every_tile_it_touches(area_file):
+    """경로가 타일 경계를 넘어도 양쪽 타일의 길이 모두 쓰인다. 타일이 없는 곳은 길이 없는 곳이다."""
+    area_file([37.54, 126.89, 37.57, 126.93])
+    across = [[37.5560, 126.9100], [37.5570, 126.9120]]
+    assert route_fit_service.measure_candidates([across])[0]["road"]["pedestrian"] == 1.0
+    empty_spot = [[37.5400, 126.8950], [37.5405, 126.8955]]  # 범위 안이지만 타일 파일이 없다
+    measured = route_fit_service.measure_candidates([empty_spot])[0]
+    assert measured is not None and measured["road"]["unknown"] == 1.0 and measured["park"] == 0.0
+
+
+def test_no_extracted_area_means_unknown(tmp_path, monkeypatch):
     monkeypatch.setattr(osm_area_service, "DATA_DIR", tmp_path)
-    osm_area_service.load_areas.cache_clear()
+    osm_area_service.clear_cache()
     try:
         assert route_fit_service.measure_candidates([ROUTE]) == [None]
     finally:
-        osm_area_service.load_areas.cache_clear()
+        osm_area_service.clear_cache()
+
+
+def test_the_smaller_area_is_used_when_areas_overlap(area_file, tmp_path):
+    area_file([37.54, 126.89, 37.57, 126.93], region="small")
+    area_file([37.0, 126.0, 38.0, 127.5], region="large")
+    assert osm_area_service.area_for(ROUTE).name == "small"
 
 
 def test_wider_pool_is_scored_then_cut_to_the_best_results(install, monkeypatch):

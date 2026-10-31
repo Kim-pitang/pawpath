@@ -32,3 +32,6 @@ playwright-report/
 .taste-skill/
 artifacts/
 frontend/debug.log
+
+# 경기 환경 타일(56MB)은 저장소에 넣지 않는다. scripts/extract_osm_tiles.py로 만들어 서버에 따로 복사한다.
+backend/app/data/osm/gyeonggi/
