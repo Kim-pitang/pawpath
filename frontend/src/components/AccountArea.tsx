@@ -1,11 +1,11 @@
-import { Check, LogIn, LogOut, Plus, Settings2, UserRound } from 'lucide-react';
+import { Check, Dog, LogIn, LogOut, Plus, Settings2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useLogout } from './AccountCard';
 
 /**
- * 머리글 오른쪽 계정 영역. 사람 아이콘 하나만 두고(로그인하면 짙게 칠해진다),
+ * 머리글 오른쪽 계정 영역. 강아지 아이콘 하나만 두고(로그인하면 짙게 칠해진다),
  * 누르면 반려동물 바꾸기와 계정을 함께 다루는 패널이 열린다.
  */
 export default function AccountArea() {
@@ -48,7 +48,7 @@ export default function AccountArea() {
           user ? 'bg-ink text-white hover:bg-black' : 'border border-line bg-white text-ink-soft hover:text-ink'
         }`}
       >
-        <UserRound size={17} aria-hidden />
+        <Dog size={21} strokeWidth={1.8} aria-hidden />
       </button>
 
       {open && (
