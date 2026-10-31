@@ -13,6 +13,8 @@
 |---|---|---|
 | 404 | 대상 없음 | `{"detail": "반려동물을 찾을 수 없습니다"}` |
 | 401 | 로그인이 필요하거나 세션이 만료됨 | `{"detail": "로그인이 만료되었어요. 다시 로그인해 주세요."}` (만료 시 쿠키 삭제) |
+| 403 | 본인 재확인이 필요하거나 비밀번호가 틀림 | `{"detail": "탈퇴하려면 본인을 다시 확인해 주세요."}` |
+| 503 | 탈퇴 기록을 남기지 못해 탈퇴를 취소함 | `{"detail": "탈퇴를 처리하지 못했어요. 지운 데이터는 없으니 잠시 뒤 다시 시도해 주세요."}` |
 | 409 | 이미 피드백을 남긴 산책, 이미 쓰는 아이디, 사진 5장 초과 | `{"detail": "이미 피드백을 남긴 산책입니다"}` |
 | 429 | 로그인을 연달아 틀림 | `{"detail": "로그인 시도가 너무 많아요. 10분 뒤에 다시 시도해 주세요."}` |
 | 410 | 기간이 끝난 공유 링크 | `{"detail": "공유 기간이 끝난 링크예요"}` |
@@ -37,11 +39,15 @@
 { "authenticated": true, "auth_required": false, "user": { "id": 2, "name": "두부 보호자", "login_id": "dubu-mom" } }
 ```
 
+세션은 로그인한 지 30일이 지나거나 7일 동안 요청이 없으면 끝납니다. 끝난 세션으로 보낸 요청은 시연 보호자로 처리하지 않고 `401`과 쿠키 삭제로 응답합니다.
+
 `/auth/me`는 만료된 쿠키를 지우고 로그인하지 않은 상태로 알려 줍니다. `google_enabled`는 서버에 Google 클라이언트가 설정되어 있는지입니다. `user.provider`는 `password` 또는 `google`이고, Google 사용자는 `login_id`가 `null`이며 Google이 확인한 이메일이 `email`에 들어갑니다.
 
 ### `GET /auth/google/start?next=/my-walks`
 
 브라우저를 이 주소로 보내면(페이지 이동) Google 로그인 화면으로 `302` 리디렉션합니다. PKCE(S256), state, nonce를 붙이고, state를 `pawpath_google_state` 쿠키(HttpOnly, 10분, 경로 `/api/auth/google`)로도 줍니다. `next`는 로그인 뒤 돌아갈 앱 안의 경로이며 다른 사이트 주소면 `/`로 바꿉니다. Google 클라이언트가 설정되지 않았으면 `404`입니다.
+
+`?reauth=true`를 붙이면 로그인이 아니라 지금 Google 보호자의 본인 재확인입니다. 끝나면 `/account`로 돌아옵니다. 로그인하지 않았으면 `/login`, 아이디 계정이면 `/account?error=google_mismatch`로 보냅니다.
 
 ### `GET /auth/google/callback`
 
@@ -49,12 +55,46 @@ Google이 돌려보내는 주소이며 콘솔의 리디렉션 URI와 같아야 �
 
 실패하면 `/login?error=이유`로 보냅니다.
 
+본인 재확인이면 새 세션을 만들지 않습니다. 같은 Google 계정(`sub`)이고 시작한 세션이 그대로일 때만 지금 세션에 기록하고 토큰을 바꿉니다. 다른 계정이면 `/account?error=google_mismatch`로 보내고, 실패와 취소도 `/account?error=이유`로 알립니다.
+
 | 이유 | 상황 |
 |---|---|
 | `google_cancelled` | Google 화면에서 사용자가 취소 |
 | `google_state` | state가 없거나 브라우저 쿠키와 다름, 이미 썼거나 10분이 지남 |
 | `google_failed` | 토큰 교환 실패, ID 토큰 확인 실패, Google의 다른 오류 |
 | `google_unavailable` | 서버에 Google 클라이언트가 설정되지 않음 |
+| `google_mismatch` | 본인 재확인에서 로그인한 계정과 다른 Google 계정을 고름 |
+
+### `POST /auth/reauth`
+
+```json
+{ "password": "지금 비밀번호" }
+```
+
+비밀번호로 본인을 다시 확인합니다. 맞으면 세션 토큰을 바꾼 쿠키와 `{ "reauth_required": false }`를 줍니다. 세션의 남은 기간은 늘지 않습니다. 틀리면 `403`, 5번 연달아 틀리면 10분 동안 `429`입니다(로그인과 따로 세어 주인의 로그인은 막히지 않음). Google 계정은 `409`, 세션이 없으면 `401`입니다.
+
+### `GET /auth/account`
+
+탈퇴하면 지워질 데이터와 로그인 유지 기간입니다. 실제 세션이 있어야 하며 시연 보호자는 `401`입니다.
+
+```json
+{
+  "provider": "password",
+  "reauth_required": false,
+  "session_expires_at": "2026-11-30T17:59:00",
+  "session_idle_days": 7,
+  "data": { "pets": 1, "walks": 2, "feedback": 1, "recommendations": 1, "saved_walks": 2, "photos": 1, "personal_courses": 1, "shared_walks": 2, "community_trails": 0, "trail_reviews": 0 },
+  "backup_retention_days": 14
+}
+```
+
+`reauth_required`가 참이면 탈퇴 전에 본인을 다시 확인해야 합니다. 로그인이나 재확인 뒤 10분 동안은 거짓입니다. `backup_retention_days`는 자동 백업을 쓰지 않으면 `null`입니다.
+
+### `DELETE /auth/account`
+
+계정과 데이터를 유예 기간 없이 지우고 `204`와 함께 쿠키를 지웁니다. 다른 기기의 세션도 끝나고, 공유 링크는 `404`가 되며, 아이디는 다시 쓸 수 있습니다. `Clear-Site-Data: "cache"`로 이 브라우저의 사진 캐시도 지웁니다.
+
+본인 재확인이 안 되었으면 `403`, 탈퇴 기록을 남기지 못하면 아무것도 지우지 않고 `503`입니다.
 
 ## 반려동물
 
