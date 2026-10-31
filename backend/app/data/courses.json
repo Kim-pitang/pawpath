@@ -15,7 +15,7 @@
   "is_familiar": true,
   "shade_level": 0.5,
   "difficulty": "easy",
-  "traffic_exposure": "low",
+  "traffic_exposure": "medium",
   "scenery_tags": [
    "park",
    "residential"
@@ -193,11 +193,34 @@
     "crowd_level",
     "shade_level",
     "lighting",
-    "traffic_exposure",
     "surface_note",
     "difficulty",
     "pet_allowed"
-   ]
+   ],
+   "environment": "OpenStreetMap Overpass (2026-10-31), 경로 10m 간격 측정",
+   "environment_unavailable": []
+  },
+  "environment": {
+   "collected_on": "2026-10-31",
+   "sampled_points": 158,
+   "road": {
+    "pedestrian": 0.222,
+    "local": 0.589,
+    "major": 0.19,
+    "unknown": 0.0
+   },
+   "lit": {
+    "yes": 0.0,
+    "no": 0.0,
+    "unknown": 1.0
+   },
+   "surface": {
+    "paved": 0.0,
+    "unpaved": 0.0,
+    "unknown": 1.0
+   },
+   "trees": 0.0,
+   "park": 0.184
   }
  },
  {
@@ -359,18 +382,41 @@
     "crowd_level",
     "shade_level",
     "lighting",
-    "traffic_exposure",
     "surface_note",
     "difficulty",
     "pet_allowed"
-   ]
+   ],
+   "environment": "OpenStreetMap Overpass (2026-10-31), 경로 10m 간격 측정",
+   "environment_unavailable": []
+  },
+  "environment": {
+   "collected_on": "2026-10-31",
+   "sampled_points": 183,
+   "road": {
+    "pedestrian": 0.044,
+    "local": 0.781,
+    "major": 0.175,
+    "unknown": 0.0
+   },
+   "lit": {
+    "yes": 0.0,
+    "no": 0.0,
+    "unknown": 1.0
+   },
+   "surface": {
+    "paved": 0.197,
+    "unpaved": 0.0,
+    "unknown": 0.803
+   },
+   "trees": 0.0,
+   "park": 0.016
   }
  },
  {
   "code": "mangwon-forest",
   "name": "망원1동 동네숲 앞 골목길",
   "description": "주택가 골목을 지나 망원1동 동네숲 앞까지 다녀오는 한적한 코스예요.",
-  "has_park": true,
+  "has_park": false,
   "park_names": [
    "망원1동 동네숲"
   ],
@@ -381,9 +427,8 @@
   "is_familiar": true,
   "shade_level": 0.4,
   "difficulty": "easy",
-  "traffic_exposure": "low",
+  "traffic_exposure": "medium",
   "scenery_tags": [
-   "park",
    "residential"
   ],
   "area": "서울 마포구 망원동 일대",
@@ -471,11 +516,34 @@
     "crowd_level",
     "shade_level",
     "lighting",
-    "traffic_exposure",
     "surface_note",
     "difficulty",
     "pet_allowed"
-   ]
+   ],
+   "environment": "OpenStreetMap Overpass (2026-10-31), 경로 10m 간격 측정",
+   "environment_unavailable": []
+  },
+  "environment": {
+   "collected_on": "2026-10-31",
+   "sampled_points": 119,
+   "road": {
+    "pedestrian": 0.0,
+    "local": 0.866,
+    "major": 0.134,
+    "unknown": 0.0
+   },
+   "lit": {
+    "yes": 0.0,
+    "no": 0.0,
+    "unknown": 1.0
+   },
+   "surface": {
+    "paved": 0.0,
+    "unpaved": 0.0,
+    "unknown": 1.0
+   },
+   "trees": 0.0,
+   "park": 0.0
   }
  },
  {
@@ -494,7 +562,7 @@
   "is_familiar": false,
   "shade_level": 0.1,
   "difficulty": "easy",
-  "traffic_exposure": "low",
+  "traffic_exposure": "medium",
   "scenery_tags": [
    "river",
    "open",
@@ -721,11 +789,34 @@
     "crowd_level",
     "shade_level",
     "lighting",
-    "traffic_exposure",
     "surface_note",
     "difficulty",
     "pet_allowed"
-   ]
+   ],
+   "environment": "OpenStreetMap Overpass (2026-10-31), 경로 10m 간격 측정",
+   "environment_unavailable": []
+  },
+  "environment": {
+   "collected_on": "2026-10-31",
+   "sampled_points": 206,
+   "road": {
+    "pedestrian": 0.684,
+    "local": 0.053,
+    "major": 0.262,
+    "unknown": 0.0
+   },
+   "lit": {
+    "yes": 0.0,
+    "no": 0.0,
+    "unknown": 1.0
+   },
+   "surface": {
+    "paved": 0.0,
+    "unpaved": 0.0,
+    "unknown": 1.0
+   },
+   "trees": 0.0,
+   "park": 0.665
   }
  },
  {
@@ -879,11 +970,34 @@
     "crowd_level",
     "shade_level",
     "lighting",
-    "traffic_exposure",
     "surface_note",
     "difficulty",
     "pet_allowed"
-   ]
+   ],
+   "environment": "OpenStreetMap Overpass (2026-10-31), 경로 10m 간격 측정",
+   "environment_unavailable": []
+  },
+  "environment": {
+   "collected_on": "2026-10-31",
+   "sampled_points": 208,
+   "road": {
+    "pedestrian": 1.0,
+    "local": 0.0,
+    "major": 0.0,
+    "unknown": 0.0
+   },
+   "lit": {
+    "yes": 0.721,
+    "no": 0.0,
+    "unknown": 0.279
+   },
+   "surface": {
+    "paved": 0.721,
+    "unpaved": 0.0,
+    "unknown": 0.279
+   },
+   "trees": 0.0,
+   "park": 0.889
   }
  },
  {
@@ -1147,11 +1261,34 @@
     "crowd_level",
     "shade_level",
     "lighting",
-    "traffic_exposure",
     "surface_note",
     "difficulty",
     "pet_allowed"
-   ]
+   ],
+   "environment": "OpenStreetMap Overpass (2026-10-31), 경로 10m 간격 측정",
+   "environment_unavailable": []
+  },
+  "environment": {
+   "collected_on": "2026-10-31",
+   "sampled_points": 376,
+   "road": {
+    "pedestrian": 1.0,
+    "local": 0.0,
+    "major": 0.0,
+    "unknown": 0.0
+   },
+   "lit": {
+    "yes": 0.742,
+    "no": 0.0,
+    "unknown": 0.258
+   },
+   "surface": {
+    "paved": 0.742,
+    "unpaved": 0.0,
+    "unknown": 0.258
+   },
+   "trees": 0.0,
+   "park": 0.939
   }
  },
  {
@@ -1280,11 +1417,34 @@
     "crowd_level",
     "shade_level",
     "lighting",
-    "traffic_exposure",
     "surface_note",
     "difficulty",
     "pet_allowed"
-   ]
+   ],
+   "environment": "OpenStreetMap Overpass (2026-10-31), 경로 10m 간격 측정",
+   "environment_unavailable": []
+  },
+  "environment": {
+   "collected_on": "2026-10-31",
+   "sampled_points": 238,
+   "road": {
+    "pedestrian": 0.987,
+    "local": 0.0,
+    "major": 0.013,
+    "unknown": 0.0
+   },
+   "lit": {
+    "yes": 0.0,
+    "no": 0.134,
+    "unknown": 0.866
+   },
+   "surface": {
+    "paved": 0.155,
+    "unpaved": 0.0,
+    "unknown": 0.845
+   },
+   "trees": 0.269,
+   "park": 0.571
   }
  },
  {
@@ -1486,11 +1646,34 @@
     "crowd_level",
     "shade_level",
     "lighting",
-    "traffic_exposure",
     "surface_note",
     "difficulty",
     "pet_allowed"
-   ]
+   ],
+   "environment": "OpenStreetMap Overpass (2026-10-31), 경로 10m 간격 측정",
+   "environment_unavailable": []
+  },
+  "environment": {
+   "collected_on": "2026-10-31",
+   "sampled_points": 258,
+   "road": {
+    "pedestrian": 0.81,
+    "local": 0.143,
+    "major": 0.047,
+    "unknown": 0.0
+   },
+   "lit": {
+    "yes": 0.771,
+    "no": 0.0,
+    "unknown": 0.229
+   },
+   "surface": {
+    "paved": 0.884,
+    "unpaved": 0.0,
+    "unknown": 0.116
+   },
+   "trees": 0.0,
+   "park": 0.0
   }
  },
  {
@@ -1734,11 +1917,34 @@
     "crowd_level",
     "shade_level",
     "lighting",
-    "traffic_exposure",
     "surface_note",
     "difficulty",
     "pet_allowed"
-   ]
+   ],
+   "environment": "OpenStreetMap Overpass (2026-10-31), 경로 10m 간격 측정",
+   "environment_unavailable": []
+  },
+  "environment": {
+   "collected_on": "2026-10-31",
+   "sampled_points": 181,
+   "road": {
+    "pedestrian": 0.414,
+    "local": 0.586,
+    "major": 0.0,
+    "unknown": 0.0
+   },
+   "lit": {
+    "yes": 0.0,
+    "no": 0.0,
+    "unknown": 1.0
+   },
+   "surface": {
+    "paved": 0.033,
+    "unpaved": 0.088,
+    "unknown": 0.878
+   },
+   "trees": 0.431,
+   "park": 0.0
   }
  },
  {
@@ -1988,11 +2194,34 @@
     "crowd_level",
     "shade_level",
     "lighting",
-    "traffic_exposure",
     "surface_note",
     "difficulty",
     "pet_allowed"
-   ]
+   ],
+   "environment": "OpenStreetMap Overpass (2026-10-31), 경로 10m 간격 측정",
+   "environment_unavailable": []
+  },
+  "environment": {
+   "collected_on": "2026-10-31",
+   "sampled_points": 225,
+   "road": {
+    "pedestrian": 0.618,
+    "local": 0.36,
+    "major": 0.022,
+    "unknown": 0.0
+   },
+   "lit": {
+    "yes": 0.0,
+    "no": 0.0,
+    "unknown": 1.0
+   },
+   "surface": {
+    "paved": 0.022,
+    "unpaved": 0.0,
+    "unknown": 0.978
+   },
+   "trees": 0.0,
+   "park": 0.062
   }
  }
 ]

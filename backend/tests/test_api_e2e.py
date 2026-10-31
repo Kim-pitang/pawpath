@@ -55,8 +55,10 @@ def test_final_verification_scenario(client):
     assert len(first["courses"]) == 3
     top = first["courses"][0]
     assert top["reason"]["summary"] == EXPECTED_SENTENCE
-    assert len(top["factors"]) == 6
-    assert first["weights"] == {"weather": 0.25, "personality": 0.25, "activity": 0.15, "schedule": 0.15, "safety": 0.1, "preference": 0.1}
+    # 기획서의 6개 평가 묶음과 세부 항목을 함께 돌려준다.
+    assert [group["key"] for group in top["score_breakdown"]] == ["pet_fit", "user_preference", "weather", "safety", "time", "past_satisfaction"]
+    assert len(top["factors"]) == 7
+    assert first["weights"] == {"weather": 0.25, "personality": 0.25, "activity": 0.15, "schedule": 0.15, "safety": 0.1, "preference": 0.1, "user_preference": 0.1}
     assert next(f for f in top["factors"] if f["key"] == "preference")["score"] == 50
     assert top["learning_delta"] == 0
 

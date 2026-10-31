@@ -7,6 +7,7 @@
    다른 코스로 일반화되므로, 가 보지 않은 코스의 선호도도 예측할 수 있다.
 3. 시간대 선호: 코스 친밀도와 같은 방식의 시간대별 평균.
 """
+import math
 from dataclasses import replace
 
 from app.recommender.types import (
@@ -197,6 +198,59 @@ def preference_score(
     if not evidence:
         evidence.append("아직 피드백이 없어 중립값으로 계산했어요")
     return round(max(0.0, min(100.0, score)), 1), tuple(evidence)
+
+
+BUCKET_ORDER = ("morning", "lunch", "afternoon", "evening")
+BUCKET_LABELS = {key: label for key, label, _, _ in TIME_BUCKETS}
+
+
+def preferred_time_match(preferred: str | None, hour: int) -> float | None:
+    """선호 시간대와의 일치도. 입력이 없으면 None이다."""
+    if preferred is None:
+        return None
+    bucket = bucket_for_hour(hour)
+    if bucket == preferred:
+        return 100.0
+    if bucket in BUCKET_ORDER and preferred in BUCKET_ORDER and abs(BUCKET_ORDER.index(bucket) - BUCKET_ORDER.index(preferred)) == 1:
+        return 60.0
+    return 30.0
+
+
+def user_preference_score(
+    course: CourseData,
+    start_hour: int,
+    features: PetFeatures,
+    state: PreferenceState,
+) -> tuple[float, tuple[str, ...]]:
+    """'사용자 선호도' 항목: 선호 거리, 선호 시간, 코스 선택 이력. 데이터가 없으면 중립값이다."""
+    parts: list[float] = []
+    evidence: list[str] = []
+
+    if features.preferred_distance_km:
+        ratio = course.distance_km / features.preferred_distance_km
+        parts.append(100 * math.exp(-(math.log(ratio) ** 2) / (2 * 0.35**2)))
+        evidence.append(f"선호 거리 {features.preferred_distance_km:g}km, 이 코스 {course.distance_km:.1f}km")
+
+    time_match = preferred_time_match(features.preferred_time_bucket, start_hour)
+    if time_match is not None:
+        parts.append(time_match)
+        evidence.append(f"선호 시간대 {BUCKET_LABELS.get(features.preferred_time_bucket, '')}, 추천 {start_hour}시")
+
+    total_visits = sum(preference.visit_count for preference in state.courses.values())
+    current = state.courses.get(course.id, CoursePreference())
+    disliked = current.feedback_count > 0 and current.affinity < DISLIKED_AFFINITY
+    # 낮게 평가한 코스는 자주 갔더라도 선호로 치지 않는다.
+    if total_visits and not disliked:
+        visits = current.visit_count
+        share = visits / total_visits
+        # 새로운 길을 좋아하는 아이일수록 지금까지의 선택 이력에 덜 묶이게 한다.
+        parts.append(NEUTRAL + 40 * share * (1 - features.novelty_tolerance))
+        if visits:
+            evidence.append(f"지금까지 산책 {total_visits}번 중 {visits}번 선택")
+
+    if not parts:
+        return NEUTRAL, ("선호 거리와 시간을 입력하면 반영돼요",)
+    return round(max(0.0, min(100.0, sum(parts) / len(parts))), 1), tuple(evidence) or ("선택 이력이 쌓이는 중이에요",)
 
 
 def attribute_insights(weights: dict[str, float]) -> list[dict]:

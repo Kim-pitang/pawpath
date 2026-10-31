@@ -13,7 +13,7 @@ HOURLY_FIELDS = (
     "relative_humidity_2m,wind_speed_10m,uv_index,is_day"
 )
 FORECAST_HOURS = 48
-SCENARIOS = ("rain_later", "heatwave", "cold", "heavy_rain")
+SCENARIOS = ("rain_later", "rain_now", "heatwave", "cold", "heavy_rain")
 
 
 class WeatherUnavailable(Exception):
@@ -131,6 +131,9 @@ def scenario_forecast(scenario: str, now: datetime, anchor: datetime) -> list[Ho
             prob = 85.0 if raining else 20.0
             mm = 1.5 if raining else 0.0
             rows.append(_hour(time, 18, 4, prob, mm, 80 if raining else 60, 3.0, 3))
+        elif scenario == "rain_now":
+            # 산책 중 비가 내리기 시작하는 상황을 시연한다.
+            rows.append(_hour(time, 18, 4, 85.0, 1.5, 80, 3.0, 3))
         elif scenario == "heatwave":
             rows.append(_hour(time, 29, 5, 10, 0.0, 70, 1.5, 10))
         elif scenario == "cold":

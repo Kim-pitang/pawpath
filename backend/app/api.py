@@ -8,11 +8,16 @@ from app.clock import now_local
 from app.database import get_db
 from app.models import Pet, Recommendation, User, WalkFeedback, WalkHistory, WalkingCourse
 from app.recommender.features import build_features
-from app.recommender.timeslots import hour_comfort, is_rainy
+from app.recommender.safety import DEMO, FORECAST, assess_conditions, assess_course, assessment_payload
+from app.recommender.timeslots import evaluate_slot, hour_comfort, is_rainy
 from app.recommender.types import FeedbackInput
 from app.seed import DEFAULT_USER_ID
+from app.services.alternative_service import ALL_DAY, evaluate_alternative
+from app.services.llm_service import enhance_recommendation
+from app.services.places_service import PLACE_LABELS, nearby_places
+from app.services.recommendation_service import create_recommendation, load_state, to_course_data, to_profile, windows_of
+from app.services.report_service import build_report, is_simulated, walked_km
 from app.services.routing_service import Approach, plan_approach
-from app.services.recommendation_service import create_recommendation, to_profile, windows_of
 from app.services.walk_service import build_insights, record_walk, submit_feedback
 from app.services.weather_service import WeatherResult, get_weather
 
@@ -66,7 +71,8 @@ def update_pet(
     user: User = Depends(current_user),
 ) -> Pet:
     pet = _get_pet(db, pet_id, user)
-    for key, value in body.model_dump().items():
+    # 새 선택 항목을 모르는 예전 요청이 저장된 값을 지우지 않도록 보낸 값만 바꾼다.
+    for key, value in body.model_dump(exclude_unset=True).items():
         setattr(pet, key, value)
     db.commit()
     return pet
@@ -194,6 +200,77 @@ def course_approach(course_id: int, body: schemas.ApproachRequest, db: Session =
     return plan_approach((body.latitude, body.longitude), (course.start_lat, course.start_lng))
 
 
+@router.get("/courses/{course_id}/nearby", tags=["산책 코스"])
+def course_nearby(
+    course_id: int,
+    radius_m: int = Query(default=300, ge=50, le=1000),
+    types: str | None = Query(default=None, description="쉼표로 구분. 비우면 전체"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """코스 경로 주변 시설. 미리 수집한 OSM 자료에서 찾으며 사용자 위치는 받지 않는다."""
+    course = db.get(WalkingCourse, course_id)
+    if course is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "코스를 찾을 수 없습니다")
+    wanted = {item.strip() for item in types.split(",") if item.strip()} if types else None
+    if wanted and wanted - set(PLACE_LABELS):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "지원하지 않는 시설 종류입니다")
+    return nearby_places(course, radius_m, wanted)
+
+
+# 경로
+@router.post("/routes/walking", response_model=schemas.ApproachRead, tags=["경로"])
+def walking_route(body: schemas.WalkingRouteRequest) -> Approach:
+    """두 지점 사이의 도보 경로. 코스를 벗어났을 때 돌아갈 길을 다시 찾는 데 쓴다."""
+    return plan_approach((body.from_latitude, body.from_longitude), (body.to_latitude, body.to_longitude))
+
+
+@router.post("/routes/alternative", tags=["경로"])
+def route_alternative(
+    body: schemas.AlternativeRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict:
+    """산책 중 날씨를 다시 평가해 계속 걸을지, 줄일지, 돌아갈지와 대체 코스를 알려 준다."""
+    pet = _get_pet(db, body.pet_id, user)
+    course = db.get(WalkingCourse, body.course_id)
+    if course is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "코스를 찾을 수 없습니다")
+    if (body.latitude is None) != (body.longitude is None):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "위도와 경도를 함께 보내 주세요")
+    position = (body.latitude, body.longitude) if body.latitude is not None else None
+    return evaluate_alternative(db, pet, user, course, position, body.progress_m, body.weather_scenario, now_local())
+
+
+# 안전 지수
+@router.get("/safety", tags=["안전 지수"])
+def safety(
+    pet_id: int,
+    course_id: int | None = None,
+    scenario: schemas.WeatherScenario = "live",
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict:
+    """지금 환경의 안전 평가. course_id를 주면 그 코스를 지금 걷는 경우를 평가한다."""
+    pet = _get_pet(db, pet_id, user)
+    now = now_local()
+    result = _load_weather(db, user, scenario)
+    features = build_features(to_profile(pet))
+    source = DEMO if result.is_mock else FORECAST
+    weather = {"source": result.source, "scenario": result.scenario, "is_mock": result.is_mock, "notice": result.notice}
+
+    if course_id is None:
+        return {"course_id": None, "checked_at": now, "weather": weather, "assessment": assessment_payload(assess_conditions(result.hours[0], features, source))}
+
+    course = db.get(WalkingCourse, course_id)
+    if course is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "코스를 찾을 수 없습니다")
+    forecast = {hour.time: hour for hour in result.hours}
+    slot = evaluate_slot(now, course.duration_min, ALL_DAY, forecast, features, load_state(db, pet), now)
+    if slot is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "예보를 찾지 못했습니다")
+    return {"course_id": course.id, "checked_at": now, "weather": weather, "assessment": assessment_payload(assess_course(to_course_data(course), slot, features, source))}
+
+
 # 추천
 def _recommendation_response(record: Recommendation) -> dict:
     return {"id": record.id, "created_at": record.created_at, **record.payload}
@@ -236,6 +313,20 @@ def get_recommendation(
     return _recommendation_response(record)
 
 
+@router.post("/recommendations/{recommendation_id}/explain", tags=["추천"])
+def explain_recommendation(
+    recommendation_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict:
+    """추천 이유를 LLM 문장으로 보강한다. 점수는 바꾸지 않으며, LLM이 꺼져 있거나 실패하면 그대로 돌려준다."""
+    record = db.get(Recommendation, recommendation_id)
+    if record is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "추천 결과를 찾을 수 없습니다")
+    pet = _get_pet(db, record.pet_id, user)
+    return _recommendation_response(enhance_recommendation(db, record, pet))
+
+
 # 산책 기록
 def _walk_response(walk: WalkHistory) -> dict:
     return {
@@ -243,8 +334,10 @@ def _walk_response(walk: WalkHistory) -> dict:
         "pet_id": walk.pet_id,
         "course_id": walk.course_id,
         "course_name": walk.course.name,
-        "distance_km": walk.course.distance_km,
+        "distance_km": round(walked_km(walk), 2),
         "recommendation_id": walk.recommendation_id,
+        "tracking_source": walk.tracking_source or "manual",
+        "is_simulated": is_simulated(walk),
         "started_at": walk.started_at,
         "ended_at": walk.ended_at,
         "duration_min": walk.duration_min,
@@ -262,7 +355,17 @@ def post_walk(body: schemas.WalkCreate, db: Session = Depends(get_db), user: Use
         recommendation = db.get(Recommendation, body.recommendation_id)
         if recommendation is None or recommendation.pet_id != pet.id:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "추천 결과를 찾을 수 없습니다")
-    walk = record_walk(db, pet, course, body.duration_min, body.started_at, body.recommendation_id, now_local())
+    walk = record_walk(
+        db,
+        pet,
+        course,
+        body.duration_min,
+        body.started_at,
+        body.recommendation_id,
+        now_local(),
+        tracking_source=body.tracking_source,
+        distance_km=body.distance_km,
+    )
     return _walk_response(walk)
 
 
@@ -277,6 +380,17 @@ def list_walks(
         _get_pet(db, pet_id, user)
         query = query.where(WalkHistory.pet_id == pet_id)
     return [_walk_response(walk) for walk in db.scalars(query.order_by(WalkHistory.started_at.desc()))]
+
+
+@router.get("/walks/report", tags=["산책 기록"])
+def walks_report(
+    pet_id: int,
+    week_offset: int = Query(default=0, ge=-52, le=0, description="0은 이번 주, -1은 지난주"),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict:
+    """주간 활동 리포트. 시연용 산책은 통계에서 빼고 건수만 따로 알려 준다."""
+    return build_report(db, _get_pet(db, pet_id, user), now_local(), week_offset)
 
 
 # 피드백

@@ -99,8 +99,11 @@ test.describe('GPS 길 안내', () => {
     const here = pointAt(model, half);
     await moveTo(context, [here[0] + 0.002, here[1] + 0.002]);
     await expect(page.getByTestId('nav-instruction')).toContainText('벗어났어요');
-    await expect(page.locator('path.nav-rejoin')).toHaveCount(1);
+    await expect(page.locator('path.nav-approach')).toHaveCount(1);
     await expect(progress).toHaveAttribute('aria-valuenow', reached);
+
+    // 벗어나면 돌아갈 길을 다시 찾는다.
+    await expect(page.getByText('돌아갈 길을 다시 찾았어요')).toBeVisible();
 
     // 복귀 후 완주
     await moveTo(context, here);
@@ -170,8 +173,119 @@ test.describe('GPS를 쓸 수 없을 때', () => {
     await expect(page.getByRole('button', { name: '산책 완료' })).toBeVisible();
   });
 
+  test('위치 권한을 거부하면 이유를 안내하고 대안을 제공한다', async ({ page, request }) => {
+    const { id } = await firstCourse(request);
+    await page.addInitScript(() => {
+      navigator.geolocation.watchPosition = (_success, error) => {
+        setTimeout(() => error?.({ code: 1, PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3, message: 'denied' } as GeolocationPositionError), 50);
+        return 1;
+      };
+    });
+    await openNavigation(page, id);
+    await expect(page.getByRole('alert')).toContainText('위치 권한');
+    await expect(page.getByRole('button', { name: '시연용 위치로 걷기' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'GPS 없이 기록하기' })).toBeVisible();
+  });
+
+  test('시연 중 비가 내리면 복귀 경로와 대체 코스를 안내하고 복귀까지 이어진다', async ({ page, request }) => {
+    const { id } = await firstCourse(request);
+    await openNavigation(page, id);
+    await page.getByRole('button', { name: '시연용 위치로 걷기' }).click();
+    await expect(page.getByTestId('walk-progress')).toBeVisible();
+    await expect(page.getByTestId('walk-environment')).toContainText('안전');
+
+    await page.getByRole('button', { name: '시연: 지금부터 비 내리기' }).click();
+    const panel = page.getByTestId('alternative-panel');
+    await expect(panel).toContainText('산책을 줄이는 편이 좋아요');
+    await expect(panel).toContainText('시연용 시나리오');
+    await expect(panel).toContainText('실시간 강수 감지가 아니니');
+
+    await panel.getByRole('button', { name: /출발점으로 돌아가기/ }).click();
+    await expect(page.getByTestId('return-summary')).toContainText('복귀 안내 중');
+    await expect(page.locator('path.nav-approach')).toHaveCount(1);
+    await expect(page.getByText('출발점에 도착했어요')).toBeVisible({ timeout: 20000 });
+
+    await page.getByRole('button', { name: '피드백 남기기' }).click();
+    await expect(page.getByRole('heading', { name: /어땠나요\?/ })).toBeVisible();
+    await expect(page.getByText('시연용', { exact: true }).first()).toBeVisible();
+  });
+
   test('코스 없이 들어오면 추천으로 안내한다', async ({ page }) => {
     await page.goto('/navigate');
     await expect(page.getByRole('link', { name: '오늘의 추천 보기' })).toBeVisible();
+  });
+});
+
+test.describe('추천과 리포트 고도화', () => {
+  test('지도에서 코스 주변 시설을 검색하고 출처와 한계를 함께 보여 준다', async ({ page, request }) => {
+    const { id } = await firstCourse(request);
+    await page.goto(`/map?course=${id}`);
+    const nearby = page.getByTestId('nearby-places');
+    await expect(nearby).toContainText('코스 주변 시설');
+    await expect(nearby).toContainText('OpenStreetMap');
+    await expect(nearby).toContainText('없는 것처럼 보여도 실제로는 있을 수 있어요');
+    await expect(nearby).toContainText('경로에서');
+    await nearby.getByRole('button', { name: '공원' }).click();
+    await expect(nearby).toContainText('망원정마당');
+  });
+
+  test('날씨 조건에 따라 위험 코스를 제외하고 이유를 보여 준다', async ({ page }) => {
+    await page.goto('/recommend');
+    await page.getByRole('button', { name: '폭염', exact: true }).click();
+    await expect(page.getByText('시연용 시나리오: 폭염')).toBeVisible();
+    await expect(page.getByTestId('course-card-1')).toBeVisible();
+    const excluded = page.getByTestId('excluded-courses');
+    await expect(excluded).toContainText('위험 조건으로 제외한 코스');
+    await excluded.locator('summary').click();
+    await expect(excluded).toContainText('그늘을 확인할 수 없어요');
+    await expect(page.getByTestId('course-card-1').getByTestId('safety-panel')).toContainText(/위험|주의/);
+  });
+
+  test('선호 거리와 시간을 입력하면 저장되고 사용자 선호도에 반영된다', async ({ page, request }) => {
+    const pets: { id: number; name: string }[] = await (await request.get('/api/pets')).json();
+    const dubu = pets.find((pet) => pet.name === '두부')!;
+    await page.goto(`/pets/${dubu.id}/edit`);
+    await expect(page.getByLabel('견종')).toHaveValue('말티즈');
+    await page.getByRole('group', { name: '선호 거리' }).getByRole('button', { name: '2km' }).click();
+    await page.getByRole('group', { name: '선호 시간대' }).getByRole('button', { name: '오후' }).click();
+    await page.getByRole('button', { name: '수정 완료' }).click();
+    await expect(page.getByRole('heading', { name: '반려동물 프로필' })).toBeVisible();
+
+    const saved = await (await request.get(`/api/pets/${dubu.id}`)).json();
+    expect(saved.preferred_distance_km).toBe(2);
+    expect(saved.preferred_time_bucket).toBe('afternoon');
+
+    // 다음 테스트에 영향을 주지 않도록 되돌린다.
+    await request.put(`/api/pets/${dubu.id}`, { data: { ...saved, preferred_distance_km: null, preferred_time_bucket: null } });
+  });
+
+  test('주간 리포트가 실제 산책만 집계하고 시연용 산책을 따로 알린다', async ({ page, request }) => {
+    const pets: { id: number; name: string }[] = await (await request.get('/api/pets')).json();
+    const pet = await (
+      await request.post('/api/pets', {
+        data: { name: '리포트견', breed: '믹스', age_years: 4, weight_kg: 10, size: 'medium', activity_level: 'medium', personality: 'curious', path_preference: 'new', heat_sensitivity: 'medium', novelty_reaction: 'calm' },
+      })
+    ).json();
+    expect(pets.length).toBeGreaterThan(0);
+    const courses: { id: number }[] = await (await request.get('/api/courses')).json();
+    const walk = await (
+      await request.post('/api/walks', { data: { pet_id: pet.id, course_id: courses[0].id, duration_min: 25, tracking_source: 'gps', distance_km: 1.5 } })
+    ).json();
+    await request.post('/api/feedback', { data: { walk_id: walk.id, walk_rating: 5, pet_rating: 4, difficulty: 'just_right', weather_rating: 5, would_revisit: true, memo: '' } });
+    await request.post('/api/walks', { data: { pet_id: pet.id, course_id: courses[1].id, duration_min: 30, tracking_source: 'simulation' } });
+
+    await page.addInitScript((id) => localStorage.setItem('pawpath.selectedPetId', String(id)), pet.id);
+    await page.goto('/my');
+    await expect(page.getByText('시연용 산책 1건은 아래 활동 통계에서 제외했어요')).toBeVisible();
+    await page.getByRole('link', { name: '주간 활동 리포트 보기' }).click();
+    await expect(page.getByRole('heading', { name: '리포트견의 주간 리포트' })).toBeVisible();
+    await expect(page.getByText('시연용 산책 1건은 통계에서 제외했어요')).toBeVisible();
+    await expect(page.getByText('1번').first()).toBeVisible();
+    await expect(page.getByText('1.5km').first()).toBeVisible();
+    await expect(page.getByRole('list', { name: '요일별 산책 거리' })).toBeVisible();
+    await expect(page.getByRole('list', { name: '선호 코스' })).toBeVisible();
+
+    await page.getByRole('button', { name: '지난주' }).click();
+    await expect(page.getByText('이 주에는 실제 산책 기록이 없어요')).toBeVisible();
   });
 });

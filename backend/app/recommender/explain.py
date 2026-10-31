@@ -4,6 +4,7 @@
 코스 데이터에 없는 시설이나 확인되지 않은 안전 정보는 언급하지 않는다.
 """
 from app.recommender.course_scoring import familiarity, is_disliked
+from app.recommender.text import hour_label
 from app.recommender.types import (
     CourseData,
     CoursePreference,
@@ -34,16 +35,6 @@ def object_particle(name: str) -> str:
 
 def topic_particle(name: str) -> str:
     return "은" if has_final_consonant(name) else "는"
-
-
-def hour_label(hour: int) -> str:
-    if hour == 0:
-        return "자정"
-    if hour == 12:
-        return "낮 12시"
-    if hour < 12:
-        return f"오전 {hour}시"
-    return f"오후 {hour - 12}시"
 
 
 def course_kind(course: CourseData) -> str:
@@ -88,6 +79,13 @@ def _pet_sentence(pet: PetProfile, features: PetFeatures, course: CourseData, st
     return f"{name}의 활동량과 성향에 잘 맞는 {kind} 코스를 골랐어요."
 
 
+def _lighting_recorded(course: CourseData) -> bool:
+    """조명이 있다고 말할 근거가 있는지. 팀 추정값은 근거로 치지 않는다."""
+    lit = course.environment.get("lit") or {}
+    known = lit.get("yes", 0.0) + lit.get("no", 0.0)
+    return known >= 0.5 and lit.get("yes", 0.0) / known >= 0.7
+
+
 def _weather_sentence(course: CourseData, slot: SlotEvaluation, features: PetFeatures) -> str:
     apparent = slot.weather.apparent_temperature
     if slot.rain_overlap_min > 0:
@@ -96,12 +94,12 @@ def _weather_sentence(course: CourseData, slot: SlotEvaluation, features: PetFea
         return "비가 오기 전 짧게 다녀올 수 있어요." if course.duration_min <= SHORT_WALK_MIN else "비가 오기 전에 다녀올 수 있어요."
     if apparent > features.comfort_high:
         if course.shade_level >= 0.6:
-            return "더운 날이라 그늘이 많은 길로 골랐어요."
+            return "더운 날이라 그늘이 많을 것으로 보이는 길로 골랐어요."
         return f"더운 날이라 비교적 덜 더운 {hour_label(slot.start.hour)}로 맞췄어요."
     if apparent < features.comfort_low:
         return f"추운 날이라 약 {course.duration_min}분 코스로 무리하지 않게 다녀올 수 있어요."
-    if slot.is_dark and course.lighting == "good":
-        return f"{hour_label(slot.start.hour)}는 해가 진 뒤라 조명이 있는 길로 골랐어요."
+    if slot.is_dark and _lighting_recorded(course):
+        return f"{hour_label(slot.start.hour)}는 해가 진 뒤라 조명 기록이 있는 길로 골랐어요."
     return f"{hour_label(slot.start.hour)}는 체감 {apparent:.0f}°C로 산책하기 좋아요."
 
 
@@ -109,6 +107,23 @@ def build_details(factors: tuple[FactorScore, ...]) -> tuple[str, ...]:
     """기여도가 큰 항목 순으로 근거를 정리한다."""
     ranked = sorted(factors, key=lambda factor: -factor.contribution)
     return tuple(f"{factor.label} {factor.score:.0f}점: {', '.join(factor.evidence)}" for factor in ranked)
+
+
+def non_environment_cautions(
+    pet: PetProfile,
+    features: PetFeatures,
+    course: CourseData,
+    slot: SlotEvaluation,
+) -> tuple[str, ...]:
+    """안전 지수에 나오지 않는, 반려동물 특성과 일정에 관한 주의사항."""
+    cautions: list[str] = []
+    if not slot.fits_window:
+        cautions.append(f"코스를 다 돌면 가능 시간({slot.window.end_hour}시)을 넘겨요.")
+    if course.crowd_level == "high" and features.crowd_tolerance < 0.5:
+        cautions.append(f"사람이 많은 코스라 {pet.name}{topic_particle(pet.name)} 긴장할 수 있어요.")
+    if course.difficulty != "easy" and features.life_stage != "adult":
+        cautions.append("오르막이 있어 관절에 부담이 될 수 있어요. 천천히 걸어 주세요.")
+    return tuple(cautions)
 
 
 def build_cautions(
@@ -134,13 +149,7 @@ def build_cautions(
         cautions.append(f"자외선 지수 {weather.uv_index:.0f}로 높아요.")
     if slot.is_dark and course.lighting in ("poor", "partial", "unknown"):
         cautions.append("해가 진 뒤 일부 구간이 어두울 수 있어요. 조명이나 반사 용품을 챙겨 주세요.")
-    if not slot.fits_window:
-        cautions.append(f"코스를 다 돌면 가능 시간({slot.window.end_hour}시)을 넘겨요.")
-    if course.crowd_level == "high" and features.crowd_tolerance < 0.5:
-        cautions.append(f"사람이 많은 코스라 {pet.name}{topic_particle(pet.name)} 긴장할 수 있어요.")
-    if course.difficulty != "easy" and features.life_stage != "adult":
-        cautions.append("오르막이 있어 관절에 부담이 될 수 있어요. 천천히 걸어 주세요.")
-
+    cautions.extend(non_environment_cautions(pet, features, course, slot))
     cautions.append(DISCLAIMER)
     return tuple(cautions)
 
@@ -158,4 +167,5 @@ def build_explanation(
         summary=summary,
         details=build_details(factors),
         cautions=build_cautions(pet, features, course, slot),
+        other_cautions=non_environment_cautions(pet, features, course, slot),
     )

@@ -22,18 +22,21 @@
 | 오픈소스 | Playwright 1.64 | 브라우저 E2E 테스트 | Apache-2.0 |
 | 외부 API | Open-Meteo Forecast API | 실시간 날씨와 시간별 예보 (실행 중 호출) | 비상업적 무료 이용, 데이터 CC BY 4.0 |
 | 외부 API | OpenStreetMap 타일 서버 | 지도 배경 (실행 중 호출) | 데이터 ODbL, 타일 이용 정책 준수 |
-| 외부 API | OSRM 도보 경로 (routing.openstreetmap.de) | 코스 경로 구축, 현재 위치에서 출발점까지 길찾기 (실행 중 호출) | 데이터 ODbL |
+| 외부 API | OSRM 도보 경로 (routing.openstreetmap.de) | 코스 경로 구축, 출발점 길찾기, 복귀 경로, 이탈 시 재탐색 (실행 중 호출) | 데이터 ODbL |
 | 외부 API | 브라우저 Geolocation API | 현재 위치 수집 (브라우저 내장) | 웹 표준 |
-| 외부 API | Overpass API | 경로 주변 시설 수집 (데이터 구축 시 1회) | 데이터 ODbL |
+| 외부 API | Overpass API | 경로 주변 시설, 도로, 조명, 나무 기록 수집 (데이터 구축 시) | 데이터 ODbL |
 | 사전 보유 코드 | 없음 | 해당 없음 | 해당 없음 |
 | 기타 | 카카오맵 길찾기 링크 | 출발점이 먼 경우 외부 지도로 연결 (사용자가 눌렀을 때만 이동, API 미사용) | 카카오맵 이용약관 |
-| 기타 | OpenStreetMap 데이터 | 코스 경로, 공원, 화장실, 음수대, 동물병원 위치 | ODbL 1.0 |
+| 기타 | OpenStreetMap 데이터 | 코스 경로, 주변 시설, 도로 유형, 조명, 노면, 나무 기록 | ODbL 1.0 |
+| 기타 | Ollama 0.33 | 로컬 LLM 실행 (선택 기능) | MIT |
+| 기타 | Gemma 4 (`gemma4:e4b`) | 추천 이유 문장 생성 (선택 기능) | Apache-2.0 |
 | 기타 | Claude Code (Anthropic) | AI 코딩 도구로 구현 전반에 활용 | 상용 서비스 |
 
 ## 직접 개발한 범위
 
 - 추천 엔진 전체 (`backend/app/recommender`): 특성값 생성, 시간대 점수, 코스 6개 항목 점수, 적응형 가중치, 온라인 학습, 근거 기반 설명 생성
-- 외부 AI 모델이나 LLM API를 추천에 사용하지 않습니다.
+- 안전 지수 (`recommender/safety.py`), LLM 문장 사실 검증 (`recommender/explain_guard.py`)
+- 추천 순위와 점수 계산에는 외부 AI 모델이나 LLM을 쓰지 않습니다. LLM은 선택 기능으로, 확정된 추천의 문장만 다듬습니다.
 - GPS 길 안내 계산 (`frontend/src/lib/navigation.ts`): 경로 투영, 왕복 코스 진행도 추적, 회전 판정, 이탈과 완주 판정
 - 코스 데이터 구축 스크립트, 백엔드 API, 프론트엔드 화면과 차트
 

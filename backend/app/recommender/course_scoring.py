@@ -5,7 +5,9 @@
 """
 import math
 
-from app.recommender.preference import DISLIKED_AFFINITY, NEUTRAL, preference_score
+from app.recommender.config import BASE_WEIGHTS, DEFAULT_CONFIG, ScoringConfig
+from app.recommender.preference import DISLIKED_AFFINITY, NEUTRAL, preference_score, user_preference_score
+from app.recommender.safety import assess_course
 from app.recommender.types import (
     CourseData,
     CoursePreference,
@@ -17,14 +19,7 @@ from app.recommender.types import (
     SlotEvaluation,
 )
 
-INITIAL_WEIGHTS = {
-    "weather": 0.25,
-    "personality": 0.25,
-    "activity": 0.15,
-    "schedule": 0.15,
-    "safety": 0.10,
-    "preference": 0.10,
-}
+INITIAL_WEIGHTS = BASE_WEIGHTS
 FACTOR_LABELS = {
     "weather": "날씨 적합도",
     "personality": "반려동물 성향 적합도",
@@ -32,12 +27,18 @@ FACTOR_LABELS = {
     "schedule": "보호자 일정 적합도",
     "safety": "안전 시설 적합도",
     "preference": "과거 선호도",
+    "user_preference": "사용자 선호도",
 }
-MAX_PREFERENCE_WEIGHT_GAIN = 0.20
-SAFETY_FACILITIES = ("toilets", "police", "surveillance", "veterinary")
+# 응답에서 보여 주는 6개 평가 묶음. 세부 항목(factors)은 호환을 위해 그대로 둔다.
+SCORE_GROUPS = (
+    ("pet_fit", "반려동물 적합도", ("personality", "activity")),
+    ("user_preference", "사용자 선호도", ("user_preference",)),
+    ("weather", "날씨 적합도", ("weather",)),
+    ("safety", "산책 안전성", ("safety",)),
+    ("time", "시간 적합도", ("schedule",)),
+    ("past_satisfaction", "과거 만족도", ("preference",)),
+)
 
-LIGHTING_VALUE = {"good": 1.0, "partial": 0.6, "poor": 0.2, "unknown": 0.5}
-TRAFFIC_VALUE = {"low": 1.0, "medium": 0.6, "high": 0.2}
 CROWD_VALUE = {"low": 0.0, "medium": 0.5, "high": 1.0}
 LIGHTING_TEXT = {"good": "조명 양호", "partial": "일부 구간 조명", "poor": "조명 부족", "unknown": "조명 정보 없음"}
 CROWD_TEXT = {"low": "한적한 편", "medium": "보통", "high": "붐비는 편"}
@@ -56,18 +57,20 @@ def _clip(value: float) -> float:
     return max(0.0, min(100.0, value))
 
 
-def adaptive_weights(feedback_total: int) -> dict[str, float]:
-    """피드백이 쌓일수록 과거 선호도의 반영 강도를 키운다. 나머지 항목은 초기 가중치 그대로다."""
-    preference = INITIAL_WEIGHTS["preference"] + MAX_PREFERENCE_WEIGHT_GAIN * feedback_total / (feedback_total + 2)
-    return {**INITIAL_WEIGHTS, "preference": preference}
+def adaptive_weights(feedback_total: int, config: ScoringConfig = DEFAULT_CONFIG) -> dict[str, float]:
+    """피드백이 쌓일수록 과거 선호도의 반영 강도를 키운다. 나머지 항목은 설정된 가중치 그대로다."""
+    gain = config.max_preference_gain * feedback_total / (feedback_total + 2)
+    return {**config.weights, "preference": config.weights["preference"] + gain, "user_preference": config.user_preference_weight}
 
 
-def _contribution(key: str, score: float, weights: dict[str, float]) -> float:
-    if key != "preference":
-        return weights[key] * score
+def _contribution(key: str, score: float, weights: dict[str, float], config: ScoringConfig) -> float:
     # 중립값에서 벗어난 만큼만 강도를 키운다. 그래서 좋은 피드백은 항상 점수를 올리고,
     # 평가하지 않은 코스는 강도가 커져도 깎이지 않는다.
-    return INITIAL_WEIGHTS[key] * NEUTRAL + weights[key] * (score - NEUTRAL)
+    if key == "preference":
+        return config.weights[key] * NEUTRAL + weights[key] * (score - NEUTRAL)
+    if key == "user_preference":
+        return weights[key] * (score - NEUTRAL)
+    return weights[key] * score
 
 
 def is_disliked(preference: CoursePreference) -> bool:
@@ -92,9 +95,9 @@ def score_weather(course: CourseData, slot: SlotEvaluation, features: PetFeature
     if weather.apparent_temperature >= features.comfort_high - 2:
         score += (course.shade_level - 0.5) * 30
         if course.shade_level >= 0.6:
-            evidence.append("더운 시간에 그늘이 많은 코스")
+            evidence.append("더운 시간에 그늘이 많을 것으로 추정되는 코스")
         elif course.shade_level <= 0.3:
-            evidence.append("더운 시간에 그늘이 적은 코스")
+            evidence.append("더운 시간에 그늘이 적을 것으로 추정되는 코스")
     if weather.is_day and weather.uv_index is not None and weather.uv_index >= 6:
         score += (course.shade_level - 0.5) * 10
 
@@ -181,27 +184,33 @@ def score_schedule(course: CourseData, slot: SlotEvaluation, schedule: Schedule)
     return _clip(score), tuple(evidence)
 
 
-def score_safety(course: CourseData, slot: SlotEvaluation) -> tuple[float, tuple[str, ...]]:
-    lighting = LIGHTING_VALUE[course.lighting]
-    traffic = TRAFFIC_VALUE[course.traffic_exposure]
-    facility_count = sum(course.facility_counts.get(kind, 0) for kind in SAFETY_FACILITIES)
-    facilities = min(1.0, facility_count / 3)
+def score_safety(course: CourseData, slot: SlotEvaluation, features: PetFeatures) -> tuple[float, tuple[str, ...]]:
+    assessment = assess_course(course, slot, features)
+    evidence = [risk.rstrip(".") for risk in assessment.risks]
+    if assessment.unverified:
+        evidence.append(f"확인 불가: {', '.join(assessment.unverified)}")
+    return assessment.score, tuple(evidence) or ("특이사항 없음",)
 
-    if slot.is_dark:
-        score = 0.5 * lighting + 0.2 * traffic + 0.1 * course.has_park + 0.1 * course.is_paved + 0.1 * facilities
-    else:
-        score = 0.15 * lighting + 0.35 * traffic + 0.2 * course.has_park + 0.15 * course.is_paved + 0.15 * facilities
 
-    evidence = []
-    if slot.is_dark:
-        evidence.append(f"해가 진 뒤 산책, {LIGHTING_TEXT[course.lighting]}(팀 조사 추정값)")
-    if course.has_park:
-        evidence.append("공원 포함")
-    if course.traffic_exposure == "low":
-        evidence.append("차량 노출이 적은 길")
-    elif course.traffic_exposure == "high":
-        evidence.append("차량 노출이 많은 길")
-    return _clip(100 * score), tuple(evidence) or ("특이사항 없음",)
+def score_breakdown(factors: tuple[FactorScore, ...]) -> list[dict]:
+    """세부 항목을 6개 평가 묶음으로 합친다."""
+    by_key = {factor.key: factor for factor in factors}
+    groups = []
+    for key, label, members in SCORE_GROUPS:
+        parts = [by_key[member] for member in members if member in by_key]
+        weight = sum(part.weight for part in parts)
+        score = sum(part.score * part.weight for part in parts) / weight if weight else 0.0
+        groups.append(
+            {
+                "key": key,
+                "label": label,
+                "score": round(score, 1),
+                "weight": round(weight, 4),
+                "contribution": round(sum(part.contribution for part in parts), 2),
+                "evidence": [line for part in parts for line in part.evidence],
+            }
+        )
+    return groups
 
 
 def score_course(
@@ -211,19 +220,21 @@ def score_course(
     features: PetFeatures,
     schedule: Schedule,
     state: PreferenceState,
+    config: ScoringConfig = DEFAULT_CONFIG,
 ) -> tuple[float, tuple[FactorScore, ...], float]:
     """코스를 출발 시각 하나에 대해 평가한다. (총점, 항목별 점수, 과거 선호도 점수)를 돌려준다."""
-    weights = adaptive_weights(state.feedback_total)
+    weights = adaptive_weights(state.feedback_total, config)
     preference, preference_evidence = preference_score(course, features, state)
     raw = {
         "weather": score_weather(course, slot, features),
         "personality": score_personality(course, pet, features, state),
         "activity": score_activity(course, features, slot),
         "schedule": score_schedule(course, slot, schedule),
-        "safety": score_safety(course, slot),
+        "safety": score_safety(course, slot, features),
         "preference": (preference, preference_evidence),
+        "user_preference": user_preference_score(course, slot.start.hour, features, state),
     }
-    contributions = {key: _contribution(key, score, weights) for key, (score, _) in raw.items()}
+    contributions = {key: _contribution(key, score, weights, config) for key, (score, _) in raw.items()}
     factors = tuple(
         FactorScore(
             key=key,
@@ -235,4 +246,6 @@ def score_course(
         )
         for key, (score, evidence) in raw.items()
     )
-    return round(_clip(sum(contributions.values())), 2), factors, preference
+    penalty = assess_course(course, slot, features).penalty
+    total = config.ranker.score(contributions, {key: score for key, (score, _) in raw.items()}, penalty)
+    return round(_clip(total), 2), factors, preference

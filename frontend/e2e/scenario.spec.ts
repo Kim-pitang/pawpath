@@ -31,7 +31,17 @@ test('최종 검증 시나리오: 추천, 산책, 5점 피드백, 다음 추천 
   const firstCard = page.getByTestId('course-card-1');
   await firstCard.getByRole('button', { name: '점수 근거 보기' }).click();
   await expect(firstCard.getByLabel('항목별 점수').getByRole('listitem')).toHaveCount(6);
-  await expect(firstCard.getByText('과거 선호도', { exact: true })).toBeVisible();
+  await expect(firstCard.getByText('과거 만족도', { exact: true })).toBeVisible();
+  await expect(firstCard.getByText('사용자 선호도', { exact: true })).toBeVisible();
+
+  // 안전 평가: 출처를 구분하고, 데이터가 없는 항목은 확인 불가로 표시한다.
+  const safety = firstCard.getByTestId('safety-panel');
+  await expect(safety).toContainText('안전');
+  await expect(safety).toContainText('확인 불가');
+  await safety.getByRole('button', { name: '항목별 근거' }).click();
+  await expect(safety.getByLabel('안전 평가 항목').getByRole('listitem').first()).toBeVisible();
+  await expect(safety).toContainText('모의');
+  await expect(safety).toContainText('보장하지 않아요');
 
   // 2위 코스로 산책해서 순위 변화까지 확인한다.
   const secondCard = page.getByTestId('course-card-2');

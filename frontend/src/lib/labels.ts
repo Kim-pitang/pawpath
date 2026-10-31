@@ -1,4 +1,4 @@
-import type { Difficulty, Level, NoveltyReaction, PathPreference, Personality, Size, WeatherScenario } from './types';
+import type { Difficulty, Level, NoveltyReaction, PathPreference, Personality, Size, TimeBucket, WeatherScenario } from './types';
 
 export const SIZE_LABELS: Record<Size, string> = { small: '소형견', medium: '중형견', large: '대형견' };
 export const ACTIVITY_LABELS: Record<Level, string> = { low: '낮음', medium: '보통', high: '높음' };
@@ -20,9 +20,17 @@ export const DIFFICULTY_LABELS: Record<Difficulty, string> = {
   hard: '힘들었어요',
 };
 
+export const TIME_BUCKET_LABELS: Record<TimeBucket, string> = {
+  morning: '오전',
+  lunch: '점심',
+  afternoon: '오후',
+  evening: '저녁',
+};
+
 export const SCENARIO_LABELS: Record<WeatherScenario, string> = {
   live: '실제 날씨',
   rain_later: '곧 비',
+  rain_now: '지금 비',
   heatwave: '폭염',
   cold: '한파',
   heavy_rain: '폭우',
@@ -30,6 +38,10 @@ export const SCENARIO_LABELS: Record<WeatherScenario, string> = {
 
 export const FACILITY_LABELS: Record<string, string> = {
   park: '공원',
+  dog_park: '반려견 놀이터',
+  pet_friendly: '반려동물 동반 표시',
+  pet_shop: '반려용품점',
+  convenience: '편의점',
   toilets: '화장실',
   drinking_water: '음수대',
   veterinary: '동물병원',

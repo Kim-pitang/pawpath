@@ -7,13 +7,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import api, models  # noqa: F401  models는 테이블 등록을 위해 불러온다
 from app.config import get_settings
-from app.database import Base, SessionLocal, engine
+from app.database import SessionLocal, engine
+from app.migrations import ensure_schema
 from app.seed import seed_all
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    Base.metadata.create_all(engine)
+    ensure_schema(engine)
     with SessionLocal() as db:
         seed_all(db)
     yield

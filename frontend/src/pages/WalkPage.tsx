@@ -173,7 +173,10 @@ export default function WalkPage() {
             {walks.map((walk) => (
               <li key={walk.id} className="py-3 first:pt-0 last:pb-0">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="font-semibold">{walk.course_name}</p>
+                  <p className="flex items-center gap-1.5 font-semibold">
+                    {walk.course_name}
+                    {walk.is_simulated && <Chip>시연용</Chip>}
+                  </p>
                   {walk.feedback ? (
                     <Chip tone="leaf">
                       <PawPrint size={12} aria-hidden />

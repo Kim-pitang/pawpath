@@ -40,6 +40,8 @@ class Pet(Base):
     path_preference: Mapped[str] = mapped_column(String(10))
     heat_sensitivity: Mapped[str] = mapped_column(String(10))
     novelty_reaction: Mapped[str] = mapped_column(String(10))
+    preferred_distance_km: Mapped[float | None] = mapped_column(Float, nullable=True)
+    preferred_time_bucket: Mapped[str | None] = mapped_column(String(10), nullable=True)
     # 온라인 학습 상태: 코스 특성 가중치, 시간대별 선호, 누적 피드백 수
     learned_attribute_weights: Mapped[dict] = mapped_column(JSON, default=dict)
     learned_time_buckets: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -82,6 +84,8 @@ class WalkingCourse(Base):
     traffic_exposure: Mapped[str] = mapped_column(String(10))
     scenery_tags: Mapped[list] = mapped_column(JSON, default=list)
     data_sources: Mapped[dict] = mapped_column(JSON, default=dict)
+    # OSM에서 경로별로 측정한 값: 도로 유형, 조명, 노면, 나무 기록 비율
+    environment: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class WeatherRecord(Base):
@@ -129,6 +133,10 @@ class WalkHistory(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime)
     ended_at: Mapped[datetime] = mapped_column(DateTime)
     duration_min: Mapped[int] = mapped_column(Integer)
+    # gps | manual | simulation. 시연용 산책(simulation)은 활동 통계에서 뺀다. 예전 기록은 비어 있다.
+    tracking_source: Mapped[str | None] = mapped_column(String(12), nullable=True, default="manual")
+    # 실제로 걸은 거리. 비어 있으면 코스 거리를 쓴다.
+    distance_km: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_local)
 
     pet: Mapped[Pet] = relationship(back_populates="walks")

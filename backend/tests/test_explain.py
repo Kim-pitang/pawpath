@@ -45,9 +45,12 @@ def test_unknown_lighting_is_never_called_lit():
     assert any("어두울" in caution for caution in result.cautions)
 
 
-def test_good_lighting_is_mentioned_only_after_dark():
-    assert "조명" in explain(course=make_course(lighting="good"), hour=19).summary
-    assert "조명" not in explain(course=make_course(lighting="good"), hour=16).summary
+def test_lighting_is_mentioned_only_with_a_record_and_only_after_dark():
+    recorded = make_course(environment={"lit": {"yes": 0.8, "no": 0.1, "unknown": 0.1}})
+    assert "조명 기록" in explain(course=recorded, hour=19).summary
+    assert "조명" not in explain(course=recorded, hour=16).summary
+    # 팀 추정값만 있으면 조명이 있다고 말하지 않는다.
+    assert "조명" not in explain(course=make_course(lighting="good"), hour=19).summary
 
 
 def test_rain_sentence_only_appears_when_rain_is_actually_coming():
@@ -113,7 +116,7 @@ def test_cautions_follow_conditions():
 
 def test_details_are_sorted_by_contribution_and_cover_all_factors():
     result = explain()
-    assert len(result.details) == 6
+    assert len(result.details) == 7
     assert all("점:" in line for line in result.details)
 
 

@@ -2,7 +2,8 @@ import { useApp } from '../context/AppContext';
 import { SCENARIO_LABELS } from '../lib/labels';
 import type { WeatherScenario } from '../lib/types';
 
-const SCENARIOS = Object.keys(SCENARIO_LABELS) as WeatherScenario[];
+// '지금 비'는 산책 중 날씨 변화를 시연할 때만 쓰므로 추천 화면에 두지 않는다.
+const SCENARIOS: WeatherScenario[] = ['live', 'rain_later', 'heatwave', 'cold', 'heavy_rain'];
 
 /** 실제 날씨와 시연용 시나리오를 고른다. 시나리오 결과에는 항상 시연용 표시가 붙는다. */
 export default function WeatherScenarioPicker() {

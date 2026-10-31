@@ -1,7 +1,7 @@
 import L from 'leaflet';
 import { useEffect, useRef } from 'react';
 import { sliceRoute, type LatLng, type RouteModel } from '../lib/navigation';
-import type { Facility } from '../lib/types';
+import type { Facility, NearbyPlace } from '../lib/types';
 import { FACILITY_MARKERS } from './CourseMap';
 
 const REMAINING_COLOR = '#2e8b62';
@@ -22,6 +22,8 @@ interface NavigationMapProps {
   facilities: Facility[];
   /** 내 위치를 따라가지 않을 때 한눈에 보여 줄 범위. 값이 바뀔 때만 지도를 맞춘다. */
   overview: LatLng[] | null;
+  /** 켜 두었을 때 지도에 함께 표시할 주변 시설. */
+  places: NearbyPlace[];
   follow: boolean;
   onUserPan: () => void;
 }
@@ -35,6 +37,7 @@ export default function NavigationMap({
   rejoinPoint,
   facilities,
   overview,
+  places,
   follow,
   onUserPan,
 }: NavigationMapProps) {
@@ -48,6 +51,7 @@ export default function NavigationMap({
     rejoin: L.Polyline;
     me: L.Marker;
     accuracy: L.Circle;
+    places: L.LayerGroup;
   } | null>(null);
   const onUserPanRef = useRef(onUserPan);
   onUserPanRef.current = onUserPan;
@@ -70,6 +74,7 @@ export default function NavigationMap({
       next: L.polyline([], { color: NEXT_COLOR, weight: 7, lineCap: 'round', className: 'nav-next' }).addTo(map),
       approach: L.polyline([], { color: NEXT_COLOR, weight: 5, dashArray: '2 10', lineCap: 'round', className: 'nav-approach' }).addTo(map),
       rejoin: L.polyline([], { color: NEXT_COLOR, weight: 4, dashArray: '2 8', lineCap: 'round', className: 'nav-rejoin' }).addTo(map),
+      places: L.layerGroup().addTo(map),
       me: L.marker([0, 0], { icon: L.divIcon({ className: 'pp-me', iconSize: [20, 20] }), keyboard: false, interactive: false, zIndexOffset: 1000 }),
     };
 
@@ -125,6 +130,22 @@ export default function NavigationMap({
   useEffect(() => {
     if (overview && overview.length >= 2) mapRef.current?.fitBounds(L.latLngBounds(overview), { padding: [36, 36] });
   }, [overview]);
+
+  useEffect(() => {
+    const layer = layersRef.current?.places;
+    if (!layer) return;
+    layer.clearLayers();
+    for (const place of places) {
+      const style = FACILITY_MARKERS[place.type];
+      if (!style) continue;
+      const marker = L.marker([place.lat, place.lng], {
+        icon: L.divIcon({ html: style.glyph, className: 'pp-marker pp-place', iconSize: [26, 26] }),
+        title: place.name,
+      }).addTo(layer);
+      marker.bindTooltip(`${place.name} (경로에서 ${place.distance_m}m)`);
+      marker.getElement()?.style.setProperty('background', style.color);
+    }
+  }, [places]);
 
   useEffect(() => {
     layersRef.current?.rejoin.setLatLngs(position && rejoinPoint ? [position, rejoinPoint] : []);

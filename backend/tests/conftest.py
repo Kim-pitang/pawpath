@@ -10,6 +10,9 @@ os.environ["DATABASE_URL"] = f"sqlite:///{_db_dir}/test.db"
 os.environ["WEATHER_PROVIDER"] = "mock"
 os.environ["SEED_DEMO_PET"] = "true"
 os.environ["ROUTING_PROVIDER"] = "none"
+# 개발자의 .env 설정과 무관하게 같은 결과가 나오도록 고정한다. 환경변수가 .env보다 우선한다.
+os.environ["LLM_PROVIDER"] = "none"
+os.environ["RECOMMENDER_WEIGHTS"] = "{}"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -133,6 +136,7 @@ def seed_course_data() -> list[CourseData]:
                 traffic_exposure=raw["traffic_exposure"],
                 scenery_tags=tuple(raw["scenery_tags"]),
                 facility_counts=dict(Counter(f["type"] for f in raw["facilities"])),
+                environment=raw.get("environment") or {},
             )
         )
     return courses

@@ -1,0 +1,94 @@
+import { AlertOctagon, AlertTriangle, ChevronDown, HelpCircle, ShieldCheck } from 'lucide-react';
+import { useState } from 'react';
+import type { SafetyAssessment, SafetyItem } from '../lib/types';
+
+const LEVELS = {
+  good: { label: '양호', icon: ShieldCheck, tone: 'bg-leaf-50 text-leaf-800' },
+  caution: { label: '주의', icon: AlertTriangle, tone: 'bg-carrot-50 text-carrot-700' },
+  danger: { label: '위험', icon: AlertOctagon, tone: 'bg-carrot-100 text-carrot-700' },
+  blocked: { label: '추천 제외', icon: AlertOctagon, tone: 'bg-carrot-100 text-carrot-700' },
+};
+
+const STATUS_ICON = { ok: ShieldCheck, caution: AlertTriangle, danger: AlertOctagon, unverified: HelpCircle };
+const STATUS_TEXT = { ok: '양호', caution: '주의', danger: '위험', unverified: '확인 불가' };
+const STATUS_COLOR = { ok: 'text-leaf-600', caution: 'text-carrot-500', danger: 'text-carrot-700', unverified: 'text-ink-muted' };
+const SOURCE_TEXT: Record<SafetyItem['source'], string> = {
+  forecast: '예보',
+  demo: '모의',
+  observed: 'OSM 기록',
+  estimated: '팀 추정',
+  unknown: '데이터 없음',
+};
+
+export function SafetyBadge({ assessment }: { assessment: SafetyAssessment }) {
+  const level = LEVELS[assessment.level];
+  const Icon = level.icon;
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${level.tone}`}>
+      <Icon size={13} aria-hidden />
+      안전 {Math.round(assessment.score)}점 · {level.label}
+    </span>
+  );
+}
+
+export default function SafetyPanel({ assessment }: { assessment: SafetyAssessment }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-2xl border border-line p-3" data-testid="safety-panel">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <SafetyBadge assessment={assessment} />
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+          className="flex min-h-8 items-center gap-1 text-xs font-semibold text-ink-soft"
+        >
+          항목별 근거
+          <ChevronDown size={15} className={`transition ${open ? 'rotate-180' : ''}`} aria-hidden />
+        </button>
+      </div>
+
+      {assessment.risks.length > 0 && (
+        <ul className="mt-2 flex flex-col gap-1 text-sm text-carrot-700" aria-label="위험 요인">
+          {assessment.risks.map((risk) => (
+            <li key={risk} className="flex items-start gap-1.5">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden />
+              <span>{risk}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {assessment.unverified.length > 0 && (
+        <p className="mt-2 flex items-start gap-1.5 text-xs text-ink-soft">
+          <HelpCircle size={13} className="mt-0.5 shrink-0" aria-hidden />
+          <span>확인 불가: {assessment.unverified.join(', ')}. 데이터가 없는 항목은 안전하다고 보지 않아요.</span>
+        </p>
+      )}
+
+      {open && (
+        <div className="mt-3">
+          <ul className="flex flex-col divide-y divide-line text-sm" aria-label="안전 평가 항목">
+            {assessment.items.map((item) => {
+              const Icon = STATUS_ICON[item.status];
+              return (
+                <li key={item.key} className="flex items-start gap-2 py-1.5">
+                  <Icon size={15} className={`mt-0.5 shrink-0 ${STATUS_COLOR[item.status]}`} aria-hidden />
+                  <div className="min-w-0 flex-1">
+                    <p className="flex flex-wrap items-baseline justify-between gap-x-2">
+                      <span className="font-semibold text-ink">
+                        {item.label} <span className="font-normal text-ink-soft">{STATUS_TEXT[item.status]}</span>
+                      </span>
+                      <span className="text-[11px] text-ink-muted">{SOURCE_TEXT[item.source]}</span>
+                    </p>
+                    <p className="text-xs text-ink-soft">{item.value}</p>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-2 text-xs text-ink-muted">{assessment.disclaimer}</p>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -72,4 +72,6 @@ def build_features(pet: PetProfile) -> PetFeatures:
         comfort_high=comfort_high,
         unsafe_cold=comfort_low - 15,
         unsafe_heat=comfort_high + 11,
+        preferred_distance_km=pet.preferred_distance_km,
+        preferred_time_bucket=pet.preferred_time_bucket,
     )

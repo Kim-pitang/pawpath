@@ -227,6 +227,8 @@ export function advanceTracking(
   position: LatLng,
   accuracy: number | null,
   now: number,
+  /** 출발점 복귀처럼 끝점이 시작점과 다른 경로면 들어오자마자 도착일 수 있다. */
+  oneWay = false,
 ): Tracking {
   if (accuracy !== null && accuracy > MAX_USABLE_ACCURACY_M) return previous;
   const tolerance = toleranceFor(accuracy);
@@ -238,7 +240,7 @@ export function advanceTracking(
     nearest: located.point,
     startedAt: previous.startedAt ?? (onRoute ? now : null),
     // 코스에 들어온 뒤에만 완주로 친다. 시작점과 끝점이 같은 순환 코스에서 출발하자마자 끝나지 않게 한다.
-    finished: previous.finished || (onRoute && previous.startedAt !== null && located.progress >= route.total - FINISH_M),
+    finished: previous.finished || (onRoute && (oneWay || previous.startedAt !== null) && located.progress >= route.total - FINISH_M),
   };
 }
 

@@ -10,7 +10,9 @@ Personality = Literal["active", "timid", "curious"]
 PathPreference = Literal["familiar", "new"]
 NoveltyReaction = Literal["calm", "cautious", "anxious"]
 Difficulty = Literal["easy", "just_right", "hard"]
-WeatherScenario = Literal["live", "rain_later", "heatwave", "cold", "heavy_rain"]
+WeatherScenario = Literal["live", "rain_later", "rain_now", "heatwave", "cold", "heavy_rain"]
+TimeBucket = Literal["morning", "lunch", "afternoon", "evening"]
+TrackingSource = Literal["gps", "manual", "simulation"]
 
 
 class PetBase(BaseModel):
@@ -24,6 +26,8 @@ class PetBase(BaseModel):
     path_preference: PathPreference
     heat_sensitivity: Level
     novelty_reaction: NoveltyReaction
+    preferred_distance_km: float | None = Field(default=None, gt=0, le=30)
+    preferred_time_bucket: TimeBucket | None = None
 
 
 class PetCreate(PetBase):
@@ -120,6 +124,7 @@ class CourseSummary(BaseModel):
     scenery_tags: list[str]
     facilities: list[dict]
     data_sources: dict
+    environment: dict | None = None
 
 
 class CourseDetail(CourseSummary):
@@ -139,6 +144,24 @@ class ApproachRead(BaseModel):
     notice: str | None
 
 
+class WalkingRouteRequest(BaseModel):
+    from_latitude: float = Field(ge=-90, le=90)
+    from_longitude: float = Field(ge=-180, le=180)
+    to_latitude: float = Field(ge=-90, le=90)
+    to_longitude: float = Field(ge=-180, le=180)
+
+
+class AlternativeRequest(BaseModel):
+    """위치는 없어도 된다. 없으면 복귀 경로 대신 안내 문구를 돌려준다."""
+
+    pet_id: int
+    course_id: int
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+    progress_m: float = Field(default=0, ge=0)
+    weather_scenario: WeatherScenario = "live"
+
+
 class RecommendationRequest(BaseModel):
     pet_id: int
     weather_scenario: WeatherScenario = "live"
@@ -150,6 +173,8 @@ class WalkCreate(BaseModel):
     recommendation_id: int | None = None
     duration_min: int = Field(ge=1, le=600)
     started_at: datetime | None = None
+    tracking_source: TrackingSource = "manual"
+    distance_km: float | None = Field(default=None, ge=0, le=100)
 
 
 class FeedbackBrief(BaseModel):
@@ -178,6 +203,8 @@ class WalkRead(BaseModel):
     ended_at: datetime
     duration_min: int
     feedback: FeedbackBrief | None
+    tracking_source: str = "manual"
+    is_simulated: bool = False
 
 
 class FeedbackCreate(BaseModel):

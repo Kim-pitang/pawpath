@@ -1,4 +1,5 @@
 import type {
+  AlternativeResult,
   Approach,
   Course,
   CurrentWeather,
@@ -6,11 +7,15 @@ import type {
   FeedbackInput,
   ForecastWeather,
   Insights,
+  NearbyResult,
   Pet,
   PetInput,
   Recommendation,
+  RouteResult,
   Schedule,
+  TrackingSource,
   Walk,
+  WalkReport,
   WeatherScenario,
 } from './types';
 
@@ -63,11 +68,24 @@ export const api = {
   getCourse: (id: number) => request<Course>(`/courses/${id}`),
   approach: (courseId: number, latitude: number, longitude: number) =>
     post<Approach>(`/courses/${courseId}/approach`, { latitude, longitude }),
+  nearbyPlaces: (courseId: number, radiusM = 300, types?: string[]) =>
+    request<NearbyResult>(`/courses/${courseId}/nearby?radius_m=${radiusM}${types ? `&types=${types.join(',')}` : ''}`),
+  walkingRoute: (from: [number, number], to: [number, number]) =>
+    post<RouteResult>('/routes/walking', { from_latitude: from[0], from_longitude: from[1], to_latitude: to[0], to_longitude: to[1] }),
+  alternativeRoute: (body: {
+    pet_id: number;
+    course_id: number;
+    latitude: number | null;
+    longitude: number | null;
+    progress_m: number;
+    weather_scenario: WeatherScenario;
+  }) => post<AlternativeResult>('/routes/alternative', body),
 
   recommend: (petId: number, scenario: WeatherScenario) =>
     post<Recommendation>('/recommendations', { pet_id: petId, weather_scenario: scenario }),
   latestRecommendations: (petId: number, limit = 1) =>
     request<Recommendation[]>(`/recommendations?pet_id=${petId}&limit=${limit}`),
+  explainRecommendation: (id: number) => post<Recommendation>(`/recommendations/${id}/explain`, {}),
 
   createWalk: (body: {
     pet_id: number;
@@ -75,9 +93,12 @@ export const api = {
     recommendation_id: number | null;
     duration_min: number;
     started_at?: string;
+    tracking_source?: TrackingSource;
+    distance_km?: number;
   }) =>
     post<Walk>('/walks', body),
   listWalks: (petId: number) => request<Walk[]>(`/walks?pet_id=${petId}`),
+  walkReport: (petId: number, weekOffset = 0) => request<WalkReport>(`/walks/report?pet_id=${petId}&week_offset=${weekOffset}`),
 
   submitFeedback: (body: FeedbackInput) => post<Feedback>('/feedback', body),
 };

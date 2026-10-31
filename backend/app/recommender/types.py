@@ -14,6 +14,8 @@ class PetProfile:
     path_preference: str  # familiar | new
     heat_sensitivity: str  # low | medium | high
     novelty_reaction: str  # calm | cautious | anxious
+    preferred_distance_km: float | None = None
+    preferred_time_bucket: str | None = None  # morning | lunch | afternoon | evening
 
 
 @dataclass(frozen=True)
@@ -30,6 +32,8 @@ class PetFeatures:
     comfort_high: float  # 쾌적 체감온도 상한(°C)
     unsafe_cold: float  # 이 체감온도 이하는 산책 제외
     unsafe_heat: float  # 이 체감온도 이상은 산책 제외
+    preferred_distance_km: float | None = None
+    preferred_time_bucket: str | None = None
 
 
 @dataclass(frozen=True)
@@ -75,6 +79,8 @@ class CourseData:
     traffic_exposure: str  # low | medium | high
     scenery_tags: tuple[str, ...] = ()
     facility_counts: dict[str, int] = field(default_factory=dict)
+    # OSM에서 수집한 실측값. 없으면 안전 평가에서 '확인 불가'로 다룬다.
+    environment: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -143,10 +149,36 @@ class FactorScore:
 
 
 @dataclass(frozen=True)
+class SafetyItem:
+    key: str
+    label: str
+    status: str  # ok | caution | danger | unverified
+    score: float | None
+    value: str
+    source: str  # forecast | demo | observed | estimated | unknown
+    source_label: str
+    detail: str | None
+
+
+@dataclass(frozen=True)
+class SafetyAssessment:
+    score: float
+    level: str  # good | caution | danger | blocked
+    items: tuple[SafetyItem, ...]
+    risks: tuple[str, ...]
+    blocked_reasons: tuple[str, ...]
+    unverified: tuple[str, ...]
+    penalty: float
+    disclaimer: str
+
+
+@dataclass(frozen=True)
 class Explanation:
     summary: str
     details: tuple[str, ...]
     cautions: tuple[str, ...]
+    # 안전 지수에 나오지 않는 주의사항. 화면에서 같은 경고를 두 번 보여 주지 않기 위해 따로 둔다.
+    other_cautions: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -160,6 +192,14 @@ class CourseRecommendation:
     factors: tuple[FactorScore, ...]
     explanation: Explanation
     preference_score: float
+    safety: SafetyAssessment
+    alternative: CourseData | None = None
+
+
+@dataclass(frozen=True)
+class ExcludedCourse:
+    course: CourseData
+    reasons: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -178,3 +218,5 @@ class RecommendationResult:
     weights: dict[str, float]
     blocked_reasons: tuple[str, ...]
     indoor_alternatives: tuple[str, ...]
+    excluded: tuple[ExcludedCourse, ...] = ()
+    ranker: str = "weighted-sum"

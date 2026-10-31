@@ -18,6 +18,7 @@ from app.recommender.preference import (
 )
 from app.recommender.types import FeedbackInput
 from app.services.recommendation_service import load_state, to_course_data
+from app.services.report_service import is_simulated, walked_km
 
 
 def _preference_row(db: Session, pet_id: int, course_id: int) -> PetCoursePreference:
@@ -49,6 +50,8 @@ def record_walk(
     started_at: datetime | None,
     recommendation_id: int | None,
     now: datetime,
+    tracking_source: str = "manual",
+    distance_km: float | None = None,
 ) -> WalkHistory:
     started = started_at or now - timedelta(minutes=duration_min)
     walk = WalkHistory(
@@ -58,6 +61,8 @@ def record_walk(
         started_at=started,
         ended_at=started + timedelta(minutes=duration_min),
         duration_min=duration_min,
+        tracking_source=tracking_source,
+        distance_km=distance_km,
         created_at=now,
     )
     db.add(walk)
@@ -106,11 +111,19 @@ def submit_feedback(db: Session, walk: WalkHistory, feedback: FeedbackInput, mem
     return record
 
 
+def _average_rating(feedbacks: list[WalkFeedback], real_walk_ids: set[int]) -> float | None:
+    ratings = [feedback.pet_rating for feedback in feedbacks if feedback.walk_id in real_walk_ids]
+    return round(sum(ratings) / len(ratings), 1) if ratings else None
+
+
 def build_insights(db: Session, pet: Pet) -> dict:
     """마이페이지 분석: 통계, 자주 간 코스, 학습된 선호, 추천 결과 변화."""
-    walks = list(
+    all_walks = list(
         db.scalars(select(WalkHistory).where(WalkHistory.pet_id == pet.id).order_by(WalkHistory.started_at))
     )
+    # 활동 통계에는 실제 산책만 넣는다. 시연용 산책은 건수만 따로 알려 준다.
+    walks = [walk for walk in all_walks if not is_simulated(walk)]
+    real_walk_ids = {walk.id for walk in walks}
     feedbacks = list(
         db.scalars(select(WalkFeedback).where(WalkFeedback.pet_id == pet.id).order_by(WalkFeedback.id))
     )
@@ -157,9 +170,10 @@ def build_insights(db: Session, pet: Pet) -> dict:
         "stats": {
             "walk_count": len(walks),
             "total_minutes": sum(walk.duration_min for walk in walks),
-            "total_distance_km": round(sum(walk.course.distance_km for walk in walks), 2),
+            "total_distance_km": round(sum(walked_km(walk) for walk in walks), 2),
             "feedback_count": len(feedbacks),
-            "average_pet_rating": round(sum(f.pet_rating for f in feedbacks) / len(feedbacks), 1) if feedbacks else None,
+            "average_pet_rating": _average_rating(feedbacks, real_walk_ids),
+            "simulated_walk_count": len(all_walks) - len(walks),
         },
         "courses": courses,
         "attributes": attribute_insights(state.attribute_weights),

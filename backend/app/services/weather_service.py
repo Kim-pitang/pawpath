@@ -29,6 +29,7 @@ _weather_lock = threading.Lock()
 LIVE = "live"
 SCENARIO_LABELS = {
     "rain_later": "시연용 시나리오: 곧 비가 오는 날",
+    "rain_now": "시연용 시나리오: 지금 비가 내리는 상황",
     "heatwave": "시연용 시나리오: 폭염",
     "cold": "시연용 시나리오: 한파",
     "heavy_rain": "시연용 시나리오: 폭우",

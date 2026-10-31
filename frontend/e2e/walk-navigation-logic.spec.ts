@@ -130,6 +130,18 @@ test('순환 코스는 출발 지점에서 끝난 것으로 치지 않는다', (
   expect(advanceTracking(route, first, LOOP[0], 5, 2000).finished).toBe(false);
 });
 
+test('복귀 경로가 아주 짧으면 첫 측정에서 바로 도착한다', () => {
+  // 출발점 근처에서 복귀를 고르면 다음 위치 변화 없이도 끝나야 한다.
+  const near: LatLng[] = [
+    [37.55, 126.9],
+    [37.55009, 126.9],
+  ];
+  const route = buildRoute(near);
+  expect(advanceTracking(route, INITIAL_TRACKING, near[0], 5, 1000, true).finished).toBe(true);
+  // 순환 코스 규칙은 그대로다.
+  expect(advanceTracking(route, INITIAL_TRACKING, near[0], 5, 1000).finished).toBe(false);
+});
+
 test('경로를 따라 끝까지 걸으면 완주한다', () => {
   const route = buildRoute(LOOP);
   let tracking = INITIAL_TRACKING;

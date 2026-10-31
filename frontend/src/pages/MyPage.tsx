@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import DivergingBars from '../components/charts/DivergingBars';
 import HBarChart from '../components/charts/HBarChart';
 import ScoreTrendChart from '../components/charts/ScoreTrendChart';
-import { Card, EmptyState, ErrorNotice, LinkButton, Loading, PageTitle, SectionTitle } from '../components/ui';
+import { Card, EmptyState, ErrorNotice, InfoNotice, LinkButton, Loading, PageTitle, SectionTitle } from '../components/ui';
 import { useApp } from '../context/AppContext';
 import { api } from '../lib/api';
 import { dateTimeLabel } from '../lib/format';
@@ -47,13 +47,20 @@ export default function MyPage() {
   if (!insights) return <Loading />;
 
   const { stats } = insights;
-  const hasWalks = stats.walk_count > 0;
+  const hasWalks = stats.walk_count > 0 || stats.simulated_walk_count > 0;
   const hasFeedback = stats.feedback_count > 0;
   const preferenceRanking = [...insights.courses].filter((c) => c.feedback_count > 0).sort((a, b) => b.affinity - a.affinity);
 
   return (
     <div className="flex flex-col gap-4">
       <PageTitle sub="산책이 쌓일수록 추천이 똑똑해져요.">{insights.pet_name}의 산책 리포트</PageTitle>
+
+      <LinkButton to="/report" variant="ghost" className="w-full">
+        주간 활동 리포트 보기
+      </LinkButton>
+      {stats.simulated_walk_count > 0 && (
+        <InfoNotice>시연용 산책 {stats.simulated_walk_count}건은 아래 활동 통계에서 제외했어요. 피드백 학습에는 반영돼요.</InfoNotice>
+      )}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="산책 횟수" value={`${stats.walk_count}번`} />

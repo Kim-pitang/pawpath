@@ -13,6 +13,10 @@ const SELECTED_COURSE_HEX = '#25784f';
 
 export const FACILITY_MARKERS: Record<string, { glyph: string; color: string }> = {
   park: { glyph: '공', color: '#25784f' },
+  dog_park: { glyph: '견', color: '#d9661a' },
+  pet_friendly: { glyph: '동', color: '#a34a0f' },
+  pet_shop: { glyph: '용', color: '#827d6f' },
+  convenience: { glyph: '편', color: '#5f5b50' },
   toilets: { glyph: '화', color: '#3f7cc4' },
   drinking_water: { glyph: '물', color: '#0f7f9a' },
   veterinary: { glyph: '병', color: '#a0569e' },

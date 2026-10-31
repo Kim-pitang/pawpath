@@ -43,14 +43,15 @@ def test_initial_weights_match_the_specification_exactly():
         "safety": 0.10,
         "preference": 0.10,
     }
-    assert adaptive_weights(0) == pytest.approx(INITIAL_WEIGHTS)
+    assert adaptive_weights(0) == pytest.approx({**INITIAL_WEIGHTS, "user_preference": 0.10})
+    assert sum(INITIAL_WEIGHTS.values()) == pytest.approx(1.0)
 
 
 @pytest.mark.parametrize("feedback_total", [1, 4, 20, 1000])
 def test_feedback_only_strengthens_the_preference_factor(feedback_total):
     weights = adaptive_weights(feedback_total)
     assert weights["preference"] > INITIAL_WEIGHTS["preference"]
-    assert {k: v for k, v in weights.items() if k != "preference"} == {
+    assert {k: v for k, v in weights.items() if k not in ("preference", "user_preference")} == {
         k: v for k, v in INITIAL_WEIGHTS.items() if k != "preference"
     }
 
@@ -63,7 +64,8 @@ def test_preference_weight_grows_with_feedback_but_stays_bounded():
 def test_total_is_the_weighted_sum_of_factors():
     total, factors, _ = score_course(make_course(), slot_at(), PET, FEATURES, default_schedule(), EMPTY_STATE)
     assert total == pytest.approx(sum(f.contribution for f in factors), abs=0.1)
-    assert total == pytest.approx(sum(f.score * f.weight for f in factors), abs=0.1)
+    # 입력과 피드백이 없으면 기본 항목의 가중합과 같고, 사용자 선호도는 점수에 영향을 주지 않는다.
+    assert total == pytest.approx(sum(f.score * f.weight for f in factors if f.key != "user_preference"), abs=0.1)
 
 
 def test_all_factors_are_normalized_for_every_seed_course():
@@ -73,7 +75,7 @@ def test_all_factors_are_normalized_for_every_seed_course():
             slot = slot_at(duration=course.duration_min, rule=rule)
             total, factors, _ = score_course(course, slot, PET, FEATURES, default_schedule(), EMPTY_STATE)
             assert 0 <= total <= 100
-            assert len(factors) == 6
+            assert len(factors) == 7
             assert all(0 <= f.score <= 100 for f in factors)
 
 
@@ -183,14 +185,14 @@ def test_rain_overlap_lowers_the_weather_score():
 def test_lighting_matters_much_more_after_dark():
     bright = make_course(lighting="good")
     dim = make_course(lighting="poor")
-    day_gap = score_safety(bright, slot_at(hour=16))[0] - score_safety(dim, slot_at(hour=16))[0]
-    night_gap = score_safety(bright, slot_at(hour=19))[0] - score_safety(dim, slot_at(hour=19))[0]
+    day_gap = score_safety(bright, slot_at(hour=16), FEATURES)[0] - score_safety(dim, slot_at(hour=16), FEATURES)[0]
+    night_gap = score_safety(bright, slot_at(hour=19), FEATURES)[0] - score_safety(dim, slot_at(hour=19), FEATURES)[0]
     assert night_gap > day_gap * 2
 
 
 def test_verified_facilities_raise_the_safety_score():
-    without, _ = score_safety(make_course(), slot_at())
-    with_toilets, _ = score_safety(make_course(facility_counts={"toilets": 3}), slot_at())
+    without, _ = score_safety(make_course(), slot_at(), FEATURES)
+    with_toilets, _ = score_safety(make_course(facility_counts={"toilets": 3}), slot_at(), FEATURES)
     assert with_toilets > without
 
 

@@ -7,6 +7,7 @@ import NavigatePage from './pages/NavigatePage';
 import PetFormPage from './pages/PetFormPage';
 import PetsPage from './pages/PetsPage';
 import RecommendPage from './pages/RecommendPage';
+import ReportPage from './pages/ReportPage';
 import SchedulePage from './pages/SchedulePage';
 import WalkPage from './pages/WalkPage';
 
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="map" element={<MapPage />} />
         <Route path="walk" element={<WalkPage />} />
         <Route path="my" element={<MyPage />} />
+        <Route path="report" element={<ReportPage />} />
       </Route>
     </Routes>
   );

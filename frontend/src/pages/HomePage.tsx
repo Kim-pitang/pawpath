@@ -175,7 +175,7 @@ export default function HomePage() {
             <span className="mt-0.5 block text-xs text-ink-soft">
               {slotRange(topCourse.recommended_time.start, topCourse.recommended_time.end)} · {topCourse.total_score.toFixed(0)}점
             </span>
-            <span className="mt-1.5 block text-sm text-ink">{topCourse.reason.summary}</span>
+            <span className="mt-1.5 block text-sm text-ink">{topCourse.reason.llm_summary ?? topCourse.reason.summary}</span>
           </Link>
         ) : (
           <p className="mb-3 text-sm text-ink-soft">성향과 날씨를 분석해 오늘 가장 좋은 코스 3곳을 골라 드려요.</p>

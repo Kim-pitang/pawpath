@@ -69,10 +69,10 @@ COURSES = [
         "name": "망원1동 동네숲 앞 골목길",
         "description": "주택가 골목을 지나 망원1동 동네숲 앞까지 다녀오는 한적한 코스예요.",
         "waypoints": [(37.5552, 126.9048), (37.55306, 126.90039), (37.5545, 126.9018), (37.5552, 126.9048)],
-        "has_park": True, "park_names": ["망원1동 동네숲"],
+        "has_park": False, "park_names": ["망원1동 동네숲"],
         "lighting": "partial", "is_paved": True, "surface_note": "포장 골목길", "crowd_level": "low",
         "is_familiar": True, "shade_level": 0.4, "difficulty": "easy", "traffic_exposure": "low",
-        "scenery_tags": ["park", "residential"],
+        "scenery_tags": ["residential"],
     },
     {
         "code": "mangwon-hangang",

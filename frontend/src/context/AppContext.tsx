@@ -18,6 +18,8 @@ interface AppState {
   cachedRecommendation: Recommendation | null;
   /** 프로필, 일정, 피드백이 바뀌면 호출해 다음 조회 때 다시 계산하게 한다. */
   invalidateRecommendations: () => void;
+  /** LLM 문장처럼 나중에 보강된 추천으로 캐시를 바꾼다. */
+  replaceRecommendation: (recommendation: Recommendation) => void;
 }
 
 const AppContext = createContext<AppState | null>(null);
@@ -89,6 +91,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const invalidateRecommendations = useCallback(() => setCache({}), []);
+  const replaceRecommendation = useCallback((recommendation: Recommendation) => {
+    setCache((previous) => {
+      const key = `${recommendation.pet_id}:${recommendation.weather.scenario}`;
+      // 그사이 새 추천을 받았다면 오래된 결과로 덮어쓰지 않는다.
+      return previous[key]?.id === recommendation.id ? { ...previous, [key]: recommendation } : previous;
+    });
+  }, []);
 
   const value = useMemo<AppState>(
     () => ({
@@ -105,6 +114,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       loadRecommendation,
       cachedRecommendation,
       invalidateRecommendations,
+      replaceRecommendation,
     }),
     [
       pets,
@@ -119,6 +129,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       loadRecommendation,
       cachedRecommendation,
       invalidateRecommendations,
+      replaceRecommendation,
     ],
   );
 

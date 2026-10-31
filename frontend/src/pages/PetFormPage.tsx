@@ -10,8 +10,9 @@ import {
   PATH_LABELS,
   PERSONALITY_LABELS,
   SIZE_LABELS,
+  TIME_BUCKET_LABELS,
 } from '../lib/labels';
-import type { Level, NoveltyReaction, PathPreference, Personality, PetInput, Size } from '../lib/types';
+import type { Level, NoveltyReaction, PathPreference, Personality, PetInput, Size, TimeBucket } from '../lib/types';
 
 function toOptions<T extends string>(labels: Record<T, string>) {
   return (Object.keys(labels) as T[]).map((value) => ({ value, label: labels[value] }));
@@ -28,7 +29,17 @@ interface FormState {
   path_preference: PathPreference | null;
   heat_sensitivity: Level | null;
   novelty_reaction: NoveltyReaction | null;
+  preferred_distance_km: number | 'any';
+  preferred_time_bucket: TimeBucket | 'any';
 }
+
+const DISTANCE_OPTIONS: { value: number | 'any'; label: string }[] = [
+  { value: 'any', label: '상관없어요' },
+  { value: 1, label: '1km' },
+  { value: 2, label: '2km' },
+  { value: 3, label: '3km' },
+  { value: 4, label: '4km 이상' },
+];
 
 const EMPTY_FORM: FormState = {
   name: '',
@@ -41,6 +52,8 @@ const EMPTY_FORM: FormState = {
   path_preference: null,
   heat_sensitivity: null,
   novelty_reaction: null,
+  preferred_distance_km: 'any',
+  preferred_time_bucket: 'any',
 };
 
 const INPUT_CLASS = 'mt-1.5 min-h-12 w-full rounded-2xl border border-line bg-white px-4 text-base outline-none focus:border-leaf-500';
@@ -71,6 +84,8 @@ export default function PetFormPage() {
           path_preference: pet.path_preference,
           heat_sensitivity: pet.heat_sensitivity,
           novelty_reaction: pet.novelty_reaction,
+          preferred_distance_km: pet.preferred_distance_km ?? 'any',
+          preferred_time_bucket: pet.preferred_time_bucket ?? 'any',
         }),
       )
       .catch((loadError: Error) => setError(loadError.message))
@@ -112,6 +127,8 @@ export default function PetFormPage() {
       path_preference: form.path_preference!,
       heat_sensitivity: form.heat_sensitivity!,
       novelty_reaction: form.novelty_reaction!,
+      preferred_distance_km: form.preferred_distance_km === 'any' ? null : form.preferred_distance_km,
+      preferred_time_bucket: form.preferred_time_bucket === 'any' ? null : form.preferred_time_bucket,
     };
     try {
       const saved = editing ? await api.updatePet(Number(petId), body) : await api.createPet(body);
@@ -181,6 +198,20 @@ export default function PetFormPage() {
         <ChoiceGroup label="산책 선호도" value={form.path_preference} options={toOptions(PATH_LABELS)} onChange={(v) => update('path_preference', v)} />
         <ChoiceGroup label="더위 민감도" value={form.heat_sensitivity} options={toOptions(HEAT_LABELS)} onChange={(v) => update('heat_sensitivity', v)} />
         <ChoiceGroup label="낯선 환경에 대한 반응" value={form.novelty_reaction} options={toOptions(NOVELTY_LABELS)} onChange={(v) => update('novelty_reaction', v)} />
+      </Card>
+
+      <Card className="flex flex-col gap-5">
+        <div>
+          <h2 className="font-bold">선호하는 산책 (선택)</h2>
+          <p className="mt-0.5 text-sm text-ink-soft">입력하면 추천의 사용자 선호도 점수에 반영돼요.</p>
+        </div>
+        <ChoiceGroup label="선호 거리" value={form.preferred_distance_km} options={DISTANCE_OPTIONS} onChange={(v) => update('preferred_distance_km', v)} />
+        <ChoiceGroup
+          label="선호 시간대"
+          value={form.preferred_time_bucket}
+          options={[{ value: 'any' as const, label: '상관없어요' }, ...toOptions(TIME_BUCKET_LABELS)]}
+          onChange={(v) => update('preferred_time_bucket', v)}
+        />
       </Card>
 
       {error && <ErrorNotice message={error} />}

@@ -5,7 +5,7 @@
 from collections.abc import Mapping
 from datetime import datetime, timedelta
 
-from app.recommender.preference import time_bucket_score
+from app.recommender.preference import preferred_time_match, time_bucket_score
 from app.recommender.types import (
     HourWeather,
     PetFeatures,
@@ -154,6 +154,9 @@ def evaluate_slot(
         daylight = 100.0
 
     learned = time_bucket_score(preferences, start.hour)
+    time_match = preferred_time_match(features.preferred_time_bucket, start.hour)
+    if time_match is not None:
+        learned = (learned + time_match) / 2
     hours_ahead = (start - now).total_seconds() / 3600
     soon = max(0.0, 100 - hours_ahead * 100 / 24)
 

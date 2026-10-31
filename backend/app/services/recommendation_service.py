@@ -1,14 +1,19 @@
 """DB 모델과 추천 엔진을 잇는 서비스 계층."""
+import logging
 from collections import Counter
 from datetime import datetime
+from functools import lru_cache
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.models import Pet, PetCoursePreference, Recommendation, User, WalkingCourse
-from app.recommender.course_scoring import LIGHTING_TEXT
+from app.recommender.config import DEFAULT_CONFIG, ScoringConfig, parse_scoring_config
+from app.recommender.course_scoring import LIGHTING_TEXT, score_breakdown
 from app.recommender.engine import recommend
 from app.recommender.explain import DISCLAIMER, hour_label
+from app.recommender.safety import DEMO, FORECAST, assessment_payload
 from app.recommender.types import (
     BucketPreference,
     CourseData,
@@ -21,7 +26,23 @@ from app.recommender.types import (
     SlotEvaluation,
     TimeWindow,
 )
+from app.services.llm_service import initial_engine_state
 from app.services.weather_service import WeatherResult, find_record_id, get_weather
+
+logger = logging.getLogger(__name__)
+
+
+@lru_cache
+def _parse_weights(raw: str) -> ScoringConfig:
+    try:
+        return parse_scoring_config(raw)
+    except ValueError as exc:
+        logger.warning("RECOMMENDER_WEIGHTS를 읽지 못해 기본 가중치를 씁니다: %s", exc)
+        return DEFAULT_CONFIG
+
+
+def scoring_config() -> ScoringConfig:
+    return _parse_weights(get_settings().recommender_weights)
 
 
 def to_profile(pet: Pet) -> PetProfile:
@@ -35,6 +56,8 @@ def to_profile(pet: Pet) -> PetProfile:
         path_preference=pet.path_preference,
         heat_sensitivity=pet.heat_sensitivity,
         novelty_reaction=pet.novelty_reaction,
+        preferred_distance_km=pet.preferred_distance_km,
+        preferred_time_bucket=pet.preferred_time_bucket,
     )
 
 
@@ -55,6 +78,7 @@ def to_course_data(course: WalkingCourse) -> CourseData:
         traffic_exposure=course.traffic_exposure,
         scenery_tags=tuple(course.scenery_tags),
         facility_counts=dict(Counter(facility["type"] for facility in course.facilities)),
+        environment=course.environment or {},
     )
 
 
@@ -136,6 +160,12 @@ def _safety_payload(course: WalkingCourse) -> dict:
     }
 
 
+def _alternative_payload(item: CourseRecommendation) -> dict | None:
+    if item.alternative is None:
+        return None
+    return {"course_id": item.alternative.id, "name": item.alternative.name, "distance_km": item.alternative.distance_km, "duration_min": item.alternative.duration_min}
+
+
 def _course_payload(item: CourseRecommendation, course: WalkingCourse, state: PreferenceState) -> dict:
     preference = state.courses.get(course.id, CoursePreference())
     return {
@@ -156,6 +186,9 @@ def _course_payload(item: CourseRecommendation, course: WalkingCourse, state: Pr
         "feedback_count": preference.feedback_count,
         "recommended_time": _slot_payload(item.slot),
         "safety": _safety_payload(course),
+        "safety_assessment": assessment_payload(item.safety),
+        "alternative": _alternative_payload(item),
+        "score_breakdown": score_breakdown(item.factors),
         "factors": [
             {
                 "key": factor.key,
@@ -169,6 +202,7 @@ def _course_payload(item: CourseRecommendation, course: WalkingCourse, state: Pr
         ],
         "reason": {"summary": item.explanation.summary, "details": list(item.explanation.details)},
         "cautions": list(item.explanation.cautions),
+        "other_cautions": list(item.explanation.other_cautions),
     }
 
 
@@ -212,7 +246,17 @@ def _result_payload(
         },
         "courses": [_course_payload(item, courses_by_id[item.course.id], state) for item in result.courses],
         "weights": {key: round(value, 4) for key, value in result.weights.items()},
-        "learning": {"feedback_total": state.feedback_total, "is_personalized": state.feedback_total > 0},
+        "learning": {
+            "feedback_total": state.feedback_total,
+            "is_personalized": state.feedback_total > 0,
+            "mode": "personalized" if state.feedback_total > 0 else "rule_based",
+            "ranker": result.ranker,
+        },
+        "excluded_courses": [
+            {"course_id": item.course.id, "name": item.course.name, "reasons": list(item.reasons)}
+            for item in result.excluded
+        ],
+        "explanation_engine": initial_engine_state() if result.courses else {"provider": "template", "model": None, "status": "disabled"},
         "blocked_reasons": list(result.blocked_reasons),
         "indoor_alternatives": list(result.indoor_alternatives),
         "disclaimer": DISCLAIMER,
@@ -232,6 +276,8 @@ def create_recommendation(db: Session, pet: Pet, user: User, scenario: str, now:
         schedule=schedule,
         state=state,
         now=now,
+        config=scoring_config(),
+        weather_source=DEMO if weather.is_mock else FORECAST,
     )
 
     courses_by_id = {course.id: course for course in courses}

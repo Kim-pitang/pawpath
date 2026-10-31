@@ -5,7 +5,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=("../.env", ".env"), extra="ignore")
+    # 값을 비운 항목은 기본값을 쓴다. .env.example을 복사해 일부만 지워도 서버가 뜨게 한다.
+    model_config = SettingsConfigDict(env_file=("../.env", ".env"), extra="ignore", env_ignore_empty=True)
 
     database_url: str = "sqlite:///./pawpath.db"
 
@@ -18,11 +19,20 @@ class Settings(BaseSettings):
     service_longitude: float = 126.9105
     service_timezone: str = "Asia/Seoul"
 
-    # 현재 위치에서 코스 출발점까지의 도보 길찾기: osrm 또는 none(직선 표시)
+    # 출발점 길찾기, 복귀 경로, 이탈 시 재탐색에 쓰는 도보 길찾기: osrm 또는 none(직선 표시)
     routing_provider: str = "osrm"
     routing_base_url: str = "https://routing.openstreetmap.de/routed-foot"
     routing_timeout_seconds: float = 4.0
     routing_max_distance_km: float = 3.0
+
+    # 추천 가중치 JSON. 비워 두면 기본값. 예: {"weather": 0.3, "safety": 0.2}
+    recommender_weights: str = ""
+
+    # 추천 이유 문장 생성: none(템플릿만) 또는 ollama
+    llm_provider: str = "none"
+    llm_base_url: str = "http://localhost:11434"
+    llm_model: str = "gemma4:e4b"
+    llm_timeout_seconds: float = 60.0
 
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     seed_demo_pet: bool = True

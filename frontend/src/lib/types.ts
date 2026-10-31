@@ -4,7 +4,9 @@ export type Personality = 'active' | 'timid' | 'curious';
 export type PathPreference = 'familiar' | 'new';
 export type NoveltyReaction = 'calm' | 'cautious' | 'anxious';
 export type Difficulty = 'easy' | 'just_right' | 'hard';
-export type WeatherScenario = 'live' | 'rain_later' | 'heatwave' | 'cold' | 'heavy_rain';
+export type WeatherScenario = 'live' | 'rain_later' | 'rain_now' | 'heatwave' | 'cold' | 'heavy_rain';
+export type TimeBucket = 'morning' | 'lunch' | 'afternoon' | 'evening';
+export type TrackingSource = 'gps' | 'manual' | 'simulation';
 
 export interface PetInput {
   name: string;
@@ -17,6 +19,8 @@ export interface PetInput {
   path_preference: PathPreference;
   heat_sensitivity: Level;
   novelty_reaction: NoveltyReaction;
+  preferred_distance_km?: number | null;
+  preferred_time_bucket?: TimeBucket | null;
 }
 
 export interface Pet extends PetInput {
@@ -102,7 +106,14 @@ export interface Course {
     route?: string;
     facilities?: string;
     team_estimates?: string[];
+    observed?: string[];
   };
+  environment?: {
+    collected_on?: string;
+    road?: { pedestrian: number; local: number; major: number; unknown: number } | null;
+    lit?: { yes: number; no: number; unknown: number } | null;
+    trees?: number | null;
+  } | null;
 }
 
 export interface Approach {
@@ -163,6 +174,37 @@ export interface Safety {
   verified_facilities: Record<string, number>;
 }
 
+export interface SafetyItem {
+  key: string;
+  label: string;
+  status: 'ok' | 'caution' | 'danger' | 'unverified';
+  score: number | null;
+  value: string;
+  source: 'forecast' | 'demo' | 'observed' | 'estimated' | 'unknown';
+  source_label: string;
+  detail: string | null;
+}
+
+export interface SafetyAssessment {
+  score: number;
+  level: 'good' | 'caution' | 'danger' | 'blocked';
+  items: SafetyItem[];
+  risks: string[];
+  blocked_reasons: string[];
+  unverified: string[];
+  penalty: number;
+  disclaimer: string;
+}
+
+export interface ScoreGroup {
+  key: string;
+  label: string;
+  score: number;
+  weight: number;
+  contribution: number;
+  evidence: string[];
+}
+
 export interface RecommendedCourse {
   rank: number;
   course_id: number;
@@ -181,9 +223,13 @@ export interface RecommendedCourse {
   feedback_count: number;
   recommended_time: Slot;
   safety: Safety;
+  safety_assessment: SafetyAssessment;
+  alternative: { course_id: number; name: string; distance_km: number; duration_min: number } | null;
+  score_breakdown: ScoreGroup[];
   factors: Factor[];
-  reason: { summary: string; details: string[] };
+  reason: { summary: string; details: string[]; llm_summary?: string };
   cautions: string[];
+  other_cautions: string[];
 }
 
 export interface Recommendation {
@@ -214,7 +260,13 @@ export interface Recommendation {
   };
   courses: RecommendedCourse[];
   weights: Record<string, number>;
-  learning: { feedback_total: number; is_personalized: boolean };
+  learning: { feedback_total: number; is_personalized: boolean; mode: 'rule_based' | 'personalized'; ranker: string };
+  excluded_courses: { course_id: number; name: string; reasons: string[] }[];
+  explanation_engine: {
+    provider: string;
+    model: string | null;
+    status: 'disabled' | 'pending' | 'ok' | 'failed' | 'rejected';
+  };
   blocked_reasons: string[];
   indoor_alternatives: string[];
   disclaimer: string;
@@ -262,6 +314,8 @@ export interface Walk {
   ended_at: string;
   duration_min: number;
   feedback: FeedbackBrief | null;
+  tracking_source: TrackingSource;
+  is_simulated: boolean;
 }
 
 export interface Insights {
@@ -273,6 +327,7 @@ export interface Insights {
     total_distance_km: number;
     feedback_count: number;
     average_pet_rating: number | null;
+    simulated_walk_count: number;
   };
   courses: {
     course_id: number;
@@ -301,4 +356,91 @@ export interface Insights {
     feedback_total: number;
     courses: { rank: number; course_id: number; name: string; total_score: number }[];
   }[];
+}
+
+export interface RouteResult {
+  mode: 'routed' | 'straight' | 'too_far';
+  distance_m: number;
+  duration_min: number;
+  route: [number, number][];
+  notice: string | null;
+}
+
+export interface AlternativeResult {
+  course_id: number;
+  status: 'continue' | 'shorten' | 'return_now' | 'unknown';
+  action: 'continue' | 'return_to_start' | 'finish_course' | 'no_location' | 'no_walking_route';
+  reasons: string[];
+  remaining_m: number;
+  remaining_min: number;
+  checked_at: string;
+  cache_minutes: number;
+  data_limit: string;
+  weather: WeatherMeta;
+  assessment: SafetyAssessment | null;
+  return_route: RouteResult | null;
+  location_notice: string | null;
+  alternatives: {
+    course_id: number;
+    name: string;
+    distance_km: number;
+    duration_min: number;
+    from_here_m: number;
+    safety_score: number;
+    safety_level: SafetyAssessment['level'];
+    reason: string;
+  }[];
+}
+
+export interface NearbyPlace {
+  type: string;
+  label: string;
+  name: string;
+  lat: number;
+  lng: number;
+  distance_m: number;
+  note: string | null;
+}
+
+export interface NearbyResult {
+  course_id: number;
+  radius_m: number;
+  source: string;
+  collected_on: string | null;
+  unavailable_types: string[];
+  notice: string;
+  places: NearbyPlace[];
+}
+
+export interface WalkReport {
+  pet_id: number;
+  pet_name: string;
+  week: { start: string; end: string; offset: number };
+  summary: {
+    walk_count: number;
+    total_distance_km: number;
+    total_minutes: number;
+    average_minutes: number | null;
+    average_pet_rating: number | null;
+  };
+  previous_week: WalkReport['summary'];
+  change: Record<'walk_count' | 'total_distance_km' | 'total_minutes', { difference: number; percent: number | null }>;
+  daily: {
+    date: string;
+    weekday: string;
+    walk_count: number;
+    distance_km: number;
+    minutes: number;
+    average_pet_rating: number | null;
+    walks: { id: number; course_name: string; distance_km: number; duration_min: number }[];
+  }[];
+  favorite_courses: { course_id: number; course_name: string; visit_count: number; average_pet_rating: number | null }[];
+  satisfaction_trend: { feedback_id: number; date: string; course_name: string; pet_rating: number; walk_rating: number }[];
+  recommendation_vs_actual: {
+    walks: { walk_id: number; date: string; recommended_top: string | null; chosen: string; chosen_rank: number | null; followed_top: boolean }[];
+    followed_top_count: number;
+    in_top_three_count: number;
+  };
+  simulated_walks_excluded: number;
+  total_simulated_walks: number;
 }

@@ -12,14 +12,17 @@ import {
   Thermometer,
   TrendingUp,
 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import HBarChart from '../components/charts/HBarChart';
 import SlotColumns from '../components/charts/SlotColumns';
+import SafetyPanel from '../components/SafetyPanel';
 import { Button, Card, Chip, EmptyState, ErrorNotice, InfoNotice, LinkButton, Loading, PageTitle, SectionTitle } from '../components/ui';
 import WeatherScenarioPicker from '../components/WeatherScenarioPicker';
 import { useApp } from '../context/AppContext';
+import { api } from '../lib/api';
 import { signed, slotRange } from '../lib/format';
-import { CROWD_LABELS, FACILITY_LABELS, TRAFFIC_LABELS, WEATHER_SOURCE_LABELS } from '../lib/labels';
+import { CROWD_LABELS, FACILITY_LABELS, WEATHER_SOURCE_LABELS } from '../lib/labels';
 import type { Recommendation, RecommendedCourse } from '../lib/types';
 
 const RANK_BADGE: Record<number, string> = {
@@ -29,7 +32,7 @@ const RANK_BADGE: Record<number, string> = {
 };
 
 export default function RecommendPage() {
-  const { selectedPet, petsLoaded, scenario, loadRecommendation, cachedRecommendation } = useApp();
+  const { selectedPet, petsLoaded, scenario, loadRecommendation, cachedRecommendation, replaceRecommendation } = useApp();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const petId = selectedPet?.id;
@@ -55,6 +58,15 @@ export default function RecommendPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [petId, scenario, cachedRecommendation]);
 
+  // 추천은 먼저 보여 주고, 문장 보강은 따로 요청해 끝나면 바꾼다. 실패해도 템플릿 문장이 남는다.
+  const explaining = useRef<number | null>(null);
+  const result = cachedRecommendation;
+  useEffect(() => {
+    if (!result || result.explanation_engine?.status !== 'pending' || explaining.current === result.id) return;
+    explaining.current = result.id;
+    api.explainRecommendation(result.id).then(replaceRecommendation).catch(() => undefined);
+  }, [result, replaceRecommendation]);
+
   if (petsLoaded && !selectedPet) {
     return (
       <Card>
@@ -64,8 +76,6 @@ export default function RecommendPage() {
       </Card>
     );
   }
-
-  const result = cachedRecommendation;
 
   return (
     <div className="flex flex-col gap-4">
@@ -90,11 +100,13 @@ export default function RecommendPage() {
 
       {result && (
         <div className={`flex flex-col gap-4 transition-opacity ${loading ? 'opacity-60' : ''}`}>
-          {result.learning.is_personalized && (
+          {result.learning.is_personalized ? (
             <InfoNotice>
-              지금까지의 피드백 {result.learning.feedback_total}건을 학습해 점수에 반영했어요. 과거 선호도 반영 강도가{' '}
+              지금까지의 피드백 {result.learning.feedback_total}건을 학습해 점수에 반영했어요. 과거 만족도 반영 강도가{' '}
               {Math.round(result.weights.preference * 100)}%로 올라갔어요.
             </InfoNotice>
+          ) : (
+            <p className="px-1 text-xs text-ink-muted">아직 피드백이 없어 기본 규칙으로 추천했어요. 산책 후 피드백을 남기면 개인화돼요.</p>
           )}
           <TimeSection result={result} />
           {result.walkable ? (
@@ -102,12 +114,16 @@ export default function RecommendPage() {
               <h2 className="font-brand text-xl text-leaf-800">추천 코스 TOP 3</h2>
               <div className="grid items-start gap-4 lg:grid-cols-3">
                 {result.courses.map((course) => (
-                  <CourseCard key={course.course_id} course={course} recommendationId={result.id} />
+                  <CourseCard key={course.course_id} course={course} recommendationId={result.id} explanationStatus={result.explanation_engine?.status} />
                 ))}
               </div>
+              <ExcludedCourses result={result} />
             </section>
           ) : (
-            <IndoorCard result={result} />
+            <>
+              <IndoorCard result={result} />
+              <ExcludedCourses result={result} />
+            </>
           )}
           <Button variant="ghost" onClick={() => load(true)} disabled={loading}>
             <RefreshCw size={16} aria-hidden />
@@ -157,11 +173,45 @@ function TimeSection({ result }: { result: Recommendation }) {
   );
 }
 
-function CourseCard({ course, recommendationId }: { course: RecommendedCourse; recommendationId: number }) {
+function ExcludedCourses({ result }: { result: Recommendation }) {
+  if (result.excluded_courses.length === 0) return null;
+  return (
+    <details className="rounded-2xl border border-line bg-white p-3 text-sm" data-testid="excluded-courses">
+      <summary className="cursor-pointer font-semibold text-ink-soft">
+        위험 조건으로 제외한 코스 {result.excluded_courses.length}곳
+      </summary>
+      <ul className="mt-2 flex flex-col gap-2">
+        {result.excluded_courses.map((course) => (
+          <li key={course.course_id}>
+            <p className="font-semibold">{course.name}</p>
+            <p className="text-xs text-ink-soft">{course.reasons.join(' / ')}</p>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+function ReasonSource({ course, status }: { course: RecommendedCourse; status?: Recommendation['explanation_engine']['status'] }) {
+  if (course.reason.llm_summary) return <p className="mt-1 px-1 text-[11px] text-ink-muted">AI가 근거 자료로 다듬은 문장이에요. 점수에는 영향을 주지 않아요.</p>;
+  if (status === 'pending') return <p className="mt-1 px-1 text-[11px] text-ink-muted">AI 문장을 만드는 중이에요. 아래 내용은 계산 결과로 만든 문장이에요.</p>;
+  return null;
+}
+
+function CourseCard({
+  course,
+  recommendationId,
+  explanationStatus,
+}: {
+  course: RecommendedCourse;
+  recommendationId: number;
+  explanationStatus?: Recommendation['explanation_engine']['status'];
+}) {
   const [open, setOpen] = useState(false);
   const time = course.recommended_time;
   const facilities = Object.entries(course.safety.verified_facilities);
-  const cautions = course.cautions.slice(0, -1);
+  // 날씨와 환경 위험은 안전 패널에 있으므로 여기서는 그 밖의 주의사항만 보여 준다.
+  const cautions = course.other_cautions;
   const disclaimer = course.cautions[course.cautions.length - 1];
   // 다녀오지 않은 코스의 작은 감소는 가중치 이동에 따른 것이라 표시하지 않는다.
   const showLearning = course.feedback_count > 0 ? course.learning_delta !== 0 : course.learning_delta >= 0.5;
@@ -204,8 +254,9 @@ function CourseCard({ course, recommendationId }: { course: RecommendedCourse; r
         )}
 
         <p className="mt-3 rounded-2xl bg-leaf-50 p-3 text-sm font-medium leading-relaxed text-leaf-800" data-testid="reason-summary">
-          {course.reason.summary}
+          {course.reason.llm_summary ?? course.reason.summary}
         </p>
+        <ReasonSource course={course} status={explanationStatus} />
 
         <dl className="mt-3 flex flex-col gap-1.5 text-sm">
           <InfoRow icon={<Clock size={15} />} label="추천 시간">{slotRange(time.start, time.end)}</InfoRow>
@@ -213,12 +264,10 @@ function CourseCard({ course, recommendationId }: { course: RecommendedCourse; r
             체감 {time.weather.apparent_temperature.toFixed(0)}°C · 강수 {time.weather.precipitation_probability.toFixed(0)}% · 바람{' '}
             {time.weather.wind_speed.toFixed(1)}m/s
           </InfoRow>
-          <InfoRow icon={<ShieldCheck size={15} />} label="안전 정보">
+          <InfoRow icon={<ShieldCheck size={15} />} label="코스 정보">
             {[
               course.safety.has_park ? '공원 포함' : '공원 없음',
-              `${course.safety.lighting_text}(추정)`,
-              course.safety.surface_note,
-              TRAFFIC_LABELS[course.safety.traffic_exposure],
+              `노면: ${course.safety.surface_note}(추정)`,
               `혼잡도 ${CROWD_LABELS[course.safety.crowd_level]}(추정)`,
             ].join(' · ')}
           </InfoRow>
@@ -228,6 +277,20 @@ function CourseCard({ course, recommendationId }: { course: RecommendedCourse; r
             </InfoRow>
           )}
         </dl>
+
+        <div className="mt-3">
+          <SafetyPanel assessment={course.safety_assessment} />
+        </div>
+
+        {course.alternative && (
+          <p className="mt-2 rounded-2xl bg-leaf-50 px-3 py-2 text-sm text-leaf-800">
+            더 안전한 대체 코스:{' '}
+            <Link to={`/map?course=${course.alternative.course_id}`} className="font-bold underline">
+              {course.alternative.name}
+            </Link>{' '}
+            ({course.alternative.distance_km.toFixed(1)}km, 약 {course.alternative.duration_min}분)
+          </p>
+        )}
 
         {cautions.length > 0 && (
           <ul className="mt-3 flex flex-col gap-1.5 rounded-2xl bg-carrot-50 p-3 text-sm text-carrot-700">
@@ -253,11 +316,11 @@ function CourseCard({ course, recommendationId }: { course: RecommendedCourse; r
           <div className="mt-2 flex flex-col gap-3">
             <HBarChart
               ariaLabel="항목별 점수"
-              items={course.factors.map((factor) => ({
-                key: factor.key,
-                label: factor.label,
-                value: factor.score,
-                note: `비중 ${Math.round(factor.weight * 100)}%`,
+              items={course.score_breakdown.map((group) => ({
+                key: group.key,
+                label: group.label,
+                value: group.score,
+                note: `비중 ${Math.round(group.weight * 100)}%`,
               }))}
             />
             <ul className="flex flex-col gap-1 text-xs leading-relaxed text-ink-soft">
