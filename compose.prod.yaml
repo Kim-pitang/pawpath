@@ -67,6 +67,16 @@ services:
     cpus: 1
     restart: unless-stopped
 
+  # 서버의 Ollama가 127.0.0.1에만 열린 ssh 터널일 때, 컨테이너가 닿는 172.17.0.1에서도 받게 이어 준다.
+  # COMPOSE_PROFILES에 ollama-relay를 넣을 때만 뜬다. 터널 자체는 건드리지 않는다.
+  ollama-relay:
+    profiles: [ollama-relay]
+    image: alpine/socat:1.8.0.3
+    network_mode: host
+    command: TCP-LISTEN:11434,bind=172.17.0.1,fork,reuseaddr TCP:127.0.0.1:11434
+    mem_limit: 64m
+    restart: unless-stopped
+
 volumes:
   pgdata:
     # 이미 있는 볼륨을 쓰려면 PG_VOLUME에 그 이름을 넣는다(예: pawpath-postgres-data).

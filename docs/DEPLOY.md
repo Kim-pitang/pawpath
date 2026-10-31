@@ -20,7 +20,7 @@
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | `pawpath`, (비밀), `pawpath` | DB 계정. backend의 `DATABASE_URL`은 이 값으로 compose가 만듭니다(.env의 `DATABASE_URL`은 쓰지 않음) |
 | `PG_VOLUME` | `pawpath-postgres-data` | 이미 있는 DB 볼륨을 쓸 때. 비우면 `pawpath-prod-pgdata` |
 | `WEB_PORT` | `5173` | 웹을 여는 포트 |
-| `COMPOSE_PROFILES` | `osrm` | 길찾기 컨테이너도 띄울 때 |
+| `COMPOSE_PROFILES` | `osrm,ollama-relay` | 길찾기 컨테이너(`osrm`), 127.0.0.1에만 열린 Ollama 터널을 컨테이너에 이어 주는 중계(`ollama-relay`)도 띄울 때 |
 | `OSRM_DATA_DIR`, `OSRM_DATASET` | `/home1/ncloud/pawpath-osrm/releases/...`, `gyeonggi` | 길찾기 데이터 위치와 이름 |
 | `PROD_LLM_BASE_URL` | `http://host.docker.internal:11434` | 서버의 Ollama. 컨테이너 안의 localhost는 컨테이너 자신입니다 |
 
