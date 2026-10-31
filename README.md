@@ -10,6 +10,21 @@ mungo(저장소 이름 PawPath)는 반려동물의 나이, 크기, 활동량, �
 
 위 문장은 고정 문구가 아니라 두부의 프로필, 코스 데이터, 시간별 예보로 계산해 만든 결과입니다.
 
+## 해커톤 심사 안내
+
+코디세이 AI 해커톤 2026 제출물입니다. 발표자료(PDF)와 시연 영상(MP4)은 팀 구글 드라이브에 올렸고, 심사 기준 커밋 해시는 `팀명_소스코드.txt`에 적었습니다.
+
+| 항목 | 위치 |
+|---|---|
+| 공개 데모 | https://pawpath.ficklebobo.dev (설치 없이 브라우저로 확인) |
+| 로컬 실행 | [빠른 시작](#빠른-시작). Docker와 API 키 없이 `./dev.sh` 한 번으로 실행 |
+| 시연 순서 | [시연 순서](#시연-순서) |
+| 활용 AI 기술과 직접 개발 범위 | [추천 알고리즘](docs/RECOMMENDER.md), [직접 개발한 범위](docs/EXTERNAL_RESOURCES.md#직접-개발한-범위) |
+| 외부 자원 활용 내역 | [외부 자원 활용 내역](docs/EXTERNAL_RESOURCES.md) (오픈소스, 외부 API, 사전 보유 코드, 기타) |
+| 검증 결과 | [검증 결과](docs/VALIDATION.md), [테스트](#테스트) |
+
+API 키 같은 인증정보는 저장소에 넣지 않았습니다. 설정값은 [`.env.example`](.env.example)에 있고, 실제 값은 커밋하지 않는 `.env`에 넣습니다.
+
 ## 핵심 기능
 
 - **펫밸런스:** 프로필에서 권장 산책량과 성향 값을 계산해 산책 시간과 강도를 맞춥니다.
@@ -56,18 +71,32 @@ mungo(저장소 이름 PawPath)는 반려동물의 나이, 크기, 활동량, �
 
 ## 빠른 시작
 
-필요 도구: Python 3.12 이상, [uv](https://docs.astral.sh/uv/), Node.js 20 이상, Docker(PostgreSQL용). API 키는 필요 없습니다.
+필요 도구: Python 3.12 이상, [uv](https://docs.astral.sh/uv/), Node.js 20 이상. API 키는 필요 없습니다. `uv`가 Python도 자동으로 준비합니다.
 
-macOS에서는 다음 명령으로 실행합니다. `uv`가 Python도 자동으로 준비합니다.
+### 1. 설치 없이 바로 실행 (SQLite, 권장)
+
+```bash
+git clone https://github.com/Kim-pitang/pawpath.git
+cd pawpath
+./dev.sh
+```
+
+`.env` 없이 실행하면 Docker 없이 SQLite 파일(`backend/pawpath.db`)로 동작합니다. 의존성 설치(`uv sync`, `npm install`)부터 백엔드와 프론트엔드 실행까지 한 번에 하고, `Ctrl+C`로 함께 종료합니다.
+
+Windows에서는 PowerShell에서 `.\dev.ps1`을 실행합니다. 실행 정책 때문에 막히면 `powershell -ExecutionPolicy Bypass -File .\dev.ps1`로 실행하세요.
+
+### 2. PostgreSQL로 실행 (선택, Docker 필요)
+
+배포 환경과 같은 DB로 돌리려면 `.env`를 만들고 실행합니다.
 
 ```bash
 cp .env.example .env   # POSTGRES_PASSWORD와 DATABASE_URL의 비밀번호를 같은 값으로 바꾸세요
 ./dev.sh
 ```
 
-PostgreSQL을 `docker compose`로 띄워 접속을 받을 때까지 기다린 뒤, 의존성을 설치하고 백엔드와 프론트엔드를 함께 띄웁니다. `Ctrl+C`로 백엔드와 프론트엔드를 함께 종료합니다(DB는 계속 돎. 멈추려면 `docker compose stop`). `.env`가 없거나 `DATABASE_URL`을 지우면 Docker 없이 SQLite 파일(`backend/pawpath.db`)로 돕니다. 운영 방법은 [PostgreSQL 운영](docs/POSTGRES.md)에 있습니다.
+`DATABASE_URL`이 이 컴퓨터의 PostgreSQL을 가리키면 `dev.sh`가 `docker compose`로 DB를 띄워 접속을 받을 때까지 기다린 뒤 서버를 띄웁니다. `Ctrl+C`로 백엔드와 프론트엔드를 종료해도 DB는 계속 돕니다(멈추려면 `docker compose stop`). 운영 방법은 [PostgreSQL 운영](docs/POSTGRES.md)에 있습니다.
 
-Windows에서는 PowerShell에서 `.\dev.ps1`을 실행합니다. 실행 정책 때문에 막히면 `powershell -ExecutionPolicy Bypass -File .\dev.ps1`로 실행하세요.
+### 실행 후 접속
 
 - 앱: http://localhost:5173
 - API 문서(Swagger): http://localhost:8000/docs
@@ -247,7 +276,7 @@ uv run python -m app.backup restore latest    # 복구
 
 산책 중 날씨 변화를 보려면 시연용 위치로 걷는 도중 **시연: 지금부터 비 내리기**를 누르세요. 복귀 경로와 대체 코스가 안내되고, **출발점으로 돌아가기**를 고르면 복귀 안내가 시작됩니다.
 
-시연 내용을 지우려면 서버를 끄고 `backend/pawpath.db`를 삭제한 뒤 다시 실행하세요.
+시연 내용을 지우려면 SQLite로 실행한 경우 서버를 끄고 `backend/pawpath.db`를 삭제한 뒤 다시 실행하세요. PostgreSQL은 [PostgreSQL 운영](docs/POSTGRES.md)을 참고하세요.
 
 ## 개포동 코스로 전환
 
@@ -436,6 +465,6 @@ PRODUCT.md           제품 정의, 사용자, 브랜드(mungo)와 디자인 원
 | 산책길 커뮤니티 | 구현. 공유, 탐색, 좋아요, 저장, 후기, 관리, 위치 가림. Chromium(Pixel 7)과 WebKit(iPhone 13)으로 확인했고, 실제 휴대폰으로 걸어 보지는 않음 |
 | 내 산책길을 추천 후보로 쓰기 | 구현. 실제 Overpass로 측정해 시드 코스의 저장값과 같음을 확인. 혼잡도와 경사는 측정하지 않음 |
 | Kakao Maps, 기상청 API | 미구현: Leaflet + OSM, Open-Meteo 사용. 카카오맵은 길찾기 링크만 연결. 날씨는 `WeatherProvider` 프로토콜로 교체 가능 |
-| PostgreSQL | 구현. 개발용 `docker compose`(PostgreSQL 18.6), Alembic 구조 관리, SQLite 데이터 이전 도구. 백엔드 테스트와 브라우저 E2E를 PostgreSQL로 돌려 통과. 배포 서버의 실제 데이터 이전은 하지 않음. [운영](docs/POSTGRES.md) |
+| PostgreSQL | 구현. 개발용 `docker compose`(PostgreSQL 18.6), Alembic 구조 관리, SQLite 데이터 이전 도구. 백엔드 테스트와 브라우저 E2E를 PostgreSQL로 돌려 통과. 배포 서버도 PostgreSQL로 운영하며 기존 SQLite 데이터를 옮김. [운영](docs/POSTGRES.md) |
 
 지도 데이터 © OpenStreetMap contributors. 날씨 데이터 Open-Meteo.
