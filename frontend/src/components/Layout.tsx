@@ -1,4 +1,4 @@
-import { CalendarCheck, Home, Map as MapIcon, PawPrint, Sparkles, UsersRound } from 'lucide-react';
+import { CalendarCheck, Home, Map as MapIcon, PawPrint, UsersRound } from 'lucide-react';
 import { Link, Navigate, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import AccountArea from './AccountArea';
@@ -8,10 +8,9 @@ import WalkActionNav from './WalkActionNav';
 
 const NAV_ITEMS = [
   { to: '/', label: '홈', icon: Home, end: true },
-  { to: '/recommend', label: '추천', icon: Sparkles, end: false },
+  { to: '/community', label: '커뮤니티', icon: UsersRound, end: false },
   { to: '/map', label: '지도', icon: MapIcon, end: false },
   { to: '/walk', label: '산책 기록', icon: CalendarCheck, end: false },
-  { to: '/community', label: '커뮤니티', icon: UsersRound, end: false },
   { to: '/my', label: '마이', icon: PawPrint, end: false },
 ];
 

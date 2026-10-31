@@ -779,8 +779,7 @@ test.describe('모바일 화면', () => {
           expect(box!.x + box!.width).toBeLessThanOrEqual(width + 0.5);
           expect(box!.height).toBeGreaterThanOrEqual(44);
         }
-        await nav.getByRole('button', { name: '산책', exact: true }).click();
-        await page.getByRole('dialog', { name: '어떻게 걸을까요?' }).getByRole('link', { name: /산책길 커뮤니티/ }).click();
+        await nav.getByRole('link', { name: '커뮤니티', exact: true }).click();
         await expect(page).toHaveURL(/\/community$/);
         await nav.getByRole('link', { name: '마이' }).click();
         await expect(page).toHaveURL(/\/my$/);

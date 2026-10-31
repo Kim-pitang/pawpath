@@ -5,13 +5,13 @@ import { useApp } from '../context/AppContext';
 
 const SIDE_TABS = [
   { to: '/', label: '홈', icon: Home, end: true },
-  { to: '/recommend', label: '추천', icon: Sparkles, end: false },
+  { to: '/community', label: '커뮤니티', icon: UsersRound, end: false },
   { to: '/map', label: '지도', icon: MapIcon, end: false },
   { to: '/my', label: '마이', icon: PawPrint, end: false },
 ];
 
-// 산책 기록과 나의 산책길 화면에 있을 때는 가운데 산책 버튼이 고른 상태로 보인다.
-const WALK_PATHS = ['/walk', '/my-walks', '/public-walks'];
+// 추천·코스 생성·산책 기록 화면에서는 가운데 산책 버튼이 고른 상태로 보인다.
+const WALK_PATHS = ['/recommend', '/generate', '/walk', '/my-walks', '/public-walks'];
 
 /** 휴대폰 아래 메뉴. 가장 자주 하는 일(산책 나가기)을 가운데 버튼에 두고, 누르면 시작 방법을 고르는 시트가 올라온다. */
 export default function WalkActionNav() {
@@ -82,7 +82,6 @@ export default function WalkActionNav() {
                 <SheetOption to="/record" icon={<Locate size={20} aria-hidden />} title="내 길로 GPS 기록" note="걷는 길을 그대로 기록하고 사진을 남겨요" />
                 <SheetOption to="/walk" icon={<CheckCircle2 size={20} aria-hidden />} title="다녀온 산책 기록" note="완료 처리와 지난 산책을 볼 수 있어요" />
                 <SheetOption to="/generate" icon={<WandSparkles size={20} aria-hidden />} title="산책길 자동 만들기" note="원하는 거리와 조건으로 산책길을 만들어요" />
-                <SheetOption to="/community" icon={<UsersRound size={20} aria-hidden />} title="산책길 커뮤니티" note="다른 보호자의 산책길을 둘러봐요" />
               </ul>
             </div>
           </div>
