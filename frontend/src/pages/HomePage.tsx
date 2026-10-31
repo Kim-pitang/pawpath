@@ -1,11 +1,13 @@
 import { ChevronRight, Footprints, RotateCw } from 'lucide-react';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { EmptyState, ErrorNotice, InfoNotice, LinkButton } from '../components/ui';
+import RouteThumbnail from '../components/RouteThumbnail';
+import WeatherSourceTag from '../components/WeatherSourceTag';
+import { EmptyState, ErrorNotice, LinkButton } from '../components/ui';
 import { useApp } from '../context/AppContext';
 import { api } from '../lib/api';
 import { dayLabel, windowLabel } from '../lib/format';
-import { PERSONALITY_LABELS, WEATHER_SOURCE_LABELS } from '../lib/labels';
+import { PERSONALITY_LABELS } from '../lib/labels';
 import type { CurrentWeather, Pet, Recommendation, RecommendedCourse, Slot } from '../lib/types';
 
 // 홈은 "오늘 언제, 어디로 걸을까"에 먼저 답한다. 멍고 오렌지는 추천 시간과 산책 버튼에만 쓴다.
@@ -14,21 +16,17 @@ const PANEL = 'rounded-lg border border-line bg-white p-5';
 export default function HomePage() {
   const { petsLoaded, loadError, selectedPet, schedule, scenario, loadRecommendation, cachedRecommendation } = useApp();
   const [weather, setWeather] = useState<CurrentWeather | null>(null);
-  const [weatherError, setWeatherError] = useState<string | null>(null);
   const [recommendError, setRecommendError] = useState<string | null>(null);
   const petId = selectedPet?.id;
 
+  // 날씨 카드는 두지 않는다. 시간표 제목 옆 출처 태그에 쓸 출처와 안내만 받아 온다.
   useEffect(() => {
     if (!petsLoaded) return;
     let active = true;
     api
       .currentWeather(scenario, petId)
-      .then((result) => {
-        if (!active) return;
-        setWeather(result);
-        setWeatherError(null);
-      })
-      .catch((error: Error) => active && setWeatherError(error.message));
+      .then((result) => active && setWeather(result))
+      .catch(() => undefined);
     return () => {
       active = false;
     };
@@ -81,7 +79,12 @@ export default function HomePage() {
           <section className={PANEL} aria-labelledby="timeline-title">
             <PanelHeader
               id="timeline-title"
-              title={bestSlot ? `${dayLabel(bestSlot.start)} 산책 시간표` : '산책 시간표'}
+              title={
+                <>
+                  {bestSlot ? `${dayLabel(bestSlot.start)} 산책 시간표` : '산책 시간표'}
+                  {weather && <WeatherSourceTag weather={weather} changeLink />}
+                </>
+              }
               action={
                 schedule && (
                   <Link to="/schedule" className="text-sm text-ink-soft hover:text-ink">
@@ -103,7 +106,6 @@ export default function HomePage() {
         </div>
         <div className="flex min-w-0 flex-col gap-4">
           <OtherCourses courses={recommendation?.courses.slice(1, 3) ?? []} loading={!recommendation && !recommendError} />
-          <WeatherPanel weather={weather} error={weatherError} />
         </div>
       </div>
     </div>
@@ -162,6 +164,22 @@ function AnswerPanel({
   error: string | null;
   onRetry: () => void;
 }) {
+  const courseId = top?.course_id;
+  const [route, setRoute] = useState<{ id: number; points: [number, number][] } | null>(null);
+
+  // 카드 왼쪽에 코스 모양을 그리려고 대표 코스의 경로만 받아 온다. 실패해도 빈 그림으로 그대로 보인다.
+  useEffect(() => {
+    if (!courseId) return;
+    let active = true;
+    api
+      .getCourse(courseId)
+      .then((course) => active && setRoute({ id: course.id, points: course.route }))
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [courseId]);
+
   if (error && !recommendation) {
     return (
       <section className={PANEL} aria-labelledby="answer-title">
@@ -213,74 +231,119 @@ function AnswerPanel({
   }
 
   const slot = top.recommended_time;
+  const points = route?.id === top.course_id ? route.points : [];
+  // 추천 화면의 티켓 카드와 같은 경로 그림을 써서, 같은 코스를 모양으로 알아보게 한다.
   return (
     <section className={PANEL} aria-labelledby="answer-title">
-      <h2 id="answer-title" className="text-lg font-bold leading-snug text-ink">
-        {top.name}
-      </h2>
-      <p className="mt-1 text-sm tabular-nums text-ink-soft">
-        {clockRange(slot.start, slot.end)} · {top.distance_km.toFixed(2)}km · {top.duration_min}분 · 추천 점수 {top.total_score.toFixed(0)}
-      </p>
+      <div className="flex gap-4">
+        <RouteThumbnail segments={points.length > 1 ? [points] : []} size={88} label={`${top.name} 경로 모양`} />
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold text-mango-700">오늘의 추천 코스</p>
+          <h2 id="answer-title" className="mt-0.5 text-lg font-bold leading-snug text-ink">
+            {top.name}
+          </h2>
+          <p className="mt-1 text-sm tabular-nums text-ink-soft">
+            {clockRange(slot.start, slot.end)} · {top.distance_km.toFixed(2)}km · {top.duration_min}분 ·{' '}
+            <span className="font-semibold text-ink">{top.total_score.toFixed(0)}점</span>
+          </p>
+        </div>
+      </div>
       <p className="mt-3 text-base leading-relaxed text-ink" data-testid="home-reason">
         {top.reason.llm_summary ?? top.reason.summary}
       </p>
-      <div className="mt-5 grid grid-cols-[1fr_auto] gap-2">
+      {/* 주요 행동은 버튼 하나로 두고, 보조 행동은 글자 링크로 낮춘다. 시간·거리는 카드 위쪽에 이미 있어 버튼에는 다시 적지 않는다. */}
+      <div className="mt-5">
         <Link
           to={`/navigate?course=${top.course_id}&recommendation=${recommendation.id}`}
-          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-mango-500 px-5 text-sm font-bold text-ink transition-[background-color,transform] hover:bg-mango-600 active:scale-[0.98]"
+          className="group pp-press flex min-h-14 items-center gap-3 rounded-md bg-mango-500 px-4 py-2.5 text-ink hover:bg-mango-600"
         >
-          <Footprints size={16} aria-hidden />
-          이 코스로 산책
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/60" aria-hidden>
+            <Footprints size={18} />
+          </span>
+          <span className="min-w-0 flex-1 text-base font-bold">이 코스로 산책</span>
+          <ChevronRight size={20} className="shrink-0 transition-transform duration-150 ease-out group-hover:translate-x-0.5" aria-hidden />
         </Link>
-        <Link
-          to="/recommend"
-          className="inline-flex min-h-12 items-center justify-center rounded-md bg-cream-deep px-4 text-sm font-semibold text-ink transition-[background-color,transform] hover:bg-peach-deep active:scale-[0.98]"
-        >
-          추천 자세히
-        </Link>
+        <div className="mt-2 flex justify-center">
+          <Link to="/recommend" className="flex min-h-10 items-center text-sm font-semibold text-ink-soft underline underline-offset-2 hover:text-ink">
+            다른 코스와 추천 근거 보기
+          </Link>
+        </div>
       </div>
     </section>
   );
 }
 
+/** 2·3위를 경로 모양이 있는 작은 카드로 가로로 늘어놓는다. 위 대표 카드와 같은 그림이라 코스를 모양으로 비교할 수 있다. */
 function OtherCourses({ courses, loading }: { courses: RecommendedCourse[]; loading: boolean }) {
+  const [routes, setRoutes] = useState<Record<number, [number, number][]>>({});
+  const ids = courses.map((course) => course.course_id).join(',');
+
+  // 경로 그림만 필요하므로 코스 목록을 한 번 받아 둔다. 실패해도 카드는 빈 그림으로 그대로 보인다.
+  useEffect(() => {
+    if (!ids) return;
+    let active = true;
+    api
+      .listCourses()
+      .then((list) => active && setRoutes(Object.fromEntries(list.map((item) => [item.id, item.route]))))
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [ids]);
+
   if (!loading && courses.length === 0) return null;
   return (
     <section className={PANEL} aria-labelledby="others-title">
-      <PanelHeader
-        id="others-title"
-        title="다른 코스"
-        action={
-          <Link to="/recommend" className="text-sm font-semibold text-ink underline underline-offset-2">
-            전체 보기
-          </Link>
-        }
-      />
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <h2 id="others-title" className="text-base font-semibold text-ink">
+          다른 코스
+          {!loading && <span className="ml-1.5 text-sm font-normal text-ink-soft">{courses.length}곳</span>}
+        </h2>
+        <Link to="/recommend" className="text-sm font-semibold text-ink underline underline-offset-2">
+          전체 보기
+        </Link>
+      </div>
       {loading ? (
-        <>
-          <Bar className="h-10 w-full" />
-          <Bar className="mt-3 h-10 w-full" />
-        </>
+        <div className="flex gap-2">
+          <Bar className="h-40 w-40" />
+          <Bar className="h-40 w-40" />
+        </div>
       ) : (
-        <ul className="-my-1">
-          {courses.map((course) => (
-            <li key={course.course_id}>
-              <Link to="/recommend" className="group -mx-2 flex min-h-14 items-center gap-3 rounded-md px-2 py-2 hover:bg-cream">
-                <span className="w-4 shrink-0 text-sm tabular-nums text-ink-soft">{course.rank}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-base font-semibold text-ink">{course.name}</span>
-                  <span className="block text-sm tabular-nums text-ink-soft">
-                    {clockRange(course.recommended_time.start, course.recommended_time.end)} · {course.distance_km.toFixed(2)}km · {course.duration_min}분
+        <ul className="-mx-5 flex snap-x scroll-px-5 gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none]">
+          {courses.map((course) => {
+            const route = routes[course.course_id] ?? [];
+            return (
+              <li key={course.course_id} className="snap-start">
+                <Link to="/recommend" className="pp-press flex h-full w-40 flex-col gap-2 rounded-lg bg-cream p-3 hover:bg-cream-deep">
+                  <span className="relative block w-fit">
+                    <RouteThumbnail segments={route.length > 1 ? [route] : []} size={56} label={`${course.name} 경로 모양`} />
+                    <span className="absolute -top-1 -left-1 flex h-5 w-5 items-center justify-center rounded-full bg-ink font-brand text-[11px] text-white" aria-hidden>
+                      {course.rank}
+                    </span>
                   </span>
-                </span>
-                <span className="shrink-0 text-right text-base tabular-nums text-ink">
-                  {course.total_score.toFixed(0)}
-                  <span className="text-sm text-ink-soft">점</span>
-                </span>
-                <ChevronRight size={16} className="shrink-0 text-ink-muted group-hover:text-ink" aria-hidden />
-              </Link>
-            </li>
-          ))}
+                  <span>
+                    <span className="line-clamp-2 text-sm font-semibold leading-snug text-ink">
+                      <span className="sr-only">{course.rank}위 </span>
+                      {course.name}
+                    </span>
+                    <span className="mt-1 block text-xs tabular-nums text-ink-soft">
+                      {clockRange(course.recommended_time.start, course.recommended_time.end).split('–')[0]} · {course.distance_km.toFixed(1)}km · {course.duration_min}분
+                    </span>
+                    <span className="mt-0.5 block text-xs font-semibold tabular-nums text-ink">{course.total_score.toFixed(0)}점</span>
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+          <li className="snap-start">
+            <Link
+              to="/recommend"
+              className="pp-press flex h-full w-24 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-line text-sm font-semibold text-ink-soft hover:text-ink"
+            >
+              <ChevronRight size={20} aria-hidden />
+              전체 보기
+            </Link>
+          </li>
         </ul>
       )}
     </section>
@@ -379,86 +442,53 @@ function TimeStrip({ slots, best }: { slots: Slot[]; best: Slot | null }) {
   );
 }
 
-/** 시간표에서 고른 시간의 날씨를 네 칸(체감·강수·바람·자외선)으로 나눠 보여 준다. */
+// 이 값부터는 걷기에 신경 쓸 만하다. 추천 엔진이 감점을 시작하는 지점에 맞췄다(습도는 엔진이 더울 때만 쓰지만 여기서는 늘 70%로 본다).
+const METRIC_CAUTION = { rain: 30, humidity: 70, wind: 5, uv: 6 };
+
+/** 시간표에서 고른 시간의 강수·습도·바람·자외선을 칩으로 늘어놓고, 주의할 값만 색으로 칠한다. 체감온도는 위 줄에 적는다. */
 function SlotStats({ slot }: { slot: Slot }) {
   const w = slot.weather;
-  const cells = [
-    { label: '체감', value: `${w.apparent_temperature.toFixed(0)}°` },
-    { label: '강수', value: `${w.precipitation_probability.toFixed(0)}%` },
-    { label: '바람', value: w.wind_speed.toFixed(1), unit: 'm/s' },
-    { label: '자외선', value: w.uv_index === null ? '–' : w.uv_index.toFixed(0) },
+  const metrics = [
+    { key: 'rain', label: '강수', value: w.precipitation_probability, text: `${w.precipitation_probability.toFixed(0)}%`, caution: METRIC_CAUTION.rain },
+    { key: 'humidity', label: '습도', value: w.humidity, text: `${w.humidity.toFixed(0)}%`, caution: METRIC_CAUTION.humidity },
+    { key: 'wind', label: '바람', value: w.wind_speed, text: `${w.wind_speed.toFixed(1)}m/s`, caution: METRIC_CAUTION.wind },
+    { key: 'uv', label: '자외선', value: w.uv_index, text: w.uv_index === null ? '–' : w.uv_index.toFixed(0), caution: METRIC_CAUTION.uv },
   ];
+  const warnings = metrics.filter((metric) => metric.value !== null && metric.value >= metric.caution);
+
   return (
     <div className="mt-3" aria-live="polite">
       <p className="text-sm text-ink">
         <span className="font-semibold">{hourPhrase(slot.start)} 출발</span>
         <span className="text-ink-soft">
           {' '}
-          · {slot.excluded_reason ? `${slot.excluded_reason}로 제외` : `${slot.score.toFixed(0)}점`}
+          · {slot.excluded_reason ? `${slot.excluded_reason}로 제외` : `${slot.score.toFixed(0)}점`} · 체감 {w.apparent_temperature.toFixed(0)}°
           {slot.is_dark ? ' · 해진 뒤' : ''}
         </span>
       </p>
-      <dl key={slot.start} className="pp-swap mt-2 grid grid-cols-4 divide-x divide-line rounded-md bg-cream py-2.5">
-        {cells.map((cell) => (
-          <div key={cell.label} className="min-w-0 px-3">
-            <dt className="text-xs text-ink-soft">{cell.label}</dt>
-            <dd className="mt-0.5 truncate text-base font-semibold tabular-nums text-ink">
-              {cell.value}
-              {cell.unit && <span className="ml-0.5 text-xs font-normal text-ink-soft">{cell.unit}</span>}
-            </dd>
-          </div>
-        ))}
-      </dl>
+      <ul key={slot.start} className="pp-swap mt-2 flex flex-wrap gap-1.5" aria-label="날씨 지표">
+        {metrics.map((metric) => {
+          const warn = metric.value !== null && metric.value >= metric.caution;
+          return (
+            <li
+              key={metric.key}
+              className={`flex min-h-8 items-center gap-1 rounded-full px-3 text-sm tabular-nums ${warn ? 'bg-[#fffbeb] text-[#92400e]' : 'bg-cream text-ink'}`}
+            >
+              <span className={warn ? '' : 'text-ink-soft'}>{metric.label}</span>
+              <span className="font-semibold">{metric.text}</span>
+              {warn && <span className="sr-only">(주의)</span>}
+            </li>
+          );
+        })}
+      </ul>
+      <p className="mt-2 text-xs text-ink-soft">
+        {warnings.length === 0 ? '걷기에 신경 쓸 만한 값은 없어요.' : `${warnings.map((metric) => metric.label).join('·')} 값을 살펴보세요.`}
+      </p>
     </div>
   );
 }
 
-function WeatherPanel({ weather, error }: { weather: CurrentWeather | null; error: string | null }) {
-  return (
-    <section className={PANEL} aria-labelledby="weather-title">
-      <PanelHeader
-        id="weather-title"
-        title="지금 날씨"
-        action={weather && <span className="text-xs text-ink-soft">출처: {WEATHER_SOURCE_LABELS[weather.source] ?? '시연용 시나리오'}</span>}
-      />
-      {error && <ErrorNotice message={error} />}
-      {!weather && !error && <Bar className="h-16 w-full" />}
-      {weather && (
-        <>
-          <div className="flex items-baseline gap-3">
-            <p className="text-3xl font-semibold tabular-nums leading-none text-ink">{weather.current.temperature.toFixed(0)}°</p>
-            <p className="text-sm text-ink-soft">
-              체감 {weather.current.apparent_temperature.toFixed(0)}° · {weather.condition}
-            </p>
-          </div>
-          <p className="mt-2 text-sm text-ink">{weather.walk_comfort_hint}</p>
-          <dl className="mt-4 grid grid-cols-4 divide-x divide-line border-y border-line py-2.5">
-            <Stat label="강수" value={`${weather.current.precipitation_probability.toFixed(0)}%`} />
-            <Stat label="습도" value={`${weather.current.humidity.toFixed(0)}%`} />
-            <Stat label="바람" value={`${weather.current.wind_speed.toFixed(1)}m/s`} />
-            <Stat label="자외선" value={weather.current.uv_index?.toFixed(0) ?? '–'} />
-          </dl>
-          {weather.notice && (
-            <div className="mt-3">
-              <InfoNotice>{weather.notice}</InfoNotice>
-            </div>
-          )}
-        </>
-      )}
-    </section>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="px-2 first:pl-0">
-      <dt className="text-xs text-ink-soft">{label}</dt>
-      <dd className="mt-0.5 text-sm font-semibold tabular-nums text-ink">{value}</dd>
-    </div>
-  );
-}
-
-function PanelHeader({ id, title, action }: { id: string; title: string; action?: ReactNode }) {
+function PanelHeader({ id, title, action }: { id: string; title: ReactNode; action?: ReactNode }) {
   return (
     <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
       <h2 id={id} className="text-base font-semibold text-ink">

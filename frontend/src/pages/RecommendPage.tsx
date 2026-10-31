@@ -2,6 +2,7 @@ import {
   AlertTriangle,
   ArrowUp,
   ChevronDown,
+  ChevronRight,
   Clock,
   Footprints,
   Home as HomeIcon,
@@ -16,12 +17,13 @@ import HBarChart from '../components/charts/HBarChart';
 import SlotColumns from '../components/charts/SlotColumns';
 import RouteThumbnail from '../components/RouteThumbnail';
 import SafetyPanel from '../components/SafetyPanel';
-import { Button, Card, Chip, EmptyState, ErrorNotice, InfoNotice, LinkButton, Loading, PageTitle, SectionTitle } from '../components/ui';
+import { Button, Card, Chip, EmptyState, ErrorNotice, LinkButton, Loading, SectionTitle } from '../components/ui';
 import WeatherScenarioPicker from '../components/WeatherScenarioPicker';
+import WeatherSourceTag from '../components/WeatherSourceTag';
 import { useApp } from '../context/AppContext';
 import { api } from '../lib/api';
 import { dayLabel, signed, slotRange } from '../lib/format';
-import { CROWD_LABELS, FACILITY_LABELS, WEATHER_SOURCE_LABELS } from '../lib/labels';
+import { CROWD_LABELS, FACILITY_LABELS } from '../lib/labels';
 import type { Course, Recommendation, RecommendedCourse } from '../lib/types';
 
 const RANK_BADGE: Record<number, string> = {
@@ -87,20 +89,10 @@ export default function RecommendPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <PageTitle sub="성향, 일정, 날씨, 지난 피드백을 함께 계산했어요.">
-        {selectedPet ? `${selectedPet.name}의 오늘의 산책각` : '오늘의 산책각'}
-      </PageTitle>
+      <RecommendTitle petName={selectedPet?.name} result={result} />
 
       <Card>
-        <WeatherScenarioPicker />
-        {result?.weather.notice && (
-          <div className="mt-3">
-            <InfoNotice>{result.weather.notice}</InfoNotice>
-          </div>
-        )}
-        {result && !result.weather.is_mock && (
-          <p className="mt-2 text-xs text-ink-muted">날씨 출처: {WEATHER_SOURCE_LABELS[result.weather.source] ?? result.weather.source}</p>
-        )}
+        <WeatherScenarioPicker status={result && <WeatherSourceTag weather={result.weather} />} />
       </Card>
 
       {error && <ErrorNotice message={error} />}
@@ -108,14 +100,6 @@ export default function RecommendPage() {
 
       {result && (
         <div className={`flex flex-col gap-4 transition-opacity ${loading ? 'opacity-60' : ''}`}>
-          {result.learning.is_personalized ? (
-            <InfoNotice>
-              지금까지의 피드백 {result.learning.feedback_total}건을 학습해 점수에 반영했어요. 과거 만족도 반영 강도가{' '}
-              {Math.round(result.weights.preference * 100)}%로 올라갔어요.
-            </InfoNotice>
-          ) : (
-            <p className="px-1 text-xs text-ink-muted">아직 피드백이 없어 기본 규칙으로 추천했어요. 산책 후 피드백을 남기면 개인화돼요.</p>
-          )}
           <TimeSection result={result} />
           {result.walkable ? (
             <section aria-label="추천 코스 TOP 3" className="flex flex-col gap-4">
@@ -147,6 +131,42 @@ export default function RecommendPage() {
       )}
     </div>
   );
+}
+
+/**
+ * 화면 제목은 무엇을 계산했는지보다 무엇이 나왔는지를 먼저 말한다.
+ * 1위 코스와 출발 시각을 바로 아래에 두고, 누르면 그 카드로 내려간다. 계산 기준은 작은 설명으로 남긴다.
+ */
+function RecommendTitle({ petName, result }: { petName?: string; result: Recommendation | null }) {
+  const top = result?.walkable ? result.courses[0] : undefined;
+  const title = result ? (top ? `코스 ${result.courses.length}곳을 골랐어요` : '오늘은 실내가 좋아요') : '코스를 고르는 중이에요';
+  const goToTop = () => {
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    document.querySelector('[data-testid="course-card-1"]')?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+  };
+
+  return (
+    <header>
+      <p className="text-sm font-semibold text-mango-700">{petName ? `${petName}의 오늘의 산책각` : '오늘의 산책각'}</p>
+      <h1 className="mt-0.5 text-2xl font-bold tracking-[-0.01em] text-ink">{title}</h1>
+      {top && (
+        <button type="button" onClick={goToTop} className="mt-2 flex min-h-8 items-center gap-1 text-left text-sm text-ink hover:underline">
+          <span className="text-ink-soft">1위</span>
+          <span className="font-semibold">{top.name}</span>
+          <span className="text-ink-soft">· {clockPhrase(top.recommended_time.start)} 출발</span>
+          <ChevronRight size={14} className="shrink-0 text-ink-soft" aria-hidden />
+        </button>
+      )}
+      <p className="mt-1 text-xs text-ink-soft">성향, 일정, 날씨, 지난 피드백을 함께 계산했어요.</p>
+    </header>
+  );
+}
+
+/** "오전 7:00"처럼 오전·오후와 시각. */
+function clockPhrase(iso: string): string {
+  const date = new Date(iso);
+  const hours = date.getHours();
+  return `${hours < 12 ? '오전' : '오후'} ${hours % 12 === 0 ? 12 : hours % 12}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
 function TimeSection({ result }: { result: Recommendation }) {

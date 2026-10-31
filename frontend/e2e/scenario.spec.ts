@@ -16,15 +16,19 @@ test('메인 화면이 오늘의 산책 시간과 코스를 먼저 보여 준다
   await expect(page.getByRole('link', { name: '두부 프로필 보기: 말티즈, 5세, 4.2kg, 소심함' })).toBeVisible();
   await expect(page.getByText('16시 ~ 20시')).toBeVisible();
   await expect(page.getByRole('group', { name: '시간대별 산책 점수' })).toBeVisible();
-  await expect(page.getByText('출처: 모의 날씨')).toBeVisible();
+  await page.getByRole('button', { name: '모의 날씨' }).click();
+  await expect(page.getByRole('dialog', { name: '날씨 데이터 안내' })).toContainText('모의 날씨 데이터를 사용 중이에요.');
+  await page.keyboard.press('Escape');
   await expect(page.getByRole('link', { name: '이 코스로 산책' })).toBeVisible();
-  await expect(page.getByRole('link', { name: '추천 자세히' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '다른 코스와 추천 근거 보기' })).toBeVisible();
 });
 
 test('최종 검증 시나리오: 추천, 산책, 5점 피드백, 다음 추천 반영', async ({ page }) => {
   // 1~5. 날씨, 코스, 점수, TOP 3, 추천 이유
   await chooseScenario(page, '곧 비');
-  await expect(page.getByText('시연용 시나리오: 곧 비가 오는 날')).toBeVisible();
+  await page.getByRole('button', { name: '시연용 곧 비' }).click();
+  await expect(page.getByRole('dialog', { name: '날씨 데이터 안내' })).toContainText('시연용 시나리오: 곧 비가 오는 날');
+  await page.keyboard.press('Escape');
   await expect(page.getByTestId('course-card-1')).toBeVisible();
   await expect(page.getByTestId('course-card-3')).toBeVisible();
   await expect(page.getByTestId('course-card-1').getByTestId('reason-summary')).toHaveText(EXPECTED_SENTENCE);
@@ -67,7 +71,6 @@ test('최종 검증 시나리오: 추천, 산책, 5점 피드백, 다음 추천 
 
   // 8. 다음 추천에 반영
   await page.getByRole('button', { name: '달라진 추천 보기' }).click();
-  await expect(page.getByText(/피드백 1건을 학습해/)).toBeVisible();
   await expect(page.getByTestId('course-card-1').getByRole('heading')).toHaveText(secondName);
   await expect(page.getByTestId('course-card-1').getByText('학습 전보다 1계단 상승')).toBeVisible();
   const updated = page.getByRole('article').filter({ hasText: secondName });
@@ -117,7 +120,7 @@ test('반려동물을 등록하고 수정하면 추천이 달라진다', async (
   await expect(page.getByText('보더콜리 · 3세 · 19.5kg')).toBeVisible();
 
   await chooseScenario(page, '실제 날씨');
-  await expect(page.getByRole('heading', { name: '바람의 오늘의 산책각' })).toBeVisible();
+  await expect(page.getByText('바람의 오늘의 산책각')).toBeVisible();
   await expect(page.getByTestId('course-card-1').getByTestId('reason-summary')).toContainText('바람');
   await expect(page.getByTestId('course-card-1').getByTestId('reason-summary')).not.toContainText('낯선 길을 싫어하는');
 });
