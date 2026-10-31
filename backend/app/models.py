@@ -24,10 +24,9 @@ class User(Base):
     available_windows: Mapped[list] = mapped_column(JSON, default=list)
     preferred_duration_min: Mapped[int] = mapped_column(Integer, default=40)
     walks_per_day: Mapped[int] = mapped_column(Integer, default=1)
+    # login_id, email, password_hash는 비밀번호 로그인을 없애기 전의 컬럼이다. 코드는 더 이상 읽거나 쓰지 않고, 지우는 일은 Alembic 리비전으로 따로 한다.
     login_id: Mapped[str | None] = mapped_column(String(30), nullable=True, unique=True, index=True)
-    # 이메일로 가입한 계정의 로그인 주소. 소유 확인은 하지 않아 Google 계정과 자동으로 잇지 않는다.
     email: Mapped[str | None] = mapped_column(String(254), nullable=True, unique=True, index=True)
-    # scrypt$N$r$p$salt$hash. 시연 보호자는 비어 있어 로그인할 수 없다.
     password_hash: Mapped[str | None] = mapped_column(String(200), nullable=True)
     # Google 로그인 사용자의 고유 ID(sub). 이메일은 바뀔 수 있어 표시에만 쓴다.
     google_sub: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)

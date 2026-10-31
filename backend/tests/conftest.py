@@ -23,6 +23,8 @@ os.environ["ENVIRONMENT_PROVIDER"] = "none"
 os.environ["GOOGLE_CLIENT_ID"] = "test-client.apps.googleusercontent.com"
 os.environ["GOOGLE_CLIENT_SECRET"] = "test-google-secret"
 os.environ["GOOGLE_REDIRECT_URI"] = "http://testserver/api/auth/google/callback"
+# 로그인이 필요한 테스트는 테스트 전용 로그인(/api/e2e/login)으로 계정을 만든다. Google 로그인 자체는 test_google_auth.py가 가짜 Google로 확인한다.
+os.environ["E2E_LOGIN"] = "true"
 # 자동 백업을 끄고, 탈퇴 기록이 프로젝트의 backups 폴더에 쌓이지 않게 임시 폴더를 쓴다.
 os.environ["BACKUP_ENABLED"] = "false"
 os.environ["BACKUP_DIR"] = f"{_db_dir}/backups"

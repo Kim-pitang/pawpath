@@ -662,14 +662,11 @@ export interface GpxPreview {
 export interface AccountUser {
   id: number;
   name: string;
-  /** Google 로그인 사용자는 아이디가 없다. */
-  login_id: string | null;
+  /** Google이 확인한 이메일. 확인되지 않았으면 비어 있다. */
   email: string | null;
-  provider: 'password' | 'google';
 }
 
 export interface AccountSummary {
-  provider: 'password' | 'google';
   /** 참이면 탈퇴 전에 본인을 다시 확인해야 한다. */
   reauth_required: boolean;
   session_expires_at: string;

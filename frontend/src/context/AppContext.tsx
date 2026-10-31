@@ -5,9 +5,9 @@ import type { Account, AccountUser, Pet, Profile, Recommendation, Schedule, Weat
 
 /**
  * 이 기기에서 마지막으로 로그인한 보호자. 세션이 끝난 뒤에도 누가 다시 로그인해야 하는지 알기 위해 남긴다.
- * login_id는 이메일로 가입한 계정이면 이메일이다. profile_id는 다시 로그인했을 때 쓰던 프로필로 돌아가는 데 쓴다.
+ * profile_id는 다시 로그인했을 때 쓰던 프로필로 돌아가는 데 쓴다.
  */
-type RememberedAccount = Pick<AccountUser, 'id' | 'login_id' | 'provider'> & { profile_id?: number | null };
+type RememberedAccount = Pick<AccountUser, 'id'> & { profile_id?: number | null };
 
 export interface ExpiredSession extends RememberedAccount {
   authRequired: boolean;
@@ -92,9 +92,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const sameUser = remembered === null || remembered.id === next.user.id;
       // 다른 사람이 이 기기에서 로그인했다면 앞사람의 저장하지 않은 기록과 멈춰 둔 요청을 넘겨주지 않는다.
       if (!sameUser) clearDraft();
-      const { id, login_id, provider, email } = next.user;
       const profileId = next.current_profile?.id ?? (sameUser ? remembered?.profile_id : null) ?? null;
-      const remember: RememberedAccount = { id, login_id: login_id ?? (provider === 'password' ? email : null), provider, profile_id: profileId };
+      const remember: RememberedAccount = { id: next.user.id, profile_id: profileId };
       localStorage.setItem(REMEMBERED_KEY, JSON.stringify(remember));
       setExpired(null);
       settleRequests(sameUser);

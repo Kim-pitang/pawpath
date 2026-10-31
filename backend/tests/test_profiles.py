@@ -13,28 +13,19 @@ from app.migrations import ADDED_COLUMNS, ensure_schema, row_counts
 from app.models import AuthSession, Profile, SavedWalk, WalkFeedback, WalkHistory
 from app.services import auth_service, backup_service, profile_service
 from tests.test_api_e2e import FIVE_STARS, PET_BODY, dubu_id
+from tests.test_account import start_reauth
+from tests.test_auth import sign_in as sign_in_as
 from tests.test_google_auth import FIRST_LOGIN, callback, google, start  # noqa: F401  google은 픽스처다
 
-PASSWORD = "walk-with-dubu-1"
 POINTS = [{"latitude": 37.55 + i * 0.0003, "longitude": 126.91, "recorded_at": f"2026-10-30T07:00:{i * 10:02d}", "segment": 0} for i in range(4)]
-
-
-@pytest.fixture(autouse=True)
-def reset_throttle():
-    auth_service.throttle.clear()
-    yield
-    auth_service.throttle.clear()
 
 
 def browser() -> TestClient:
     return TestClient(app)
 
 
-def signup(client, login_id="mom", name="엄마", **extra) -> dict:
-    body = {"password": PASSWORD, "name": name, **({"login_id": login_id} if login_id else {}), **extra}
-    response = client.post("/api/auth/signup", json=body)
-    assert response.status_code == 201, response.text
-    return response.json()
+def sign_in(client, key="mom", name="엄마") -> dict:
+    return sign_in_as(client, key=key, name=name).json()
 
 
 def add_profile(client, name="아빠", avatar="sun") -> dict:
@@ -64,16 +55,16 @@ def saved_walk(client, title="아침 길") -> dict:
 
 def family(client) -> tuple[dict, dict, int]:
     """대표 프로필(엄마)과 하위 프로필(아빠), 가족 반려동물 한 마리."""
-    account = signup(client)
+    account = sign_in(client)
     default = account["current_profile"]
     second = add_profile(client)
     pet = client.post("/api/pets", json=PET_BODY).json()
     return default, second, pet["id"]
 
 
-# ---------- 가입과 대표 프로필
-def test_signup_creates_the_account_and_a_default_profile_in_use(client):
-    account = signup(client)
+# ---------- 첫 로그인과 대표 프로필
+def test_first_login_creates_the_account_and_a_default_profile_in_use(client):
+    account = sign_in(client)
     assert account["authenticated"] is True
     assert account["profile_required"] is False
     [profile] = account["profiles"]
@@ -81,27 +72,6 @@ def test_signup_creates_the_account_and_a_default_profile_in_use(client):
     assert profile["name"] == "엄마"
     assert account["current_profile"]["id"] == profile["id"]
     assert account["max_profiles"] == profile_service.MAX_PROFILES == 5
-
-
-def test_email_signup_and_login(client):
-    account = signup(client, login_id=None, email="  Mom@Example.com ")
-    assert account["user"]["email"] == "mom@example.com"
-    assert account["user"]["login_id"] is None
-    client.post("/api/auth/logout")
-    assert client.post("/api/auth/login", json={"login_id": "MOM@example.com", "password": "wrong-password"}).status_code == 401
-    assert client.post("/api/auth/login", json={"login_id": "mom@example.com", "password": PASSWORD}).status_code == 200
-    assert client.get("/api/auth/me").json()["user"]["email"] == "mom@example.com"
-
-
-def test_email_is_unique_and_signup_needs_exactly_one_identifier(client):
-    signup(client, login_id=None, email="mom@example.com")
-    duplicate = browser().post("/api/auth/signup", json={"email": "mom@example.com", "password": PASSWORD, "name": "다른"})
-    assert duplicate.status_code == 409
-    assert "이메일" in duplicate.json()["detail"]
-    other = browser()
-    assert other.post("/api/auth/signup", json={"password": PASSWORD, "name": "없음"}).status_code == 422
-    assert other.post("/api/auth/signup", json={"login_id": "both", "email": "b@example.com", "password": PASSWORD, "name": "둘"}).status_code == 422
-    assert other.post("/api/auth/signup", json={"email": "not-an-email", "password": PASSWORD, "name": "형식"}).status_code == 422
 
 
 def test_google_first_login_creates_a_default_profile_and_asks_to_set_it_up(client, google):  # noqa: F811
@@ -118,7 +88,7 @@ def test_google_first_login_creates_a_default_profile_and_asks_to_set_it_up(clie
 
 
 def test_account_name_can_be_changed_separately_from_profiles(client):
-    signup(client)
+    sign_in(client)
     account = client.patch("/api/auth/account", json={"name": "우리 가족"}).json()
     assert account["user"]["name"] == "우리 가족"
     assert account["current_profile"]["name"] == "엄마"
@@ -127,7 +97,7 @@ def test_account_name_can_be_changed_separately_from_profiles(client):
 
 # ---------- 프로필 관리
 def test_profiles_are_limited_to_five_including_the_default(client):
-    signup(client)
+    sign_in(client)
     for index in range(4):
         add_profile(client, name=f"가족{index}")
     response = client.post("/api/profiles", json={"name": "여섯째"})
@@ -137,7 +107,7 @@ def test_profiles_are_limited_to_five_including_the_default(client):
 
 
 def test_creating_profiles_at_the_same_time_cannot_pass_the_limit(client):
-    signup(client)
+    sign_in(client)
     token = client.cookies.get(auth_service.SESSION_COOKIE)
 
     def create(index: int) -> int:
@@ -152,7 +122,7 @@ def test_creating_profiles_at_the_same_time_cannot_pass_the_limit(client):
 
 
 def test_profile_names_must_differ_and_avatars_are_checked(client):
-    signup(client)
+    sign_in(client)
     assert client.post("/api/profiles", json={"name": "엄마"}).status_code == 409
     assert client.post("/api/profiles", json={"name": "아빠", "avatar_key": "dragon"}).status_code == 422
     assert client.post("/api/profiles", json={"name": ""}).status_code == 422
@@ -200,7 +170,7 @@ def test_deleting_the_profile_in_use_on_another_device_asks_that_device_to_choos
     _, second, _ = family(client)
     add_profile(client, "할머니")
     phone = browser()
-    phone.post("/api/auth/login", json={"login_id": "mom", "password": PASSWORD})
+    sign_in(phone)
     use_profile(phone, second["id"])
     assert client.delete(f"/api/profiles/{second['id']}").status_code == 204
     me = phone.get("/api/auth/me").json()
@@ -212,7 +182,7 @@ def test_deleting_the_profile_in_use_on_another_device_asks_that_device_to_choos
 def test_login_with_several_profiles_asks_which_profile_until_one_is_chosen(client):
     _, second, pet_id = family(client)
     client.post("/api/auth/logout")
-    account = client.post("/api/auth/login", json={"login_id": "mom", "password": PASSWORD}).json()
+    account = sign_in(client)
     assert account["profile_required"] is True
     assert account["current_profile"] is None
     assert [profile["name"] for profile in account["profiles"]] == ["엄마", "아빠"]
@@ -227,15 +197,15 @@ def test_login_with_several_profiles_asks_which_profile_until_one_is_chosen(clie
 
 
 def test_login_with_one_profile_goes_straight_in(client):
-    signup(client)
+    sign_in(client)
     client.post("/api/auth/logout")
-    account = client.post("/api/auth/login", json={"login_id": "mom", "password": PASSWORD}).json()
+    account = sign_in(client)
     assert account["profile_required"] is False
     assert account["current_profile"]["name"] == "엄마"
 
 
 def test_adding_a_profile_keeps_the_profile_in_use(client):
-    account = signup(client)
+    account = sign_in(client)
     # 프로필이 하나일 때 고르지 않은 세션(예전 세션)이어도 둘째를 만든 뒤 쓰던 프로필이 이어진다.
     with SessionLocal() as db:
         db.execute(text("UPDATE auth_sessions SET profile_id = NULL"))
@@ -259,10 +229,11 @@ def test_switching_profiles_keeps_the_session_and_records_last_use(client):
     assert after[0].token_hash == before[0].token_hash
 
 
-def test_reauthentication_keeps_the_profile_in_use(client):
-    _, second, _ = family(client)
+def test_reauthentication_keeps_the_profile_in_use(client, google):  # noqa: F811
+    callback(client, start(client), google)
+    second = add_profile(client)
     use_profile(client, second["id"])
-    assert client.post("/api/auth/reauth", json={"password": PASSWORD}).status_code == 200
+    assert callback(client, start_reauth(client), google).headers["location"] == "/account"
     assert client.get("/api/auth/me").json()["current_profile"]["id"] == second["id"]
 
 
@@ -400,7 +371,7 @@ def test_another_family_cannot_use_our_profile_ids(client):
     record = walk(client, pet_id)
     path = saved_walk(client)
     other = browser()
-    signup(other, login_id="neighbor", name="이웃")
+    sign_in(other, key="neighbor", name="이웃")
     for method, path_ in (
         ("GET", f"/api/profiles/{second['id']}"),
         ("PATCH", f"/api/profiles/{second['id']}"),
@@ -435,7 +406,7 @@ def test_public_pages_do_not_reveal_profile_names(client):
 def test_a_session_pointing_at_another_familys_profile_is_not_trusted(client):
     _, second, _ = family(client)
     other = browser()
-    signup(other, login_id="neighbor", name="이웃")
+    sign_in(other, key="neighbor", name="이웃")
     # DB가 잘못 가리켜도 서버는 요청마다 계정 소속을 다시 확인한다.
     with SessionLocal() as db:
         session = db.scalar(select(AuthSession).order_by(AuthSession.id.desc()).limit(1))
@@ -450,7 +421,6 @@ def test_a_session_pointing_at_another_familys_profile_is_not_trusted(client):
 def test_account_deletion_removes_every_profile(client):
     family(client)
     add_profile(client, "할머니")
-    client.post("/api/auth/reauth", json={"password": PASSWORD})
     assert client.get("/api/auth/account").json()["data"]["profiles"] == 2
     assert client.delete("/api/auth/account").status_code == 204
     # 시연 보호자의 대표 프로필만 남는다.

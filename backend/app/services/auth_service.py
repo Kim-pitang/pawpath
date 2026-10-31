@@ -1,20 +1,12 @@
-"""보호자 계정: 비밀번호 해시, 로그인 세션, 로그인 시도 제한. 표준 라이브러리만 쓴다."""
-import base64
+"""보호자 로그인 세션. 로그인은 Google로만 하고(google_auth_service), 여기서는 세션을 열고 확인하고 닫는다."""
 import hashlib
-import hmac
-import math
 import secrets
-import threading
-import time
 from datetime import datetime, timedelta
 
 from sqlalchemy import delete, func, or_, select, update
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import AuthSession, User
-from app.seed import new_user_defaults
-from app.services.profile_service import new_default_profile
 
 SESSION_COOKIE = "pawpath_session"
 # 로그인한 지 이 기간이 지나면 계속 쓰고 있어도 끝난다.
@@ -25,113 +17,10 @@ SESSION_IDLE_DAYS = 7
 TOUCH_MINUTES = 5
 # 본인을 다시 확인한 뒤 되돌릴 수 없는 작업을 할 수 있는 시간.
 REAUTH_MINUTES = 10
-SCRYPT_N, SCRYPT_R, SCRYPT_P = 2**14, 8, 1
-MAX_FAILURES = 5
-LOCK_SECONDS = 600
-
-
-class AuthError(Exception):
-    def __init__(self, status_code: int, message: str):
-        super().__init__(message)
-        self.status_code = status_code
-        self.message = message
-
-
-def _b64(data: bytes) -> str:
-    return base64.urlsafe_b64encode(data).decode().rstrip("=")
-
-
-def _unb64(text: str) -> bytes:
-    return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
-
-
-def hash_password(password: str) -> str:
-    salt = secrets.token_bytes(16)
-    digest = hashlib.scrypt(password.encode(), salt=salt, n=SCRYPT_N, r=SCRYPT_R, p=SCRYPT_P, dklen=32)
-    return f"scrypt${SCRYPT_N}${SCRYPT_R}${SCRYPT_P}${_b64(salt)}${_b64(digest)}"
-
-
-def verify_password(password: str, stored: str) -> bool:
-    try:
-        scheme, n, r, p, salt, digest = stored.split("$")
-        expected = _unb64(digest)
-        actual = hashlib.scrypt(password.encode(), salt=_unb64(salt), n=int(n), r=int(r), p=int(p), dklen=len(expected))
-    except (ValueError, TypeError):
-        return False
-    return scheme == "scrypt" and hmac.compare_digest(actual, expected)
-
-
-# 없는 아이디도 같은 시간이 걸리게 해 아이디가 있는지 응답 시간으로 알 수 없게 한다.
-_DUMMY_HASH = hash_password(secrets.token_urlsafe(16))
-
-
-class LoginThrottle:
-    """아이디별로 연달아 틀린 횟수를 센다. 서버 메모리에 두므로 재시작하면 초기화된다."""
-
-    def __init__(self) -> None:
-        self._failures: dict[str, list[float]] = {}
-        self._lock = threading.Lock()
-
-    def seconds_locked(self, login_id: str, now: float) -> float:
-        with self._lock:
-            recent = [t for t in self._failures.get(login_id, []) if now - t < LOCK_SECONDS]
-            self._failures[login_id] = recent
-            return LOCK_SECONDS - (now - recent[0]) if len(recent) >= MAX_FAILURES else 0.0
-
-    def fail(self, login_id: str, now: float) -> None:
-        with self._lock:
-            self._failures.setdefault(login_id, []).append(now)
-
-    def clear(self, login_id: str | None = None) -> None:
-        with self._lock:
-            if login_id is None:
-                self._failures.clear()
-            else:
-                self._failures.pop(login_id, None)
-
-
-throttle = LoginThrottle()
 
 
 def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
-
-
-def signup(db: Session, login_id: str | None, password: str, name: str, email: str | None = None) -> User:
-    """대표 계정을 만든다. 아이디나 이메일 중 하나로 로그인하고, 대표 프로필이 함께 만들어진다."""
-    taken = AuthError(409, "이미 사용 중인 이메일이에요." if email else "이미 사용 중인 아이디예요.")
-    if db.scalar(select(User.id).where(User.email == email if email else User.login_id == login_id)) is not None:
-        raise taken
-    user = User(name=name, login_id=login_id, email=email, password_hash=hash_password(password), **new_user_defaults())
-    new_default_profile(user)
-    db.add(user)
-    try:
-        db.commit()
-    except IntegrityError as error:
-        # 같은 아이디로 동시에 가입한 경우다.
-        db.rollback()
-        raise taken from error
-    return user
-
-
-def _check_password(throttle_key: str, stored: str | None, password: str, failure: AuthError, clock: float | None) -> None:
-    now = time.monotonic() if clock is None else clock
-    wait = throttle.seconds_locked(throttle_key, now)
-    if wait:
-        raise AuthError(429, f"로그인 시도가 너무 많아요. {math.ceil(wait / 60)}분 뒤에 다시 시도해 주세요.")
-    matched = verify_password(password, stored or _DUMMY_HASH)
-    if stored is None or not matched:
-        throttle.fail(throttle_key, now)
-        raise failure
-    throttle.clear(throttle_key)
-
-
-def login(db: Session, login_id: str, password: str, clock: float | None = None) -> User:
-    """아이디에는 @를 쓸 수 없으므로 @가 있으면 이메일로 찾는다."""
-    user = db.scalar(select(User).where(User.email == login_id if "@" in login_id else User.login_id == login_id))
-    stored = user.password_hash if user is not None and user.password_hash else None
-    _check_password(login_id, stored, password, AuthError(401, "아이디나 비밀번호가 맞지 않아요."), clock)
-    return user
 
 
 def create_session(db: Session, user: User, now: datetime, profile_id: int | None = None) -> str:
@@ -170,16 +59,6 @@ def user_for_token(db: Session, token: str, now: datetime) -> User | None:
 
 def needs_reauth(session: AuthSession, now: datetime) -> bool:
     return (session.reauthenticated_at or session.created_at) + timedelta(minutes=REAUTH_MINUTES) <= now
-
-
-def confirm_password(user: User, password: str, clock: float | None = None) -> None:
-    """로그인 중인 보호자의 비밀번호를 다시 확인한다.
-
-    로그인과 따로 세어, 세션을 훔친 사람이 일부러 틀려서 주인의 로그인까지 막지 못하게 한다.
-    """
-    if not user.password_hash:
-        raise AuthError(409, "Google 계정은 Google로 본인을 확인해 주세요.")
-    _check_password(f"reauth:{user.id}", user.password_hash, password, AuthError(403, "비밀번호가 맞지 않아요."), clock)
 
 
 def reauthenticate(db: Session, session: AuthSession, now: datetime) -> str:

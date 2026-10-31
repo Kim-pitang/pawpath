@@ -1,4 +1,4 @@
-import { ShieldCheck, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import GoogleMark from '../components/GoogleMark';
@@ -32,7 +32,6 @@ export default function AccountPage() {
   const [params] = useSearchParams();
   const [summary, setSummary] = useState<AccountSummary | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [password, setPassword] = useState('');
   const [confirmWord, setConfirmWord] = useState('');
   const [error, setError] = useState<string | null>(GOOGLE_ERRORS[params.get('error') ?? ''] ?? null);
   const [busy, setBusy] = useState(false);
@@ -48,21 +47,6 @@ export default function AccountPage() {
   if (account && !signedIn) return <Navigate to="/login" replace state={{ from: '/account' }} />;
   if (loadError) return <ErrorNotice message={loadError} />;
   if (!summary) return <Loading />;
-
-  const confirmIdentity = async (event: FormEvent) => {
-    event.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      await api.reauthenticate(password);
-      setPassword('');
-      setSummary({ ...summary, reauth_required: false });
-    } catch (failure) {
-      setError((failure as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const remove = async (event: FormEvent) => {
     event.preventDefault();
@@ -108,7 +92,7 @@ export default function AccountPage() {
       <Card>
         <SectionTitle>대표 계정</SectionTitle>
         <p className="mb-3 text-sm text-ink-soft" data-testid="account-login">
-          {summary.provider === 'google' ? `Google 계정 (${account?.user?.email ?? 'Google'})` : `로그인: ${account?.user?.login_id ?? account?.user?.email ?? ''}`}
+          {`Google 계정 (${account?.user?.email ?? 'Google'})`}
         </p>
         <form onSubmit={rename} className="flex flex-col gap-3" noValidate>
           <label className="text-sm font-semibold">
@@ -153,7 +137,7 @@ export default function AccountPage() {
         <ul className="mt-3 flex list-disc flex-col gap-1 pl-4 text-xs text-ink-muted">
           {summary.data.shared_walks + summary.data.community_trails > 0 && <li>공유 링크와 공개 목록, 커뮤니티에서도 바로 사라져요.</li>}
           {summary.backup_retention_days !== null && <li>백업에 남은 사본은 {summary.backup_retention_days}일 안에 사라지고, 백업에서 복구해도 되살아나지 않아요.</li>}
-          {summary.provider === 'google' && <li>Google 계정은 그대로예요. PawPath 연결은 Google 계정 설정에서 해제할 수 있어요.</li>}
+          <li>Google 계정은 그대로예요. PawPath 연결은 Google 계정 설정에서 해제할 수 있어요.</li>
         </ul>
         {summary.data.saved_walks > 0 && (
           <LinkButton to="/my-walks" variant="ghost" className="mt-3 w-full">
@@ -168,29 +152,16 @@ export default function AccountPage() {
             </div>
           )}
           {summary.reauth_required ? (
-            summary.provider === 'google' ? (
-              <>
-                <p className="mb-3 text-sm font-semibold">탈퇴하려면 본인을 다시 확인해 주세요.</p>
-                <a
-                  href={api.googleReauthUrl()}
-                  className="inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-2xl border border-line bg-white px-5 text-sm font-bold text-ink transition hover:bg-cream"
-                >
-                  <GoogleMark />
-                  Google로 본인 확인
-                </a>
-              </>
-            ) : (
-              <form onSubmit={confirmIdentity} className="flex flex-col gap-3" noValidate>
-                <label className="text-sm font-semibold">
-                  탈퇴하려면 비밀번호를 다시 입력해 주세요
-                  <input className={INPUT_CLASS} type="password" value={password} maxLength={128} autoComplete="current-password" onChange={(event) => setPassword(event.target.value)} />
-                </label>
-                <Button type="submit" variant="ghost" disabled={busy || !password}>
-                  <ShieldCheck size={18} aria-hidden />
-                  {busy ? '확인 중이에요' : '본인 확인'}
-                </Button>
-              </form>
-            )
+            <>
+              <p className="mb-3 text-sm font-semibold">탈퇴하려면 본인을 다시 확인해 주세요.</p>
+              <a
+                href={api.googleReauthUrl()}
+                className="inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-2xl border border-line bg-white px-5 text-sm font-bold text-ink transition hover:bg-cream"
+              >
+                <GoogleMark />
+                Google로 본인 확인
+              </a>
+            </>
           ) : (
             <form onSubmit={remove} className="flex flex-col gap-3" noValidate>
               <label className="text-sm font-semibold">

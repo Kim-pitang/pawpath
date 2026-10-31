@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { signIn } from './login';
 
 const START: [number, number] = [37.5545, 126.9065];
 
@@ -73,7 +74,7 @@ test('다른 계정에는 내 산책길 코스가 보이지 않는다', async ({
   const courseId = new URL(await page.getByRole('link', { name: '지도에서 보기' }).evaluate((a: HTMLAnchorElement) => a.href)).searchParams.get('course');
 
   const other = await (await browser.newContext()).newPage();
-  expect((await other.request.post('/api/auth/signup', { data: { login_id: `other${Date.now()}`, password: 'walk-with-dubu-1', name: '다른 보호자' } })).status()).toBe(201);
+  await signIn(other, `other${Date.now()}`, '다른 보호자');
   await other.goto('/map');
   await expect(other.getByRole('list', { name: '코스 목록' })).toBeVisible();
   await expect(other.getByRole('list', { name: '코스 목록' }).getByRole('button', { name: new RegExp(name) })).toHaveCount(0);

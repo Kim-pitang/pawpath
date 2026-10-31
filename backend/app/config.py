@@ -82,6 +82,8 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
     # 콘솔에 등록한 "승인된 리디렉션 URI"와 글자 하나까지 같아야 한다.
     google_redirect_uri: str = "http://localhost:5173/api/auth/google/callback"
+    # 참이면 테스트 전용 로그인(POST /api/e2e/login)을 연다. 비밀번호 없이 아무 계정으로나 들어갈 수 있으므로 운영 서버에서는 켜지 않는다.
+    e2e_login: bool = False
 
     # 자동 백업. SQLite일 때 서버가 스스로 돌린다. 정책과 복구 방법은 docs/BACKUP.md에 있다.
     backup_enabled: bool = True
