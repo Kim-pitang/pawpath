@@ -50,6 +50,51 @@ def prepared_ways(elements: list[dict], origin: float) -> list[tuple[dict, list[
     return ways
 
 
+class SegmentGrid:
+    """선분을 격자 칸에 넣어 두고, 한 점에서 limit 안에 있는 선분만 훑게 한다. 전체를 훑는 것과 결과는 같다.
+
+    선분은 limit만큼 넓힌 상자가 닿는 모든 칸에 들어간다. 그래서 점이 속한 칸 하나만 보면 limit 안의 선분이 빠짐없이 나온다.
+    칸 안의 선분은 넣은 순서대로 있어, 거리가 같을 때 나중 선분을 고르는 기존 규칙도 그대로 지킨다.
+    """
+
+    CELL_M = 40.0
+
+    def __init__(self, limit: float):
+        self.limit = limit
+        self.cells: dict[tuple[int, int], list] = {}
+
+    def add(self, payload, a, b) -> None:
+        cell = self.CELL_M
+        x0, x1 = sorted((a[0], b[0]))
+        y0, y1 = sorted((a[1], b[1]))
+        for ix in range(math.floor((x0 - self.limit) / cell), math.floor((x1 + self.limit) / cell) + 1):
+            for iy in range(math.floor((y0 - self.limit) / cell), math.floor((y1 + self.limit) / cell) + 1):
+                self.cells.setdefault((ix, iy), []).append((payload, a, b))
+
+    def candidates(self, point) -> list:
+        return self.cells.get((math.floor(point[0] / self.CELL_M), math.floor(point[1] / self.CELL_M)), [])
+
+    def nearest(self, point):
+        best = None
+        best_distance = self.limit
+        for payload, a, b in self.candidates(point):
+            distance = point_segment_m(point, a, b)
+            if distance <= best_distance:
+                best, best_distance = payload, distance
+        return best
+
+    def within(self, point) -> bool:
+        return any(point_segment_m(point, a, b) <= self.limit for _, a, b in self.candidates(point))
+
+
+def way_grid(ways: list[tuple[dict, list[tuple[float, float]]]]) -> SegmentGrid:
+    grid = SegmentGrid(WAY_MATCH_M)
+    for tags, points in ways:
+        for a, b in zip(points, points[1:]):
+            grid.add(tags, a, b)
+    return grid
+
+
 def nearest_way(point, ways, limit: float) -> dict | None:
     best = None
     best_distance = limit
@@ -69,8 +114,9 @@ def measure_roads(samples, ways, origin) -> dict:
     road = {"pedestrian": 0, "local": 0, "major": 0, "unknown": 0}
     lit = {"yes": 0, "no": 0, "unknown": 0}
     surface = {"paved": 0, "unpaved": 0, "unknown": 0}
+    grid = way_grid(ways)
     for lat, lng in samples:
-        tags = nearest_way(to_xy(lat, lng, origin), ways, WAY_MATCH_M) or {}
+        tags = grid.nearest(to_xy(lat, lng, origin)) or {}
         kind = tags.get("highway")
         road["pedestrian" if kind in PEDESTRIAN else "local" if kind in LOCAL else "major" if kind in MAJOR else "unknown"] += 1
         value = tags.get("lit")
@@ -90,28 +136,39 @@ def point_in_polygon(point, polygon) -> bool:
     return inside
 
 
+def polygon_box(points) -> tuple[float, float, float, float]:
+    xs = [p[0] for p in points]
+    ys = [p[1] for p in points]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def inside_any(point, polygons) -> bool:
+    """면 안에 있는지. 상자 밖이면 자세히 보지 않는다."""
+    x, y = point
+    return any(x0 <= x <= x1 and y0 <= y <= y1 and point_in_polygon(point, polygon) for (x0, y0, x1, y1), polygon in polygons)
+
+
 def measure_trees(samples, elements, origin) -> float:
-    nodes = []
-    lines = []
+    nodes = SegmentGrid(TREE_MATCH_M)
+    lines = SegmentGrid(TREE_MATCH_M)
     polygons = []
     for element in elements:
         if element["type"] == "node":
-            nodes.append(to_xy(element["lat"], element["lon"], origin))
+            point = to_xy(element["lat"], element["lon"], origin)
+            nodes.add(None, point, point)  # 점은 길이 0인 선분으로 넣는다. 거리는 점까지의 거리와 같다.
             continue
         points = [to_xy(node["lat"], node["lon"], origin) for node in element.get("geometry") or []]
         if len(points) < 2:
             continue
-        lines.append(points)
+        for a, b in zip(points, points[1:]):
+            lines.add(None, a, b)
         if points[0] == points[-1] and len(points) >= 4:
-            polygons.append(points)
+            polygons.append((polygon_box(points), points))
 
     near = 0
     for lat, lng in samples:
         point = to_xy(lat, lng, origin)
-        close = any(math.hypot(point[0] - n[0], point[1] - n[1]) <= TREE_MATCH_M for n in nodes)
-        close = close or any(point_in_polygon(point, polygon) for polygon in polygons)
-        close = close or any(point_segment_m(point, a, b) <= TREE_MATCH_M for line in lines for a, b in zip(line, line[1:]))
-        near += close
+        near += nodes.within(point) or lines.within(point) or inside_any(point, polygons)
     return round(near / len(samples), 3)
 
 
@@ -120,8 +177,8 @@ def measure_parks(samples, elements, origin) -> float:
     for element in elements:
         points = [to_xy(node["lat"], node["lon"], origin) for node in element.get("geometry") or []]
         if len(points) >= 4 and points[0] == points[-1]:
-            polygons.append(points)
-    inside = sum(1 for lat, lng in samples if any(point_in_polygon(to_xy(lat, lng, origin), polygon) for polygon in polygons))
+            polygons.append((polygon_box(points), points))
+    inside = sum(1 for lat, lng in samples if inside_any(to_xy(lat, lng, origin), polygons))
     return round(inside / len(samples), 3)
 
 

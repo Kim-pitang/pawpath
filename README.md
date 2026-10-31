@@ -158,7 +158,7 @@ cp .env.example .env
 | `GENERATION_MAX_REQUESTS` | `11` | 길찾기 요청 상한(4~300). 시도 수 = 방위 × 배율 × 각도, 후보가 모자라면 보정 요청 몇 번 추가. 늘리면 `GENERATION_MAX_SECONDS`도 함께 올릴 것(기본 30초는 요청 약 27회에서 끝남) |
 | `GENERATION_POOL_SIZE` | `5` | 반려동물 평가 전에 남기는 서로 다른 후보 수. 평가 후 점수 높은 순으로 `GENERATION_MAX_RESULTS`개만 보여 줌 |
 | `GENERATION_MAX_RESULTS` | `5` | 화면에 돌려주는 후보 수(1~10) |
-| `ENVIRONMENT_PROVIDER` | `overpass` | 내 산책길을 추천 후보로 등록할 때 주변 환경을 OSM에서 측정. `none`이면 측정하지 않고 "확인 불가"로 표시. 산책길 만들기의 후보 평가는 이 값과 무관하게 미리 받아 둔 `backend/app/data/osm_*.json`을 쓴다(갱신: `scripts/collect_osm_area.py`, 공용 서버가 느려 지역당 20분 넘게 걸릴 수 있음) |
+| `ENVIRONMENT_PROVIDER` | `overpass` | 내 산책길을 추천 후보로 등록할 때 주변 환경을 OSM에서 측정. `none`이면 측정하지 않고 "확인 불가"로 표시. 산책길 만들기의 후보 평가는 이 값과 무관하게 pbf에서 미리 뽑아 둔 `backend/app/data/osm/<지역>/`(타일)을 쓴다(갱신: `scripts/extract_osm_tiles.py`, osmium-tool 필요, 서울 기준 15초. 저장소에는 서울만 있고 경기는 `python scripts/extract_osm_tiles.py gyeonggi <경기 pbf>`로 만든다) |
 | `RECOMMENDER_WEIGHTS` | (비움) | 추천 가중치 JSON. v2 예: `{"pet_fit":0.3,"feedback":0.1}`, v1 예: `{"weather":0.3,"safety":0.2}`. 잘못된 값이면 기본 가중치를 씀 |
 | `RECOMMENDER_VERSION` | `v2` | 추천 알고리즘. `v2`는 안전 단계를 먼저 적용하는 5개 묶음 모델, `v1`은 이전 6항목 가중합. 자세한 내용은 [추천 알고리즘](docs/RECOMMENDER.md) |
 | `LLM_PROVIDER` | `none` | 추천 문장 생성. `ollama`면 로컬 LLM 사용 |
@@ -411,7 +411,7 @@ frontend/
   src/components/    지도, 차트, 안전 평가, 공통 UI
   src/lib/           API 호출, 길 안내 계산, 위치 수집, 산책 기록 계산
   e2e/               브라우저 E2E
-scripts/             코스 경로 구축(build_courses.py), OSM 환경값 계산(enrich_courses.py), 지역 OSM 자료 수집(collect_osm_area.py), 테스트 DB 초기화(postgres-init/)
+scripts/             코스 경로 구축(build_courses.py), OSM 환경값 계산(enrich_courses.py), 환경 타일 추출(extract_osm_tiles.py), 테스트 DB 초기화(postgres-init/)
 docs/                아키텍처, API 명세, 추천 알고리즘, 검증 결과, 백업, PostgreSQL, 배포, GPX 코스, 외부 자원
 docker-compose.yml   개발용 PostgreSQL
 compose.prod.yaml    배포용 DB, API, 웹(nginx), 길찾기

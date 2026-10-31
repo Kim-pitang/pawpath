@@ -1,6 +1,6 @@
 """생성한 경로 후보가 이 반려견과 이 시간에 얼마나 맞는지 평가한다.
 
-길찾기로 만든 경로는 길이와 시간만 안다. 그래서 미리 수집해 둔 서비스 지역의 OpenStreetMap 자료(osm_area_service)로
+길찾기로 만든 경로는 길이와 시간만 안다. 그래서 pbf에서 미리 뽑아 둔 서비스 지역의 OpenStreetMap 자료(osm_area_service)로
 후보마다 도로·조명·노면·나무·공원을 측정하고, 미리 수집한 시설(공원, 화장실, 음수대, 동물병원)을 센 뒤,
 내 산책길을 추천 후보로 등록할 때와 같은 변환으로 추천 엔진 입력(CourseData)을 만들어 같은 엔진에 넣는다.
 새 점수 체계를 따로 두지 않으므로 반려견 성향, 날씨, 일정, 지난 피드백 학습이 그대로 반영된다.
@@ -50,21 +50,19 @@ class FitReport:
 
 
 def measure_candidates(routes: list[list[list[float]]]) -> list[dict | None]:
-    """후보마다 주변 환경 측정값. 미리 수집한 자료가 덮지 않는 곳이면 모두 None(확인 불가)이다."""
-    if not routes:
-        return []
-    area = osm_area_service.area_for([point for route in routes for point in route])
-    if area is None:
-        return [None] * len(routes)
+    """후보마다 주변 환경 측정값. 미리 뽑아 둔 자료가 덮지 않는 경로는 None(확인 불가)이다."""
     measured: list[dict | None] = []
     for route in routes:
+        area = osm_area_service.area_for(route)
+        if area is None:
+            measured.append(None)
+            continue
         lats = [p[0] for p in route]
         lngs = [p[1] for p in route]
         box = (min(lats) - MARGIN_DEG, min(lngs) - MARGIN_DEG, max(lats) + MARGIN_DEG, max(lngs) + MARGIN_DEG)
+        ways, trees, parks = area.elements(box)
         measured.append(
-            environment_service.measure_environment(
-                route, osm_area_service.near(area.ways, box), osm_area_service.near(area.trees, box), osm_area_service.near(area.parks, box), area.collected_on
-            )
+            environment_service.measure_environment(route, osm_area_service.near(ways, box), osm_area_service.near(trees, box), osm_area_service.near(parks, box), area.collected_on)
         )
     return measured
 
