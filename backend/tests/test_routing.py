@@ -134,3 +134,35 @@ def test_approach_endpoint_validates_input(client):
     assert client.post("/api/courses/1/approach", json={"latitude": 95, "longitude": 126.9}).status_code == 422
     assert client.post("/api/courses/1/approach", json={"latitude": 37.5, "longitude": 200}).status_code == 422
     assert client.post("/api/courses/1/approach", json={"latitude": 37.5}).status_code == 422
+
+
+def test_route_via_sends_all_waypoints_in_one_request_and_returns_snap_distances():
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "code": "Ok",
+                "routes": [{"distance": 900.0, "geometry": {"coordinates": [[126.9, 37.5], [126.91, 37.51], [126.9, 37.5]]}}],
+                "waypoints": [{"distance": 1.5}, {"distance": 20.0}, {"distance": 30.0}, {"distance": 1.5}],
+            },
+        )
+
+    path = router_with(handler).route_via([(37.5, 126.9), (37.51, 126.91), (37.52, 126.9), (37.5, 126.9)])
+    assert len(seen) == 1
+    assert seen[0].url.path.count(";") == 3
+    assert seen[0].url.params["continue_straight"] == "false"
+    assert seen[0].headers["user-agent"].startswith("PawPath/")
+    assert path.snap_distances_m == (1.5, 20.0, 30.0, 1.5)
+    assert path.points[1] == [37.51, 126.91]
+
+
+def test_route_via_failure_does_not_leak_coordinates():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500)
+
+    with pytest.raises(RoutingUnavailable) as caught:
+        router_with(handler).route_via([(37.5, 126.9), (37.51, 126.91)])
+    assert "37.5" not in str(caught.value) and "126.9" not in str(caught.value)
