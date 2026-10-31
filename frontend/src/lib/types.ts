@@ -323,6 +323,8 @@ export interface Walk {
   feedback: FeedbackBrief | null;
   tracking_source: TrackingSource;
   is_simulated: boolean;
+  /** 커뮤니티 산책길로 걸었으면 그 번호. 산책을 마친 뒤 후기로 잇는다. */
+  community_trail_id?: number | null;
 }
 
 export interface Insights {
@@ -508,6 +510,8 @@ export interface SavedWalkInput {
 }
 
 export interface SavedWalkSummary {
+  /** 커뮤니티에 공유한 상태. */
+  community_trail: { id: number; visibility: TrailVisibility } | null;
   id: number;
   pet_id: number | null;
   pet_name: string | null;
@@ -605,3 +609,127 @@ export interface Account {
   user: AccountUser | null;
 }
 
+// 산책길 커뮤니티
+export type TrailVisibility = 'public' | 'private';
+export type TrailSort = 'recent' | 'popular' | 'rating';
+export type TrailDifficulty = 'easy' | 'moderate' | 'hard';
+export type TrailFeature = 'park' | 'shade' | 'flat' | 'paved' | 'waterside' | 'forest' | 'quiet' | 'lit';
+export type TrailSuitable = 'small' | 'medium' | 'large' | 'senior' | 'puppy' | 'active' | 'timid';
+export type HideRadius = 100 | 200 | 300 | 500;
+
+export interface TrailSummary {
+  id: number;
+  title: string;
+  description: string;
+  region: string;
+  author_name: string;
+  cover_photo_id: number | null;
+  visibility: TrailVisibility;
+  features: TrailFeature[];
+  suitable_for: TrailSuitable[];
+  distance_m: number;
+  estimated_min: number;
+  elevation_gain_m: number | null;
+  difficulty: TrailDifficulty;
+  preview: number[][][];
+  view_count: number;
+  like_count: number;
+  bookmark_count: number;
+  review_count: number;
+  average_rating: number | null;
+  liked: boolean;
+  bookmarked: boolean;
+  is_mine: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Paged<T> {
+  items: T[];
+  total: number;
+  page: number;
+  size: number;
+  has_next: boolean;
+}
+
+export type TrailReactionPage = Paged<TrailSummary> & { hidden_count: number };
+
+export interface TrailNearby extends TrailSummary {
+  distance_from_me_m: number;
+}
+
+export interface TrailRecommended extends TrailSummary {
+  match_score: number;
+  reasons: string[];
+}
+
+export interface TrailReview {
+  id: number;
+  trail_id: number;
+  rating: number;
+  content: string;
+  author_name: string;
+  is_mine: boolean;
+  verified: boolean;
+  edited: boolean;
+  photos: { id: number }[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MyTrailReview extends TrailReview {
+  trail_available: boolean;
+  trail_title: string | null;
+}
+
+export interface TrailDetail extends TrailSummary {
+  route: number[][][];
+  start: number[];
+  end: number[];
+  start_label: string | null;
+  end_label: string | null;
+  can_navigate: boolean;
+  my_review: TrailReview | null;
+  walked: boolean;
+  owner: { saved_walk_id: number; hide_radius_m: number } | null;
+}
+
+export interface TrailPreview {
+  saved_walk_id: number;
+  hide_radius_m: number;
+  hidden_m: number;
+  region: string;
+  distance_m: number;
+  estimated_min: number;
+  elevation_gain_m: number | null;
+  difficulty: TrailDifficulty;
+  start_label: string | null;
+  end_label: string | null;
+  can_navigate: boolean;
+  route: number[][][];
+}
+
+export interface TrailInput {
+  title: string;
+  description: string;
+  cover_photo_id: number | null;
+  visibility: TrailVisibility;
+  region: string;
+  features: TrailFeature[];
+  suitable_for: TrailSuitable[];
+  hide_radius_m: HideRadius;
+}
+
+export interface TrailQuery {
+  q?: string;
+  region?: string;
+  min_km?: number;
+  max_km?: number;
+  min_minutes?: number;
+  max_minutes?: number;
+  difficulty?: TrailDifficulty;
+  suitable?: TrailSuitable;
+  sort?: TrailSort;
+  page?: number;
+  size?: number;
+}

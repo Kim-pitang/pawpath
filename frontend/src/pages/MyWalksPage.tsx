@@ -1,4 +1,4 @@
-import { FileUp, Footprints, Globe, Sparkles } from 'lucide-react';
+import { FileUp, Footprints, Globe, Sparkles, UsersRound } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import GuestNotice from '../components/GuestNotice';
@@ -7,7 +7,7 @@ import { Card, Chip, ChoiceGroup, EmptyState, ErrorNotice, LinkButton, Loading, 
 import { useApp } from '../context/AppContext';
 import { api } from '../lib/api';
 import { dateTimeLabel, distanceLabel, durationLabel } from '../lib/format';
-import { VISIBILITY_LABELS, WALK_SOURCE_LABELS } from '../lib/labels';
+import { TRAIL_VISIBILITY_LABELS, VISIBILITY_LABELS, WALK_SOURCE_LABELS } from '../lib/labels';
 import type { SavedWalkSort, SavedWalkSummary, Visibility } from '../lib/types';
 
 const SORT_OPTIONS: { value: SavedWalkSort; label: string }[] = [
@@ -112,6 +112,7 @@ export default function MyWalksPage() {
                   <div className="mt-1.5 flex flex-wrap gap-1">
                     <Chip tone={walk.visibility === 'private' ? 'neutral' : 'leaf'}>{VISIBILITY_LABELS[walk.visibility]}</Chip>
                     <Chip>{WALK_SOURCE_LABELS[walk.source_type]}</Chip>
+                    {walk.community_trail && <Chip tone={walk.community_trail.visibility === 'public' ? 'leaf' : 'neutral'}>커뮤니티 {TRAIL_VISIBILITY_LABELS[walk.community_trail.visibility]}</Chip>}
                   </div>
                 </div>
               </Link>
@@ -120,6 +121,10 @@ export default function MyWalksPage() {
         </ul>
       )}
 
+      <Link to="/community" className="flex min-h-11 items-center justify-center gap-1.5 text-sm font-semibold text-leaf-800 underline">
+        <UsersRound size={16} aria-hidden />
+        산책길 커뮤니티 둘러보기
+      </Link>
       <Link to="/public-walks" className="flex min-h-11 items-center justify-center gap-1.5 text-sm font-semibold text-leaf-800 underline">
         <Globe size={16} aria-hidden />
         공개된 산책길 둘러보기

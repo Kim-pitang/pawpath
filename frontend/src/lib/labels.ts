@@ -1,4 +1,4 @@
-import type { Visibility, WalkSourceType, Difficulty, Level, NoveltyReaction, PathPreference, Personality, Size, TimeBucket, WeatherScenario } from './types';
+import type { HideRadius, TrailDifficulty, TrailFeature, TrailSuitable, TrailVisibility, Visibility, WalkSourceType, Difficulty, Level, NoveltyReaction, PathPreference, Personality, Size, TimeBucket, WeatherScenario } from './types';
 
 export const SIZE_LABELS: Record<Size, string> = { small: '소형견', medium: '중형견', large: '대형견' };
 export const ACTIVITY_LABELS: Record<Level, string> = { low: '낮음', medium: '보통', high: '높음' };
@@ -78,9 +78,36 @@ export const WEATHER_SOURCE_LABELS: Record<string, string> = {
 
 export const VISIBILITY_LABELS: Record<Visibility, string> = { private: '비공개', link: '링크 공유', public: '공개' };
 export const VISIBILITY_HINTS: Record<Visibility, string> = {
-  private: '나만 볼 수 있어요. 공유 링크로도 열리지 않아요.',
+  private: '공유 링크와 공개 목록에 나오지 않아요. 커뮤니티 공유는 산책길 상세에서 따로 정해요.',
   link: '링크를 받은 사람만 볼 수 있어요.',
   public: '공개된 산책길 목록에 올라가 누구나 볼 수 있어요.',
 };
 export const WALK_SOURCE_LABELS: Record<WalkSourceType, string> = { recorded: '직접 기록', imported: 'GPX 가져옴', generated: '자동 생성' };
 
+export const TRAIL_VISIBILITY_LABELS: Record<TrailVisibility, string> = { public: '공개', private: '비공개' };
+export const TRAIL_DIFFICULTY_LABELS: Record<TrailDifficulty, string> = { easy: '가벼워요', moderate: '보통이에요', hard: '힘들어요' };
+export const TRAIL_FEATURE_LABELS: Record<TrailFeature, string> = {
+  park: '공원',
+  shade: '그늘',
+  flat: '평지',
+  paved: '포장길',
+  waterside: '물가',
+  forest: '숲길',
+  quiet: '한적해요',
+  lit: '밤에도 밝아요',
+};
+export const TRAIL_SUITABLE_LABELS: Record<TrailSuitable, string> = {
+  small: '소형견',
+  medium: '중형견',
+  large: '대형견',
+  senior: '노령견',
+  puppy: '어린 강아지',
+  active: '활동량 많은 아이',
+  timid: '겁 많은 아이',
+};
+export const HIDE_RADIUS_OPTIONS: { value: HideRadius; label: string }[] = [
+  { value: 100, label: '100m' },
+  { value: 200, label: '200m' },
+  { value: 300, label: '300m' },
+  { value: 500, label: '500m' },
+];

@@ -53,10 +53,14 @@ class CourseError(ValueError):
 
 
 def joined_route(walk: SavedWalk) -> list[list[float]]:
+    return join_points(walk.points)
+
+
+def join_points(points) -> list[list[float]]:
     """구간을 이어 하나의 경로로 만든다. 구간 사이가 멀면 거부한다."""
     route: list[list[float]] = []
     segment = None
-    for point in walk.points:
+    for point in points:
         here = [point.latitude, point.longitude]
         if route and point.segment != segment:
             gap = haversine_m(*route[-1], *here)

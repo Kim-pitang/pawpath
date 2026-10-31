@@ -1,11 +1,13 @@
 import { Route, Routes } from 'react-router-dom';
 import Layout from './components/Layout';
+import CommunityPage from './pages/CommunityPage';
 import GeneratePage from './pages/GeneratePage';
 import GpxImportPage from './pages/GpxImportPage';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import MapPage from './pages/MapPage';
 import MyPage from './pages/MyPage';
+import MyTrailsPage from './pages/MyTrailsPage';
 import MyWalkDetailPage from './pages/MyWalkDetailPage';
 import MyWalksPage from './pages/MyWalksPage';
 import NavigatePage from './pages/NavigatePage';
@@ -17,6 +19,8 @@ import RecordPage from './pages/RecordPage';
 import ReportPage from './pages/ReportPage';
 import SchedulePage from './pages/SchedulePage';
 import SharedWalkPage from './pages/SharedWalkPage';
+import TrailDetailPage from './pages/TrailDetailPage';
+import TrailSharePage from './pages/TrailSharePage';
 import WalkPage from './pages/WalkPage';
 
 export default function App() {
@@ -43,6 +47,11 @@ export default function App() {
         <Route path="generate" element={<GeneratePage />} />
         <Route path="my-walks/:walkId" element={<MyWalkDetailPage />} />
         <Route path="public-walks" element={<PublicWalksPage />} />
+        <Route path="community" element={<CommunityPage />} />
+        <Route path="community/share" element={<TrailSharePage />} />
+        <Route path="community/my" element={<MyTrailsPage />} />
+        <Route path="community/trails/:trailId" element={<TrailDetailPage />} />
+        <Route path="community/trails/:trailId/edit" element={<TrailSharePage />} />
       </Route>
     </Routes>
   );

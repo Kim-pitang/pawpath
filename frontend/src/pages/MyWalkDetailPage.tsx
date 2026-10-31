@@ -1,14 +1,15 @@
-import { Copy, Download, Link2, Pencil, Share2, Trash2, Unlink } from 'lucide-react';
+import { Copy, Download, Link2, Pencil, Share2, Trash2, Unlink, UsersRound } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Button, Card, Chip, ChoiceGroup, ErrorNotice, InfoNotice, Loading, PageTitle, SectionTitle } from '../components/ui';
+import { Button, Card, Chip, ChoiceGroup, ErrorNotice, InfoNotice, LinkButton, Loading, PageTitle, SectionTitle } from '../components/ui';
 import WalkDetailsForm, { PRIVACY_WARNING, type WalkDetailsValue } from '../components/WalkDetailsForm';
 import CourseCandidatePanel from '../components/CourseCandidatePanel';
 import WalkPhotos from '../components/WalkPhotos';
 import WalkRouteMap from '../components/WalkRouteMap';
+import { useApp } from '../context/AppContext';
 import { api } from '../lib/api';
 import { dateTimeLabel, distanceLabel, durationLabel, speedLabel } from '../lib/format';
-import { VISIBILITY_LABELS, WALK_SOURCE_LABELS } from '../lib/labels';
+import { TRAIL_VISIBILITY_LABELS, VISIBILITY_LABELS, WALK_SOURCE_LABELS } from '../lib/labels';
 import type { LatLng } from '../lib/navigation';
 import type { SavedWalkDetail } from '../lib/types';
 
@@ -67,7 +68,8 @@ export default function MyWalkDetailPage() {
   };
 
   const remove = async () => {
-    if (!window.confirm(`"${walk.title}"을 삭제할까요? 되돌릴 수 없고, 공유 링크도 함께 사라져요.`)) return;
+    const shared = walk.community_trail ? ' 커뮤니티에 공유한 글과 좋아요, 저장, 후기도 함께 지워져요.' : '';
+    if (!window.confirm(`"${walk.title}"을 삭제할까요? 되돌릴 수 없고, 공유 링크도 함께 사라져요.${shared}`)) return;
     try {
       await api.deleteSavedWalk(id);
       navigate('/my-walks', { replace: true });
@@ -116,6 +118,8 @@ export default function MyWalkDetailPage() {
         GPX 다운로드
       </a>
 
+      <CommunityPanel walk={walk} />
+
       <SharePanel walk={walk} onChange={setWalk} onError={setError} />
 
       {editing ? (
@@ -157,6 +161,43 @@ function Info({ label, value }: { label: string; value: string }) {
       <dt className="text-xs text-ink-muted">{label}</dt>
       <dd className="mt-0.5 text-base font-bold text-ink">{value}</dd>
     </div>
+  );
+}
+
+function CommunityPanel({ walk }: { walk: SavedWalkDetail }) {
+  const { account } = useApp();
+  const trail = walk.community_trail;
+  return (
+    <Card>
+      <SectionTitle action={trail ? <Chip tone={trail.visibility === 'public' ? 'leaf' : 'neutral'}>{TRAIL_VISIBILITY_LABELS[trail.visibility]}</Chip> : undefined}>산책길 커뮤니티</SectionTitle>
+      <div data-testid="community-panel">
+        {trail ? (
+          <>
+            <p className="mb-3 text-sm text-ink-soft">커뮤니티에 공유한 산책길이에요. 출발점과 도착점 주변을 가린 경로만 공개돼요.</p>
+            <LinkButton to={`/community/trails/${trail.id}`} variant="ghost" className="w-full">
+              <UsersRound size={16} aria-hidden />
+              공유한 산책길 보기
+            </LinkButton>
+          </>
+        ) : account?.authenticated ? (
+          <>
+            <p className="mb-3 text-sm text-ink-soft">이 길을 다른 보호자와 나눠 보세요. 출발점과 도착점 주변은 가리고, 걸은 시각과 메모는 공개되지 않아요.</p>
+            <LinkButton to={`/community/share?walk=${walk.id}`} variant="accent" className="w-full">
+              <UsersRound size={16} aria-hidden />
+              커뮤니티에 공유하기
+            </LinkButton>
+          </>
+        ) : (
+          <p className="text-sm text-ink-soft">
+            커뮤니티 공유는{' '}
+            <Link to="/login" className="font-bold underline">
+              로그인
+            </Link>
+            한 뒤 쓸 수 있어요.
+          </p>
+        )}
+      </div>
+    </Card>
   );
 }
 

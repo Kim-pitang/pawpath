@@ -11,13 +11,13 @@ from app import schemas
 from app.clock import now_local, to_local
 from app.database import get_db
 from app.config import get_settings
-from app.models import Pet, Recommendation, SavedWalk, SavedWalkPhoto, User, WalkFeedback, WalkHistory, WalkingCourse
+from app.models import CommunityTrail, Pet, Recommendation, SavedWalk, SavedWalkPhoto, TrailBookmark, TrailLike, TrailReview, TrailReviewPhoto, User, WalkFeedback, WalkHistory, WalkingCourse
 from app.recommender.features import build_features
 from app.recommender.safety import DEMO, FORECAST, assess_conditions, assess_course, assessment_payload
 from app.recommender.timeslots import evaluate_slot, hour_comfort, is_rainy
 from app.recommender.types import FeedbackInput
 from app.seed import DEFAULT_USER_ID
-from app.services import auth_service, google_auth_service, saved_walk_service
+from app.services import auth_service, community_service, google_auth_service, saved_walk_service
 from app.services.alternative_service import ALL_DAY, evaluate_alternative
 from app.services.gpx_service import MAX_GPX_BYTES, GpxError, build_gpx, content_disposition, parse_gpx
 from app.services.llm_service import enhance_recommendation
@@ -65,10 +65,32 @@ def viewer(request: Request, db: Session = Depends(get_db)) -> User | None:
     return db.get(User, DEFAULT_USER_ID)
 
 
+def signed_in_user(request: Request, db: Session = Depends(get_db)) -> User:
+    """실제로 로그인한 보호자. 커뮤니티에 글을 남기는 API는 시연 보호자를 인정하지 않는다."""
+    token = request.cookies.get(auth_service.SESSION_COOKIE)
+    if not token:
+        raise HTTPException(401, "로그인이 필요해요.")
+    user = auth_service.user_for_token(db, token, now_local())
+    if user is None:
+        raise HTTPException(401, "로그인이 만료되었어요. 다시 로그인해 주세요.", headers={"Set-Cookie": auth_service.EXPIRED_COOKIE})
+    return user
+
+
+def signed_in_viewer(request: Request, db: Session = Depends(get_db)) -> User | None:
+    """커뮤니티를 보는 사람. 로그인하지 않았으면 비어 있다. 시연 보호자로 바꾸지 않아 서로의 좋아요가 섞이지 않는다."""
+    token = request.cookies.get(auth_service.SESSION_COOKIE)
+    return auth_service.user_for_token(db, token, now_local()) if token else None
+
+
 def _visible_course(db: Session, course_id: int, user: User | None) -> WalkingCourse:
     """공용 코스이거나 내 코스일 때만 돌려준다. 다른 보호자의 코스는 없는 것과 같다."""
     course = db.get(WalkingCourse, course_id)
-    if course is None or (course.owner_user_id is not None and (user is None or course.owner_user_id != user.id)):
+    if course is not None and course.community_trail_id is not None:
+        if not community_service.course_open_to(db, course, user):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "코스를 찾을 수 없습니다")
+        return course
+    # 공유를 해제해 경로를 지운 커뮤니티 코스는 산책 기록을 위해 행만 남아 있다.
+    if course is None or not course.route or (course.owner_user_id is not None and (user is None or course.owner_user_id != user.id)):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "코스를 찾을 수 없습니다")
     return course
 
@@ -621,6 +643,7 @@ def _walk_response(walk: WalkHistory) -> dict:
         "ended_at": walk.ended_at,
         "duration_min": walk.duration_min,
         "feedback": walk.feedback,
+        "community_trail_id": walk.course.community_trail_id,
     }
 
 
@@ -876,6 +899,8 @@ def delete_saved_walk(walk_id: int, db: Session = Depends(get_db), user: User = 
     walk = _get_saved_walk(db, walk_id, user)
     # 이 코스로 남긴 산책 기록이 있을 수 있어 코스는 지우지 않고 추천에서만 뺀다.
     user_course_service.detach(db, walk)
+    # 커뮤니티에 공유한 글과 좋아요, 저장, 후기도 함께 지워진다.
+    community_service.before_walk_deleted(db, walk)
     db.delete(walk)
     db.commit()
 
@@ -972,7 +997,9 @@ def get_photo(walk_id: int, photo_id: int, db: Session = Depends(get_db), user: 
 
 @router.delete("/my-walks/{walk_id}/photos/{photo_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["나만의 산책길"])
 def delete_photo(walk_id: int, photo_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> None:
-    db.delete(_get_photo(db, _get_saved_walk(db, walk_id, user), photo_id))
+    photo = _get_photo(db, _get_saved_walk(db, walk_id, user), photo_id)
+    community_service.clear_cover(db, photo)
+    db.delete(photo)
     db.commit()
 
 
@@ -1004,4 +1031,274 @@ def export_shared_walk(token: str, db: Session = Depends(get_db)) -> Response:
 @router.get("/public-walks", response_model=list[schemas.PublicWalkSummary], tags=["공유"])
 def list_public_walks(db: Session = Depends(get_db)) -> list[dict]:
     return [saved_walk_service.public_summary(walk) for walk in saved_walk_service.list_public_walks(db)]
+
+
+# 산책길 커뮤니티
+PAGE_SIZE = Query(default=12, ge=1, le=50)
+PHOTO_HEADERS = {"Cache-Control": "private, max-age=300", "X-Content-Type-Options": "nosniff", "Content-Disposition": "inline"}
+
+
+def _get_trail(db: Session, trail_id: int, viewer_user: User | None) -> CommunityTrail:
+    """공개 산책길이거나 내 산책길일 때만 돌려준다. 다른 보호자의 비공개 산책길은 없는 것과 같다."""
+    trail = db.get(CommunityTrail, trail_id)
+    if trail is None or not community_service.can_view(trail, viewer_user):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "산책길을 찾을 수 없습니다")
+    return trail
+
+
+def _own_trail(db: Session, trail_id: int, user: User) -> CommunityTrail:
+    trail = _get_trail(db, trail_id, user)
+    if trail.user_id != user.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "내가 공유한 산책길만 고칠 수 있어요.")
+    return trail
+
+
+def _own_review(db: Session, review_id: int, user: User) -> TrailReview:
+    review = db.get(TrailReview, review_id)
+    if review is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "후기를 찾을 수 없습니다")
+    if review.user_id != user.id:
+        # 볼 수 없는 산책길의 후기라면 있다는 것도 알리지 않는다.
+        _get_trail(db, review.community_trail_id, user)
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "내가 쓴 후기만 고칠 수 있어요.")
+    return review
+
+
+@router.post("/community/trails/preview", response_model=schemas.TrailPreview, tags=["산책길 커뮤니티"])
+def preview_trail(body: schemas.TrailPreviewRequest, db: Session = Depends(get_db), user: User = Depends(signed_in_user)) -> dict:
+    """출발점과 도착점 주변을 가린 뒤 실제로 공개될 경로를 미리 보여 준다. 저장하지 않는다."""
+    walk = _get_saved_walk(db, body.saved_walk_id, user)
+    try:
+        return community_service.preview_public(walk, body.hide_radius_m)
+    except community_service.CommunityError as error:
+        raise HTTPException(error.status_code, error.message) from error
+
+
+@router.post("/community/trails/nearby", response_model=list[schemas.TrailNearby], tags=["산책길 커뮤니티"])
+def nearby_trails(body: schemas.TrailNearbyRequest, db: Session = Depends(get_db), viewer_user: User | None = Depends(signed_in_viewer)) -> list[dict]:
+    """가까운 공개 산책길. 위치는 저장하지 않으며, 로그에 남지 않도록 본문으로 받는다."""
+    return community_service.nearby_trails(db, viewer_user, body.latitude, body.longitude, body.radius_km, body.limit)
+
+
+@router.get("/community/trails/recommended", response_model=list[schemas.TrailRecommended], tags=["산책길 커뮤니티"])
+def recommended_trails(
+    pet_id: int,
+    limit: int = Query(default=6, ge=1, le=20),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+    viewer_user: User | None = Depends(signed_in_viewer),
+) -> list[dict]:
+    """반려동물의 권장 거리, 보호자가 표시한 추천 대상, 학습된 취향, 평점으로 고른 공개 산책길."""
+    return community_service.recommend_trails(db, viewer_user, _get_pet(db, pet_id, user), limit)
+
+
+@router.get("/community/regions", response_model=list[schemas.TrailRegionRead], tags=["산책길 커뮤니티"])
+def trail_regions(db: Session = Depends(get_db)) -> list[dict]:
+    return community_service.list_regions(db)
+
+
+@router.get("/community/trails", response_model=schemas.TrailPage, tags=["산책길 커뮤니티"])
+def list_trails(
+    filters: schemas.TrailFilters = Depends(),
+    page: int = Query(default=1, ge=1),
+    size: int = PAGE_SIZE,
+    db: Session = Depends(get_db),
+    viewer_user: User | None = Depends(signed_in_viewer),
+) -> dict:
+    """공개 산책길 목록. 로그인 없이 볼 수 있다."""
+    return community_service.list_trails(db, viewer_user, filters, page, size)
+
+
+@router.post("/community/trails", response_model=schemas.TrailDetail, status_code=status.HTTP_201_CREATED, tags=["산책길 커뮤니티"])
+def create_trail(body: schemas.TrailCreate, db: Session = Depends(get_db), user: User = Depends(signed_in_user)) -> dict:
+    """저장한 산책길을 커뮤니티에 공유한다. 좌표를 복사하지 않고 원본을 참조한다."""
+    walk = _get_saved_walk(db, body.saved_walk_id, user)
+    try:
+        trail = community_service.create_trail(db, user, walk, body, now_local())
+    except community_service.CommunityError as error:
+        raise HTTPException(error.status_code, error.message) from error
+    return community_service.trail_detail(db, trail, user)
+
+
+@router.get("/community/trails/{trail_id}", response_model=schemas.TrailDetail, tags=["산책길 커뮤니티"])
+def get_trail(trail_id: int, db: Session = Depends(get_db), viewer_user: User | None = Depends(signed_in_viewer)) -> dict:
+    return community_service.trail_detail(db, _get_trail(db, trail_id, viewer_user), viewer_user)
+
+
+@router.patch("/community/trails/{trail_id}", response_model=schemas.TrailDetail, tags=["산책길 커뮤니티"])
+def update_trail(trail_id: int, body: schemas.TrailUpdate, db: Session = Depends(get_db), user: User = Depends(signed_in_user)) -> dict:
+    trail = _own_trail(db, trail_id, user)
+    changes = body.model_dump(exclude_unset=True)
+    # 대표 이미지만 비울 수 있다. 나머지 항목을 null로 보내면 저장하지 않고 알려 준다.
+    cleared = [key for key, value in changes.items() if value is None and key != "cover_photo_id"]
+    if cleared:
+        raise HTTPException(422, f"비울 수 없는 항목이에요: {', '.join(cleared)}")
+    try:
+        return community_service.trail_detail(db, community_service.update_trail(db, trail, changes), user)
+    except community_service.CommunityError as error:
+        raise HTTPException(error.status_code, error.message) from error
+
+
+@router.delete("/community/trails/{trail_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["산책길 커뮤니티"])
+def delete_trail(trail_id: int, db: Session = Depends(get_db), user: User = Depends(signed_in_user)) -> None:
+    """공유를 해제한다. 원본 산책길은 남고, 좋아요와 저장, 후기는 함께 지운다."""
+    community_service.delete_trail(db, _own_trail(db, trail_id, user))
+
+
+@router.post("/community/trails/{trail_id}/view", status_code=status.HTTP_204_NO_CONTENT, tags=["산책길 커뮤니티"])
+def view_trail(trail_id: int, db: Session = Depends(get_db), viewer_user: User | None = Depends(signed_in_viewer)) -> None:
+    """조회수를 올린다. 화면이 세션마다 한 번만 부른다."""
+    community_service.count_view(db, _get_trail(db, trail_id, viewer_user), viewer_user)
+
+
+@router.get("/community/trails/{trail_id}/gpx", tags=["산책길 커뮤니티"])
+def export_trail(trail_id: int, db: Session = Depends(get_db), viewer_user: User | None = Depends(signed_in_viewer)) -> Response:
+    """공개용 GPX. 가린 경로만 담고 시각, 고도, 원본 이름, 메모, 작성자, 날짜를 넣지 않는다."""
+    trail = _get_trail(db, trail_id, viewer_user)
+    return Response(
+        build_gpx(trail.title, community_service.trail_points(trail), include_details=False),
+        media_type=GPX_MEDIA_TYPE,
+        headers={"Content-Disposition": content_disposition(trail.title, None)},
+    )
+
+
+@router.get("/community/trails/{trail_id}/cover", tags=["산책길 커뮤니티"])
+def trail_cover(trail_id: int, db: Session = Depends(get_db), viewer_user: User | None = Depends(signed_in_viewer)) -> Response:
+    """주인이 대표로 고른 사진 한 장만 공개한다. 산책길의 다른 사진은 열지 않는다."""
+    trail = _get_trail(db, trail_id, viewer_user)
+    photo = db.get(SavedWalkPhoto, trail.cover_photo_id) if trail.cover_photo_id else None
+    if photo is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "대표 이미지가 없습니다")
+    return Response(photo.data, media_type=photo.content_type, headers=PHOTO_HEADERS)
+
+
+@router.post("/community/trails/{trail_id}/start", response_model=schemas.TrailCourseRead, tags=["산책길 커뮤니티"])
+def start_trail(trail_id: int, db: Session = Depends(get_db), viewer_user: User | None = Depends(signed_in_viewer)) -> dict:
+    """이 산책길로 길 안내를 받을 코스 번호를 돌려준다. 산책길마다 코스는 하나만 만든다."""
+    trail = _get_trail(db, trail_id, viewer_user)
+    try:
+        return {"course_id": community_service.start_course(db, trail).id}
+    except community_service.CommunityError as error:
+        raise HTTPException(error.status_code, error.message) from error
+
+
+@router.post("/community/trails/{trail_id}/like", response_model=schemas.LikeState, tags=["산책길 커뮤니티"])
+def like_trail(trail_id: int, db: Session = Depends(get_db), user: User = Depends(signed_in_user)) -> dict:
+    return {"liked": True, "like_count": community_service.set_reaction(db, TrailLike, user, _get_trail(db, trail_id, user), True)}
+
+
+@router.delete("/community/trails/{trail_id}/like", response_model=schemas.LikeState, tags=["산책길 커뮤니티"])
+def unlike_trail(trail_id: int, db: Session = Depends(get_db), user: User = Depends(signed_in_user)) -> dict:
+    return {"liked": False, "like_count": community_service.set_reaction(db, TrailLike, user, _get_trail(db, trail_id, user), False)}
+
+
+@router.post("/community/trails/{trail_id}/bookmark", response_model=schemas.BookmarkState, tags=["산책길 커뮤니티"])
+def bookmark_trail(trail_id: int, db: Session = Depends(get_db), user: User = Depends(signed_in_user)) -> dict:
+    return {"bookmarked": True, "bookmark_count": community_service.set_reaction(db, TrailBookmark, user, _get_trail(db, trail_id, user), True)}
+
+
+@router.delete("/community/trails/{trail_id}/bookmark", response_model=schemas.BookmarkState, tags=["산책길 커뮤니티"])
+def unbookmark_trail(trail_id: int, db: Session = Depends(get_db), user: User = Depends(signed_in_user)) -> dict:
+    return {"bookmarked": False, "bookmark_count": community_service.set_reaction(db, TrailBookmark, user, _get_trail(db, trail_id, user), False)}
+
+
+@router.get("/community/trails/{trail_id}/reviews", response_model=schemas.ReviewPage, tags=["산책길 커뮤니티"])
+def list_reviews(
+    trail_id: int,
+    page: int = Query(default=1, ge=1),
+    size: int = PAGE_SIZE,
+    db: Session = Depends(get_db),
+    viewer_user: User | None = Depends(signed_in_viewer),
+) -> dict:
+    return community_service.list_reviews(db, _get_trail(db, trail_id, viewer_user), viewer_user, page, size)
+
+
+@router.post("/community/trails/{trail_id}/reviews", response_model=schemas.ReviewRead, status_code=status.HTTP_201_CREATED, tags=["산책길 커뮤니티"])
+def create_review(trail_id: int, body: schemas.ReviewCreate, db: Session = Depends(get_db), user: User = Depends(signed_in_user)) -> dict:
+    """산책길마다 한 번만 남긴다. 이 산책길을 GPS로 걸은 기록이 있으면 산책 인증이 붙는다."""
+    trail = _get_trail(db, trail_id, user)
+    try:
+        review = community_service.create_review(db, user, trail, body.rating, body.content, now_local())
+    except community_service.CommunityError as error:
+        raise HTTPException(error.status_code, error.message) from error
+    return community_service.review_items(db, [review], user)[0]
+
+
+@router.patch("/community/reviews/{review_id}", response_model=schemas.ReviewRead, tags=["산책길 커뮤니티"])
+def update_review(review_id: int, body: schemas.ReviewUpdate, db: Session = Depends(get_db), user: User = Depends(signed_in_user)) -> dict:
+    review = _own_review(db, review_id, user)
+    changes = body.model_dump(exclude_unset=True)
+    cleared = [key for key, value in changes.items() if value is None]
+    if cleared:
+        raise HTTPException(422, f"비울 수 없는 항목이에요: {', '.join(cleared)}")
+    return community_service.review_items(db, [community_service.update_review(db, review, changes, now_local())], user)[0]
+
+
+@router.delete("/community/reviews/{review_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["산책길 커뮤니티"])
+def delete_review(review_id: int, db: Session = Depends(get_db), user: User = Depends(signed_in_user)) -> None:
+    db.delete(_own_review(db, review_id, user))
+    db.commit()
+
+
+@router.post("/community/reviews/{review_id}/photos", response_model=schemas.ReviewPhotoRead, status_code=status.HTTP_201_CREATED, tags=["산책길 커뮤니티"])
+def upload_review_photo(
+    review_id: int,
+    data: bytes = Depends(_read_photo_body),
+    db: Session = Depends(get_db),
+    user: User = Depends(signed_in_user),
+) -> TrailReviewPhoto:
+    """산책길 사진과 같은 검사를 거친다. 형식은 파일 내용으로 판단하고 촬영 위치 같은 메타데이터를 지운다."""
+    review = _own_review(db, review_id, user)
+    if len(review.photos) >= community_service.MAX_REVIEW_PHOTOS:
+        raise HTTPException(status.HTTP_409_CONFLICT, f"후기 사진은 {community_service.MAX_REVIEW_PHOTOS}장까지 올릴 수 있어요.")
+    try:
+        content_type, cleaned = clean_image(data)
+    except PhotoError as error:
+        raise HTTPException(422, str(error)) from error
+    photo = TrailReviewPhoto(review=review, content_type=content_type, data=cleaned, size_bytes=len(cleaned))
+    db.add(photo)
+    db.commit()
+    return photo
+
+
+def _get_review_photo(db: Session, review_id: int, photo_id: int) -> TrailReviewPhoto:
+    photo = db.get(TrailReviewPhoto, photo_id)
+    if photo is None or photo.review_id != review_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "사진을 찾을 수 없습니다")
+    return photo
+
+
+@router.get("/community/reviews/{review_id}/photos/{photo_id}", tags=["산책길 커뮤니티"])
+def get_review_photo(review_id: int, photo_id: int, db: Session = Depends(get_db), viewer_user: User | None = Depends(signed_in_viewer)) -> Response:
+    photo = _get_review_photo(db, review_id, photo_id)
+    if viewer_user is None or photo.review.user_id != viewer_user.id:
+        _get_trail(db, photo.review.community_trail_id, viewer_user)
+    return Response(photo.data, media_type=photo.content_type, headers=PHOTO_HEADERS)
+
+
+@router.delete("/community/reviews/{review_id}/photos/{photo_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["산책길 커뮤니티"])
+def delete_review_photo(review_id: int, photo_id: int, db: Session = Depends(get_db), user: User = Depends(signed_in_user)) -> None:
+    review = _own_review(db, review_id, user)
+    db.delete(_get_review_photo(db, review.id, photo_id))
+    db.commit()
+
+
+@router.get("/community/my/trails", response_model=schemas.TrailPage, tags=["산책길 커뮤니티"])
+def my_trails(page: int = Query(default=1, ge=1), size: int = PAGE_SIZE, db: Session = Depends(get_db), user: User = Depends(signed_in_user)) -> dict:
+    return community_service.my_trails(db, user, page, size)
+
+
+@router.get("/community/my/bookmarks", response_model=schemas.TrailReactionPage, tags=["산책길 커뮤니티"])
+def my_bookmarks(page: int = Query(default=1, ge=1), size: int = PAGE_SIZE, db: Session = Depends(get_db), user: User = Depends(signed_in_user)) -> dict:
+    return community_service.my_reactions(db, TrailBookmark, user, page, size)
+
+
+@router.get("/community/my/likes", response_model=schemas.TrailReactionPage, tags=["산책길 커뮤니티"])
+def my_likes(page: int = Query(default=1, ge=1), size: int = PAGE_SIZE, db: Session = Depends(get_db), user: User = Depends(signed_in_user)) -> dict:
+    return community_service.my_reactions(db, TrailLike, user, page, size)
+
+
+@router.get("/community/my/reviews", response_model=schemas.MyReviewPage, tags=["산책길 커뮤니티"])
+def my_reviews(page: int = Query(default=1, ge=1), size: int = PAGE_SIZE, db: Session = Depends(get_db), user: User = Depends(signed_in_user)) -> dict:
+    return community_service.my_reviews(db, user, page, size)
 

@@ -2,9 +2,9 @@ const SIZE = 72;
 const PADDING = 8;
 
 /** 목록용 경로 그림. 지도 타일을 받지 않아 카드가 많아도 가볍다. */
-export default function RouteThumbnail({ segments, label }: { segments: number[][][]; label: string }) {
+export default function RouteThumbnail({ segments, label, size = SIZE }: { segments: number[][][]; label: string; size?: number }) {
   const points = segments.flat();
-  if (points.length === 0) return <div className="h-[72px] w-[72px] shrink-0 rounded-2xl bg-cream-deep" />;
+  if (points.length === 0) return <div style={{ width: size, height: size }} className="shrink-0 rounded-2xl bg-cream-deep" />;
 
   const lats = points.map((point) => point[0]);
   const lngs = points.map((point) => point[1]);
@@ -22,7 +22,7 @@ export default function RouteThumbnail({ segments, label }: { segments: number[]
   const [endX, endY] = project(points[points.length - 1]);
 
   return (
-    <svg viewBox={`0 0 ${SIZE} ${SIZE}`} width={SIZE} height={SIZE} role="img" aria-label={label} className="shrink-0 rounded-2xl bg-leaf-50" data-testid="route-thumbnail">
+    <svg viewBox={`0 0 ${SIZE} ${SIZE}`} width={size} height={size} role="img" aria-label={label} className="shrink-0 rounded-2xl bg-leaf-50" data-testid="route-thumbnail">
       {segments.map((segment, index) => (
         <polyline
           key={index}

@@ -201,6 +201,37 @@ ID 토큰은 서버가 Google 토큰 엔드포인트에서 HTTPS로 직접 받�
 
 시드 코스는 `unknown`이 비어 있어 기존 추천 결과가 바뀌지 않습니다. OSM 측정 함수는 시드 코스를 만든 `scripts/enrich_courses.py`와 같은 모듈을 쓰며, 옮긴 뒤 스크립트로 개포동 데이터를 다시 만들어 한 글자도 달라지지 않음을 확인했습니다.
 
+## 산책길 커뮤니티
+
+기존 산책 경험을 잇는 계층입니다. `community_service.py`가 맡고, 경로는 `saved_walk_points`를 그대로 씁니다.
+
+```mermaid
+flowchart LR
+    R[GPS 기록 또는 GPX] --> W[saved_walks]
+    W -->|공유, 좌표 복사 없음| T[community_trails]
+    T -->|가린 경로로 만든 코스 1개| C[walking_courses]
+    C --> N[GPS 길 안내]
+    N --> H[walk_histories]
+    H -->|GPS로 절반 이상 걸음| V[산책 인증]
+    T --> L[좋아요, 저장, 후기]
+    V --> L
+```
+
+| 결정 | 이유 |
+|---|---|
+| `saved_walks.visibility`를 쓰지 않고 `community_trails`를 더함 | 원본 이름과 메모는 개인 기록이고, 기존 공유는 가리지 않은 경로를 내보냄. 공유 글은 자기 제목과 공개 값을 가져야 함. 산책길마다 1건(`saved_walk_id` 고유) |
+| 좌표는 복사하지 않음 | 상세와 GPX는 요청 때 원본에서 가림. 목록에 쓰는 거리, 시간, 난이도, 출발점, 썸네일만 가린 뒤 계산해 저장 |
+| 반경 방식으로 가림 (`public_points`) | 앞뒤 거리만 자르면 집 앞을 다시 지나는 경로가 드러남. 반경 안의 지점을 모두 빼고 구간을 나눔. 지점이 드물면 두 지점 사이 선이 반경을 지나는지도 봄 |
+| 가리는 반경은 주인에게만 알려 줌 | 반경을 알면 경로가 끊긴 곳들로 원본 출발점을 되짚을 수 있음 |
+| 좋아요 수와 평점은 저장하지 않음 | 읽을 때 집계해 행과 어긋날 일이 없음. 고유 제약으로 중복을 막음 |
+| 글을 쓰는 API는 `signed_in_user` | `current_user`는 로그인하지 않으면 시연 보호자라 쓰면 비로그인 제한이 뚫림. 보기는 `signed_in_viewer`로 시연 보호자와 분리 |
+| 길 안내는 `walking_courses`로 연결 | 코스를 쓰는 길 안내, 산책 기록, 피드백, 리포트를 고치지 않고 재사용. 산책길마다 하나를 처음 시작할 때 만들고 `is_active=false`라 추천에 섞이지 않음. `_visible_course`가 산책길의 공개 상태를 따름 |
+| 산책 인증은 강제가 아니라 표시 | `tracking_source`는 브라우저가 보내는 값이라 이것으로 글쓰기를 막으면 믿을 수 없는 관문이 됨. 일반 후기와 구분하고 읽을 때 계산해 기록을 지우면 떨어짐 |
+| 공유를 거두면 코스의 경로, 이름, 주인을 지움 | 다른 보호자의 산책 기록이 코스를 가리키므로 행은 남기되 다시 열리지 않게 함 |
+| 맞춤 추천은 기존 학습 재사용 | 표시된 특징을 `learned_attribute_weights`의 코스 특성에 대응시킴. 표시되지 않은 특징은 모르는 값이라 빼고, 근거에는 "보호자가 표시했다"고 밝힘 |
+
+SQLite는 외래 키를 검사하지 않으므로 `ondelete`만 믿지 않습니다. 공유 해제와 원본 삭제는 ORM cascade로 지우고 테스트로 확인합니다. ORM을 거치지 않는 벌크 삭제에 쓸 `user_delete_statements`도 함께 둡니다.
+
 ## 데이터 모델
 
 ```mermaid
@@ -222,6 +253,12 @@ erDiagram
     saved_walks ||--o{ saved_walk_photos : has
     pets |o--o{ saved_walks : walked_with
     saved_walks ||--o{ saved_walk_points : has
+    saved_walks ||--o| community_trails : shared_as
+    community_trails ||--o| walking_courses : guided_by
+    community_trails ||--o{ trail_likes : has
+    community_trails ||--o{ trail_bookmarks : has
+    community_trails ||--o{ trail_reviews : has
+    trail_reviews ||--o{ trail_review_photos : has
 ```
 
 | 테이블 | 내용 |
@@ -239,8 +276,12 @@ erDiagram
 | `saved_walks` | 나만의 산책길. 이름, 메모, 거리, 시간, 공개 범위, 공유 토큰과 기간, 중복 확인용 경로 해시, 썸네일 경로 (추가 테이블) |
 | `saved_walk_points` | 산책길의 GPS 지점. 순서, 구간, 위경도, 고도, 시각, 정확도 (추가 테이블) |
 | `saved_walk_photos` | 산책길 사진. 메타데이터를 지운 이미지와 형식, 크기 (추가 테이블) |
+| `community_trails` | 공유한 산책길. 제목, 설명, 대표 사진 번호, 공개 여부, 지역, 특징, 추천 대상, 가리는 반경, 가린 뒤 계산한 거리, 시간, 오르막, 난이도, 출발과 도착, 썸네일, 조회수 (추가 테이블) |
+| `trail_likes`, `trail_bookmarks` | 좋아요와 저장. 보호자와 산책길 조합이 고유 (추가 테이블) |
+| `trail_reviews` | 후기. 별점 1~5(CHECK), 글. 보호자와 산책길 조합이 고유 (추가 테이블) |
+| `trail_review_photos` | 후기 사진. 메타데이터를 지운 이미지 (추가 테이블) |
 
-`walking_courses`에는 내 산책길 코스를 위해 `owner_user_id`(주인, 공용 코스는 비어 있음), `saved_walk_id`(원본 산책길), `is_active`(추천 후보 여부)를 더했습니다. 산책 기록이 코스를 가리키므로 추천에서 빼거나 산책길을 지워도 코스는 지우지 않고 끕니다.
+`walking_courses`에는 커뮤니티 산책길의 길 안내를 위해 `community_trail_id`(고유)를 더했습니다. `walking_courses`에는 내 산책길 코스를 위해 `owner_user_id`(주인, 공용 코스는 비어 있음), `saved_walk_id`(원본 산책길), `is_active`(추천 후보 여부)를 더했습니다. 산책 기록이 코스를 가리키므로 추천에서 빼거나 산책길을 지워도 코스는 지우지 않고 끕니다.
 
 ## 데이터 출처와 신뢰도
 

@@ -552,6 +552,114 @@ GPX 파일 원본을 요청 본문으로 보냅니다(`Content-Type: application
 
 공개로 설정한 산책길 목록입니다. 각 항목은 `token`, `title`, `distance_m`, `duration_sec`, `preview`만 담습니다.
 
+## 산책길 커뮤니티
+
+내 산책길을 공개하고 둘러보는 API입니다. `GET`과 `/view`, `/start`, `/nearby`는 로그인 없이 부를 수 있고, 나머지는 실제 로그인이 필요합니다. 시연 보호자로는 쓸 수 없어 `AUTH_REQUIRED=false`여도 `401`입니다. 다른 보호자의 비공개 산책길은 없는 산책길과 같은 `404`이고, 공개 산책길을 주인이 아닌 사람이 고치면 `403`입니다.
+
+공개 값에는 출발점과 도착점 반경 안의 지점이 없고, 원본 산책길의 이름, 메모, 걸은 시각, 공유 토큰, 반려동물, 가리는 반경이 들어가지 않습니다. 작성자는 이름(`author_name`)만 보냅니다.
+
+### `POST /community/trails/preview`
+
+```json
+{ "saved_walk_id": 12, "hide_radius_m": 200 }
+```
+
+공개될 경로와 계산 값을 미리 돌려줍니다. 저장하지 않습니다. 응답은 `route`, `distance_m`, `estimated_min`, `elevation_gain_m`, `difficulty`, `region`(추천 지역), `start_label`, `end_label`, `hidden_m`, `can_navigate`입니다. 가린 뒤 100m보다 짧게 남으면 `422`입니다.
+
+### `POST /community/trails`
+
+```json
+{
+  "saved_walk_id": 12,
+  "title": "망원 한강공원 저녁 산책길",
+  "description": "해 질 때 걷기 좋아요",
+  "cover_photo_id": 3,
+  "visibility": "public",
+  "region": "",
+  "features": ["park", "waterside"],
+  "suitable_for": ["small", "senior"],
+  "hide_radius_m": 200
+}
+```
+
+- `saved_walk_id`만 내 산책길을 가리키면 되고 좌표는 보내지 않습니다. 남의 산책길이면 `404`입니다.
+- `title` 1~80자, `description` 2000자까지. 제어 문자는 지웁니다.
+- `visibility`: `public`(기본), `private`. `hide_radius_m`: `100`, `200`(기본), `300`, `500`.
+- `features`: `park`, `shade`, `flat`, `paved`, `waterside`, `forest`, `quiet`, `lit`. `suitable_for`: `small`, `medium`, `large`, `senior`, `puppy`, `active`, `timid`.
+- `region`을 비우면 출발점 5km 안의 서비스 지역 이름, 없으면 `기타 지역`을 씁니다. 주소 검색 API는 위치를 외부로 보내게 되어 쓰지 않습니다.
+- `cover_photo_id`는 이 산책길의 사진만 고를 수 있고(`422`), 고른 한 장만 공개됩니다.
+- 이미 공유한 산책길이나 같은 경로면 `409`입니다.
+
+### `GET /community/trails`
+
+`q`(이름, 지역, 설명), `region`, `min_km`, `max_km`, `min_minutes`, `max_minutes`, `difficulty`(`easy`, `moderate`, `hard`), `suitable`, `feature`, `sort`(`recent`, `popular`, `rating`), `page`, `size`(최대 50, 기본 12).
+
+```json
+{ "items": [{ "id": 1, "title": "...", "region": "...", "author_name": "앨리스", "distance_m": 2998.4, "estimated_min": 39, "elevation_gain_m": 23.0, "difficulty": "moderate", "preview": [[[37.55, 126.91]]], "cover_photo_id": 3, "view_count": 12, "like_count": 4, "bookmark_count": 2, "review_count": 1, "average_rating": 5.0, "liked": false, "bookmarked": false, "is_mine": false, "visibility": "public", "features": [], "suitable_for": [], "description": "", "created_at": "...", "updated_at": "..." }], "total": 1, "page": 1, "size": 12, "has_next": false }
+```
+
+좋아요 수와 평점은 저장하지 않고 읽을 때 집계합니다. 인기순은 `좋아요×3 + 저장×2 + 후기×2 + 조회×0.1`, 평점순은 후기 3개 분량의 3.5점을 섞은 평균입니다. 후기가 하나뿐인 5점이 후기가 많은 높은 평균을 앞서지 않게 하기 위해서입니다. 난이도는 5km 이상이나 오르막 100m 이상이면 `hard`, 2km 이상이나 30m 이상이면 `moderate`입니다. 고도 기록이 절반이 안 되면 `elevation_gain_m`이 `null`이고 거리로만 정합니다.
+
+### `POST /community/trails/nearby`
+
+```json
+{ "latitude": 37.55, "longitude": 126.91, "radius_km": 5, "limit": 20 }
+```
+
+위치가 접근 로그에 남지 않도록 본문으로 받고 저장하지 않습니다. 각 항목에 `distance_from_me_m`(10m 단위)가 더해집니다.
+
+### `GET /community/trails/recommended?pet_id=1&limit=6`
+
+내 반려동물에게 맞는 순서입니다. 내가 공유한 길은 뺍니다. 각 항목에 `match_score`(0~100)와 `reasons`가 더해집니다. 점수는 권장 거리 35%, 추천 대상 20%, 평점 20%, 학습된 취향 15%, 지형 10%입니다. 남의 반려동물이면 `404`입니다.
+
+### `GET /community/regions`
+
+공개 산책길이 있는 지역과 개수입니다. `[{ "region": "서울 마포구 망원동 일대", "count": 3 }]`
+
+### `GET /community/trails/{id}` · `PATCH /community/trails/{id}` · `DELETE /community/trails/{id}`
+
+상세에는 `route`(가린 경로), `start`, `end`, `start_label`, `end_label`(가까운 공원 이름, 없으면 `null`), `can_navigate`, `my_review`, `walked`(보는 사람이 GPS로 걸은 기록 여부), `owner`(주인에게만 `saved_walk_id`, `hide_radius_m`)가 더해집니다. `PATCH`는 만든 때와 같은 항목에서 보낸 것만 바꾸며, `cover_photo_id`만 `null`로 비울 수 있습니다. `hide_radius_m`을 바꾸면 공개 값과 길 안내 코스를 다시 계산합니다. `DELETE`는 공유 해제입니다. 좋아요, 저장, 후기를 함께 지우고 원본 산책길은 남깁니다(`204`).
+
+### `POST /community/trails/{id}/view`
+
+조회수를 올립니다(`204`). 화면이 세션마다 한 번 부르고, 주인은 세지 않습니다. 상세를 읽는 것만으로는 올라가지 않습니다.
+
+### `GET /community/trails/{id}/gpx`
+
+공개용 GPX입니다. 가린 경로만 담고 시각, 고도, 원본 이름, 메모, 작성자를 넣지 않으며 파일 이름에도 날짜가 없습니다.
+
+### `GET /community/trails/{id}/cover`
+
+대표 이미지입니다. `Cache-Control: private, max-age=300`, `X-Content-Type-Options: nosniff`와 함께 돌려줍니다. 없으면 `404`입니다.
+
+### `POST /community/trails/{id}/start`
+
+이 산책길의 길 안내 코스 번호를 돌려줍니다. `{ "course_id": 21 }`. 산책길마다 하나만 만들어 함께 쓰며 추천 후보에는 넣지 않습니다. `/courses/{id}`, `/walks`, `/feedback`을 기존과 같이 쓸 수 있고, `/walks` 응답의 `community_trail_id`로 후기에 이을 수 있습니다. 산책길이 비공개가 되면 코스도 주인에게만 열리고, 공유를 해제하면 경로를 지워 `404`가 됩니다. 가린 구간이나 끊긴 구간이 100m를 넘어 한 줄로 이을 수 없으면 `422`입니다.
+
+### `POST /community/trails/{id}/like` · `DELETE` · `POST /community/trails/{id}/bookmark` · `DELETE`
+
+`{ "liked": true, "like_count": 4 }`, `{ "bookmarked": true, "bookmark_count": 2 }`. 여러 번 보내도 결과가 같고, DB 고유 제약이 동시 요청의 중복도 막습니다.
+
+### `GET /community/trails/{id}/reviews` · `POST /community/trails/{id}/reviews`
+
+```json
+{ "rating": 5, "content": "직접 걸어 보니 좋았어요" }
+```
+
+`rating` 1~5, `content` 1~1000자입니다. 산책길마다 한 번만 쓰며 두 번째는 `409`, 내 산책길이면 `403`입니다. 응답의 `verified`는 이 산책길의 코스를 `tracking_source: "gps"`로 절반 이상 걸은 기록이 있을 때 참이며, 읽을 때 계산하므로 나중에 걸으면 붙고 기록을 지우면 떨어집니다. 시연용 걷기와 직접 입력은 세지 않습니다.
+
+### `PATCH /community/reviews/{id}` · `DELETE /community/reviews/{id}`
+
+내 후기만 고치거나 지웁니다. 남의 후기면 `403`입니다.
+
+### `POST /community/reviews/{id}/photos` · `GET /community/reviews/{id}/photos/{photo_id}` · `DELETE ...`
+
+산책길 사진과 같은 검사를 거칩니다(JPG, PNG, 5MB, 메타데이터 제거). 후기마다 3장이며 넘으면 `409`입니다. 산책길을 볼 수 없으면 사진도 `404`입니다.
+
+### `GET /community/my/trails` · `/my/bookmarks` · `/my/likes` · `/my/reviews`
+
+내 활동입니다. `bookmarks`와 `likes`는 작성자가 비공개로 돌린 길을 빼고 `hidden_count`로 개수만 알려 줍니다. `reviews`의 각 항목에는 `trail_available`, `trail_title`이 더해지고, 볼 수 없는 길이면 이름이 `null`입니다.
+
 ## 시스템
 
 ### `GET /health`
