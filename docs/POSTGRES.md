@@ -99,11 +99,11 @@ docker compose exec -T db psql -U pawpath -d pawpath_test -c "drop schema public
 | 글자 수 제한 | 검사하지 않음 | `VARCHAR(n)`을 넘으면 거부 |
 | 번호 | 가장 큰 번호 다음을 씀 | 시퀀스. 번호를 직접 넣으면 시퀀스를 맞춰야 함(`sync_id_sequence`) |
 | 지운 행 | `secure_delete`로 파일에서 0으로 덮음 | VACUUM 전까지 데이터 파일에 남고 WAL에도 남음. 아래 한계 참고 |
-| 자동 백업 | 서버가 함 | `pg_dump`를 직접 또는 cron으로 |
+| 자동 백업 | 서버가 함 | 배포 서버는 `scripts/backup_postgres.sh`를 cron으로. 개발 DB는 `pg_dump`를 직접 |
 
 ## 한계
 
 - 탈퇴한 보호자의 데이터가 지운 직후 디스크에서 사라지는지는 보장하지 않습니다. PostgreSQL은 지운 행을 VACUUM이 공간을 재사용할 때까지 데이터 파일에 남기고, WAL 파일에도 남습니다. SQLite에서 확인하던 "파일에 남지 않음" 테스트는 PostgreSQL에서 건너뜁니다.
-- 자동 백업, 보존 기간 정리, 복구 뒤 처리(`deletions.jsonl` 재적용 등)는 PostgreSQL에서 자동화하지 않았습니다.
+- 자동 백업과 보존 기간 정리는 배포 서버의 cron(`scripts/backup_postgres.sh`)만 합니다. 복구 뒤 처리(`deletions.jsonl` 재적용 등)는 자동화하지 않았습니다.
 - 배포 서버에 실제 데이터를 옮기는 일은 하지 않았습니다. 배포 서버의 DB는 `compose.prod.yaml`로 띄우고, 데이터 이전 절차는 [배포](DEPLOY.md#처음-배포하기-sqlite-데이터가-있을-때)를 따르면 됩니다.
 - 백엔드는 컨테이너로 띄우지 않습니다. `docker compose`는 DB만 띄우고, 백엔드는 지금처럼 `./dev.sh` 또는 `uv run uvicorn`으로 띄웁니다.

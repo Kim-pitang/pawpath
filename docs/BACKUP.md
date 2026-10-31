@@ -100,6 +100,6 @@ uv run python -m app.backup migrate           # 마이그레이션 전 백업, D
 
 자동 백업과 복구 명령은 SQLite만 지원합니다. `DATABASE_URL`이 PostgreSQL이면 자동 백업을 건너뛰고 로그로 알리며, 명령은 이유를 알리고 멈춥니다. 탈퇴 화면에서도 백업 보존 기간을 말하지 않습니다.
 
-PostgreSQL은 `pg_dump`로 백업하고 `pg_restore`로 새 DB에 복구해 확인한 뒤 바꿔 씁니다. 명령은 [PostgreSQL 운영](POSTGRES.md#백업과-복구)에 있고, 개발 DB로 백업한 뒤 새 DB로 복구해 테이블별 행 수, 번호 시퀀스, 리비전, 한글 값이 같음을 확인했습니다. 복구 뒤 위 표의 처리와 `deletions.jsonl` 재적용은 직접 해야 하고, 주기 실행과 보존 기간 정리도 자동화하지 않았습니다.
+PostgreSQL은 `pg_dump`로 백업하고 `pg_restore`로 새 DB에 복구해 확인한 뒤 바꿔 씁니다. 명령은 [PostgreSQL 운영](POSTGRES.md#백업과-복구)에 있고, 개발 DB로 백업한 뒤 새 DB로 복구해 테이블별 행 수, 번호 시퀀스, 리비전, 한글 값이 같음을 확인했습니다. 배포 서버는 `scripts/backup_postgres.sh`를 cron으로 매일 04:30에 돌려 백업하고, 읽을 수 있는지 확인한 뒤 14일이 지난 백업을 지웁니다([배포](DEPLOY.md#백업)). 복구 뒤 위 표의 처리와 `deletions.jsonl` 재적용은 여전히 직접 해야 합니다.
 
 SQLite에서 PostgreSQL로 옮길 때(`python -m app.transfer`)는 원본을 `pre-postgres-*.db`로 먼저 백업합니다. `list`, `verify`, `restore`로 다룰 수 있습니다. PostgreSQL로 바꾼 뒤에는 서버가 SQLite 백업을 정리하지 않으므로, 이 파일과 예전 SQLite 백업은 옮긴 결과를 확인한 뒤 보존 기간(14일) 안에 직접 지우세요. 탈퇴한 보호자의 데이터가 남아 있습니다.

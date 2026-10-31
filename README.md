@@ -220,7 +220,7 @@ GOOGLE_CLIENT_SECRET=GOCSPX-xxxx
 
 ## 백업과 복구
 
-PostgreSQL은 `pg_dump`로 백업하고 `pg_restore`로 복구합니다. 명령은 [PostgreSQL 운영](docs/POSTGRES.md#백업과-복구)에 있습니다. 아래 자동 백업과 명령은 SQLite일 때만 동작합니다.
+PostgreSQL은 `pg_dump`로 백업하고 `pg_restore`로 복구합니다. 명령은 [PostgreSQL 운영](docs/POSTGRES.md#백업과-복구)에 있습니다. 배포 서버는 `scripts/backup_postgres.sh`를 cron으로 매일 돌려 백업하고, 읽을 수 있는지 확인한 뒤 14일이 지난 백업을 지웁니다([배포](docs/DEPLOY.md#백업)). 아래 자동 백업과 명령은 SQLite일 때만 동작합니다.
 
 SQLite DB를 서버가 24시간마다 자동으로 백업하고, 14일이 지난 백업을 지웁니다. 기본 위치는 `backend/backups`입니다. 서버가 쓰는 중에도 안전하게 복사합니다.
 
@@ -432,7 +432,7 @@ PRODUCT.md           제품 정의, 사용자, 브랜드(mungo)와 디자인 원
 | Google 로그인 | 구현. 팀이 실제 Google 클라이언트로 개발 서버에서 로그인을 확인했고, 위조와 장애 상황은 가짜 Google 서버로 검증. 아이디 계정과 Google 계정 연결은 미구현 |
 | 세션 만료와 본인 재확인 | 구현. 비밀번호 재확인은 실제 브라우저로 확인. Google 재확인은 가짜 Google 서버로만 확인했고, Google이 비밀번호를 다시 묻게 강제할 수는 없음 |
 | 계정 탈퇴와 데이터 삭제 | 구현. 유예 기간 없이 바로 삭제 |
-| 백업과 복구 | 구현(SQLite). 실제 서버로 복구 훈련을 함. 원격 복사와 백업 암호화는 미구현. PostgreSQL은 `pg_dump`/`pg_restore` 절차만 문서화하고 개발 DB로 확인했으며 자동화는 미구현 |
+| 백업과 복구 | 구현(SQLite). 실제 서버로 복구 훈련을 함. 원격 복사와 백업 암호화는 미구현. PostgreSQL은 배포 서버에서 `scripts/backup_postgres.sh`로 매일 백업(검증, 14일 보존). 복구는 `pg_restore` 절차를 따르며 복구 뒤 처리는 직접 함 |
 | 산책길 커뮤니티 | 구현. 공유, 탐색, 좋아요, 저장, 후기, 관리, 위치 가림. Chromium(Pixel 7)과 WebKit(iPhone 13)으로 확인했고, 실제 휴대폰으로 걸어 보지는 않음 |
 | 내 산책길을 추천 후보로 쓰기 | 구현. 실제 Overpass로 측정해 시드 코스의 저장값과 같음을 확인. 혼잡도와 경사는 측정하지 않음 |
 | Kakao Maps, 기상청 API | 미구현: Leaflet + OSM, Open-Meteo 사용. 카카오맵은 길찾기 링크만 연결. 날씨는 `WeatherProvider` 프로토콜로 교체 가능 |
