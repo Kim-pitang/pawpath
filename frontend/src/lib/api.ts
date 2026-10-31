@@ -8,8 +8,11 @@ import type {
   FeedbackInput,
   ForecastWeather,
   GpxPreview,
+  HideRadius,
   Insights,
+  MyTrailReview,
   NearbyResult,
+  Paged,
   Pet,
   PetInput,
   PublicWalk,
@@ -22,6 +25,15 @@ import type {
   Schedule,
   SharedWalk,
   TrackingSource,
+  TrailDetail,
+  TrailInput,
+  TrailNearby,
+  TrailPreview,
+  TrailQuery,
+  TrailReactionPage,
+  TrailRecommended,
+  TrailReview,
+  TrailSummary,
   Visibility,
   Walk,
   WalkPhoto,
@@ -98,6 +110,12 @@ function uploadGpx(file: File, onProgress: (percent: number) => void): Promise<G
     };
     xhr.send(file);
   });
+}
+
+/** 비어 있는 조건은 주소에 넣지 않는다. */
+function toQuery(params: object): string {
+  const entries = Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '');
+  return new URLSearchParams(entries.map(([key, value]) => [key, String(value)])).toString();
 }
 
 const post = <T>(path: string, body: unknown) => request<T>(path, { method: 'POST', body: JSON.stringify(body) });
@@ -185,4 +203,38 @@ export const api = {
     request<WalkPhoto>(`/my-walks/${walkId}/photos`, { method: 'POST', body: photo, headers: { 'Content-Type': photo.type || 'image/jpeg' } }),
   deletePhoto: (walkId: number, photoId: number) => request<void>(`/my-walks/${walkId}/photos/${photoId}`, { method: 'DELETE' }),
   photoUrl: (walkId: number, photoId: number) => `${BASE}/my-walks/${walkId}/photos/${photoId}`,
+
+  listTrails: (query: TrailQuery) => request<Paged<TrailSummary>>(`/community/trails?${toQuery(query)}`),
+  /** 위치가 접근 로그에 남지 않도록 본문으로 보낸다. */
+  nearbyTrails: (latitude: number, longitude: number, radiusKm: number) =>
+    post<TrailNearby[]>('/community/trails/nearby', { latitude, longitude, radius_km: radiusKm }),
+  recommendedTrails: (petId: number) => request<TrailRecommended[]>(`/community/trails/recommended?pet_id=${petId}`),
+  trailRegions: () => request<{ region: string; count: number }[]>('/community/regions'),
+  previewTrail: (savedWalkId: number, hideRadius: HideRadius) =>
+    post<TrailPreview>('/community/trails/preview', { saved_walk_id: savedWalkId, hide_radius_m: hideRadius }),
+  createTrail: (body: TrailInput & { saved_walk_id: number }) => post<TrailDetail>('/community/trails', body),
+  getTrail: (id: number) => request<TrailDetail>(`/community/trails/${id}`),
+  updateTrail: (id: number, body: Partial<TrailInput>) => request<TrailDetail>(`/community/trails/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteTrail: (id: number) => request<void>(`/community/trails/${id}`, { method: 'DELETE' }),
+  viewTrail: (id: number) => request<void>(`/community/trails/${id}/view`, { method: 'POST' }),
+  startTrail: (id: number) => request<{ course_id: number }>(`/community/trails/${id}/start`, { method: 'POST' }),
+  trailGpxUrl: (id: number) => `${BASE}/community/trails/${id}/gpx`,
+  trailCoverUrl: (id: number, photoId: number) => `${BASE}/community/trails/${id}/cover?photo=${photoId}`,
+  setTrailLike: (id: number, on: boolean) =>
+    request<{ liked: boolean; like_count: number }>(`/community/trails/${id}/like`, { method: on ? 'POST' : 'DELETE' }),
+  setTrailBookmark: (id: number, on: boolean) =>
+    request<{ bookmarked: boolean; bookmark_count: number }>(`/community/trails/${id}/bookmark`, { method: on ? 'POST' : 'DELETE' }),
+  listReviews: (trailId: number, page: number) => request<Paged<TrailReview>>(`/community/trails/${trailId}/reviews?page=${page}`),
+  createReview: (trailId: number, body: { rating: number; content: string }) => post<TrailReview>(`/community/trails/${trailId}/reviews`, body),
+  updateReview: (id: number, body: { rating: number; content: string }) =>
+    request<TrailReview>(`/community/reviews/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteReview: (id: number) => request<void>(`/community/reviews/${id}`, { method: 'DELETE' }),
+  uploadReviewPhoto: (reviewId: number, photo: Blob) =>
+    request<{ id: number }>(`/community/reviews/${reviewId}/photos`, { method: 'POST', body: photo, headers: { 'Content-Type': photo.type || 'image/jpeg' } }),
+  deleteReviewPhoto: (reviewId: number, photoId: number) => request<void>(`/community/reviews/${reviewId}/photos/${photoId}`, { method: 'DELETE' }),
+  reviewPhotoUrl: (reviewId: number, photoId: number) => `${BASE}/community/reviews/${reviewId}/photos/${photoId}`,
+  myTrails: (page: number) => request<Paged<TrailSummary>>(`/community/my/trails?page=${page}`),
+  myBookmarks: (page: number) => request<TrailReactionPage>(`/community/my/bookmarks?page=${page}`),
+  myLikes: (page: number) => request<TrailReactionPage>(`/community/my/likes?page=${page}`),
+  myReviews: (page: number) => request<Paged<MyTrailReview>>(`/community/my/reviews?page=${page}`),
 };

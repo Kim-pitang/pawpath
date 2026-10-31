@@ -1,4 +1,4 @@
-import { CalendarCheck, Home, Map as MapIcon, PawPrint, Sparkles } from 'lucide-react';
+import { CalendarCheck, Home, Map as MapIcon, PawPrint, Sparkles, UsersRound } from 'lucide-react';
 import { Link, Navigate, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { PawPathMark, Wordmark } from './Logo';
@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { to: '/recommend', label: '추천', icon: Sparkles, end: false },
   { to: '/map', label: '지도', icon: MapIcon, end: false },
   { to: '/walk', label: '산책 기록', icon: CalendarCheck, end: false },
+  { to: '/community', label: '커뮤니티', icon: UsersRound, end: false },
   { to: '/my', label: '마이', icon: PawPrint, end: false },
 ];
 
@@ -81,7 +82,7 @@ export default function Layout() {
         className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
         aria-label="주요 메뉴"
       >
-        <div className="mx-auto grid max-w-md grid-cols-5">
+        <div className="mx-auto grid max-w-md grid-cols-6">
           {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
