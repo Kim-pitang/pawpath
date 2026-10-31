@@ -34,6 +34,7 @@ mungo가 해결하려는 문제("오늘 이 아이와 언제, 어디로 걸어�
 | AI 추천 문장 (선택) | 계산 문장은 딱딱함 | 근거를 지키면서 자연스러운 문장 | 로컬 Ollama(`gemma4:e4b`)가 점수를 뺀 근거로 문장만 다듬음. `explain_guard.py`가 이름, 길이, 단정 표현, 위치 표현, 근거 없는 시설·숫자를 검사해 통과한 문장만 사용 | Implemented (로컬 Ollama만) | Verified (pytest `test_llm`, 실제 Ollama로 3개 날씨 조건 확인). 품질의 통계적 평가는 Not Verified |
 | GPS 길 안내 | 추천을 받아도 처음 가는 길은 찾아가기 어려움 | 출발점까지 도보 안내, 회전 방향, 진행률, 이탈 시 재탐색 | 출발점 3km 이내면 OSRM 도보 경로. 코스 위 진행도·회전·이탈(35m, 정확도에 따라 최대 60m)·완주 판정은 브라우저에서 계산 | Implemented | Partially Verified (Playwright 위치 에뮬레이션, 실제 OSRM). **실제 휴대폰 야외 도보는 Not Verified** |
 | 산책 중 날씨 재평가 | 걷는 도중 날씨가 나빠져도 알기 어려움 | 복귀 경로와 대체 코스 안내 | 5분마다 또는 버튼으로 재평가. 시간별 예보 기반 | Implemented | Partially Verified (E2E 시연 시나리오). 실시간 강수 감지는 Not Implemented |
+| 산책길 자동 만들기 | 정해진 코스가 없는 곳에서도 걷고 싶음 | 원하는 시간에 맞는 순환 산책길을 바로 얻고, 우리 아이 기준으로 비교 | 출발 위치와 산책 시간(20~90분)으로 OSRM 도보 경로에 경유점 두 개를 넣어 순환 경로 후보 최대 5개. 시간 오차(−20%~+50%), 되돌아오는 구간(25% 이하), 후보 간 겹침(65% 이하)을 넘지 못한 후보는 버리고, 남지 않으면 "만들지 못함"으로 안내. 반려동물을 고르면 서울 OSM 타일로 도로·나무·공원을 측정해 추천 엔진으로 평가. 저장하면 내 산책길이자 추천 후보 | Implemented (경사·반려견 출입은 평가하지 않음. 환경 측정은 서울 타일 범위 안만) | Verified (pytest `test_route_generator`, `test_generate_route_api`, `test_route_fit`, E2E `generate-route`) |
 
 ## 부가 기능
 
@@ -48,7 +49,6 @@ mungo가 해결하려는 문제("오늘 이 아이와 언제, 어디로 걸어�
 | 나만의 산책길 | 직접 걸은 길을 남기고 다시 쓰고 싶음 | GPS 기록(일시정지, 오차·순간 이동 거르기, 기기 임시 저장), 목록·상세·수정·삭제, 사진 5장(EXIF 제거) | Implemented | Partially Verified (Playwright 위치 에뮬레이션, WebKit). 실제 휴대폰 기록은 Not Verified |
 | GPX 가져오기·내보내기 | 다른 앱의 기록을 쓰고 싶음 | GPX 1.0/1.1 읽기, 1.1 쓰기, XXE 차단, 10MB·10만 지점 제한 | Implemented | Verified (GPX 1.1 공식 스키마, gpxpy 상호 변환, 공개 GPX 51개) |
 | 내 산책길을 추천 후보로 | 공용 코스만으로는 동네 길이 부족함 | 저장한 길이 내 전용 코스가 되어 같은 엔진으로 추천. 주변 환경은 Overpass로 측정 | Partially Implemented (혼잡도·경사는 측정하지 않음) | Verified (pytest `test_user_courses`, 실제 Overpass 측정값이 시드 코스와 일치) |
-| 산책길 자동 만들기 | 정해진 코스가 없는 곳에서도 걷고 싶음 | 출발점과 시간으로 OSRM 순환 경로 후보 최대 5개. 반려동물을 고르면 서울 OSM 타일로 환경을 측정해 엔진으로 평가 | Implemented (경사·반려견 출입은 평가하지 않음) | Verified (pytest `test_route_generator`, `test_route_fit`, E2E `generate-route`) |
 | 공유 링크 | 산책길을 다른 사람에게 보여 주고 싶음 | 추측할 수 없는 32자 토큰, 기간, 해제. 공유 화면에서 시각·정확도·반려동물·보호자 정보 제외 | Implemented | Verified (pytest `test_saved_walks`) |
 | 산책길 커뮤니티 | 다른 보호자가 실제로 걸은 길을 찾기 어려움 | 출발·도착점 반경 가림 공유, 탐색·필터, 내 주변, 맞춤 추천, 좋아요·저장, 후기, 산책 인증, 공개용 GPX | Partially Implemented (신고·관리자 숨김 없음, 작성 횟수 제한 없음) | Partially Verified (pytest `test_community`, E2E Chromium·WebKit). 실제 휴대폰은 Not Verified |
 | 공용 GPX 후보 코스 | 시드 코스가 동네 두 곳뿐임 | 공개 GPX 20개(서울 20개 구)를 적재. 서비스 지역 5km 안의 망원 4개, 개포 3개가 추천 후보 | Implemented | Verified (pytest `test_gpx_courses`) |
