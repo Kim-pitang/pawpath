@@ -22,12 +22,13 @@ async function importWalk(page: Page, name: string, far: [number, number]) {
   await expect(page).toHaveURL(/\/my-walks\/\d+$/);
 }
 
-test('가져온 산책길을 추천 후보에 넣으면 지도와 길 안내에 내 산책길로 나오고, 빼면 사라진다', async ({ page }) => {
+test('가져온 산책길은 저장하자마자 추천 후보가 되고, 빼면 사라진다', async ({ page }) => {
   const name = `망원정마당 왕복 ${Date.now()}`;
   await importWalk(page, name, [37.5512, 126.9034]);
   const panel = page.getByTestId('course-candidate');
-  await panel.getByRole('button', { name: '추천 후보에 넣기' }).click();
-  await expect(panel.getByText('이 산책길을 추천 후보에 넣었어요')).toBeVisible();
+  // 따로 누르지 않아도 저장과 함께 후보가 된다.
+  await expect(panel.getByText('저장할 때 추천 후보에 넣었어요')).toBeVisible();
+  await expect(panel.getByRole('button', { name: '추천 후보에 넣기' })).toHaveCount(0);
   await expect(panel.getByText('혼잡도와 경사는 측정할 수 없어')).toBeVisible();
   await expect(panel.getByText('주변 환경을 측정하지 않아')).toBeVisible();
 
@@ -46,7 +47,7 @@ test('가져온 산책길을 추천 후보에 넣으면 지도와 길 안내에 
   await page.goBack();
   await expect(panel).toBeVisible();
   await panel.getByRole('button', { name: '추천 후보에서 빼기' }).click();
-  await expect(panel.getByRole('button', { name: '추천 후보에 넣기' })).toBeVisible();
+  await expect(panel.getByRole('button', { name: '다시 추천 후보로' })).toBeVisible();
   await page.goto('/map');
   await expect(page.getByRole('list', { name: '코스 목록' }).getByRole('button', { name: new RegExp(name) })).toHaveCount(0);
 });
@@ -54,8 +55,7 @@ test('가져온 산책길을 추천 후보에 넣으면 지도와 길 안내에 
 test('그늘을 모르는 긴 내 산책길은 폭염 때 이유와 함께 추천에서 빠진다', async ({ page }) => {
   const name = `긴 강변길 ${Date.now()}`;
   await importWalk(page, name, [37.541, 126.9065]);
-  await page.getByTestId('course-candidate').getByRole('button', { name: '추천 후보에 넣기' }).click();
-  await expect(page.getByText('이 산책길을 추천 후보에 넣었어요')).toBeVisible();
+  await expect(page.getByText('저장할 때 추천 후보에 넣었어요')).toBeVisible();
 
   await page.goto('/recommend');
   await page.getByRole('button', { name: '폭염', exact: true }).click();
@@ -69,8 +69,7 @@ test('그늘을 모르는 긴 내 산책길은 폭염 때 이유와 함께 추�
 test('다른 계정에는 내 산책길 코스가 보이지 않는다', async ({ page, browser }) => {
   const name = `혼자 보는 길 ${Date.now()}`;
   await importWalk(page, name, [37.5512, 126.9034]);
-  await page.getByTestId('course-candidate').getByRole('button', { name: '추천 후보에 넣기' }).click();
-  await expect(page.getByText('이 산책길을 추천 후보에 넣었어요')).toBeVisible();
+  await expect(page.getByText('저장할 때 추천 후보에 넣었어요')).toBeVisible();
   const courseId = new URL(await page.getByRole('link', { name: '지도에서 보기' }).evaluate((a: HTMLAnchorElement) => a.href)).searchParams.get('course');
 
   const other = await (await browser.newContext()).newPage();

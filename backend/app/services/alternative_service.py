@@ -12,11 +12,11 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.models import Pet, Profile, User, WalkingCourse
 from app.recommender.features import build_features
-from app.recommender.safety import DEMO, FORECAST, assess_course, assessment_payload
+from app.recommender.safety import assess_course, assessment_payload
 from app.recommender.text import hour_label
 from app.recommender.timeslots import evaluate_slot, is_rainy
 from app.recommender.types import TimeWindow
-from app.services.recommendation_service import load_state, to_course_data, to_profile, visible_to, windows_of
+from app.services.recommendation_service import load_state, to_course_data, to_profile, visible_to, weather_source_of, windows_of
 from app.services.routing_service import Approach, Router, haversine_m, plan_approach
 from app.services.weather_service import get_weather
 
@@ -91,7 +91,7 @@ def evaluate_alternative(
     features = build_features(to_profile(pet))
     state = load_state(db, pet)
     data = to_course_data(course)
-    weather_source = DEMO if weather.is_mock else FORECAST
+    weather_source = weather_source_of(weather)
 
     total_m = course.distance_km * 1000
     remaining_m = max(0.0, total_m - max(0.0, progress_m))

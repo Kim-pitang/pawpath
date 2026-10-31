@@ -5,6 +5,7 @@
 측정 전이나 측정에 실패한 값, 혼잡도와 경사처럼 측정할 수 없는 값은 중립값으로 계산하되
 '확인 불가'로 표시하고 안전하다고 보지 않는다.
 """
+import logging
 import math
 import secrets
 from datetime import datetime, timedelta
@@ -19,6 +20,8 @@ from app.models import SavedWalk, User, WalkingCourse
 from app.services import environment_service
 from app.services.places_service import load_places
 from app.services.saved_walk_service import haversine_m
+
+logger = logging.getLogger(__name__)
 
 MAX_COURSE_KM = 10.0
 # 일시정지나 GPX 구간 사이가 이보다 떨어져 있으면 한 코스로 이을 수 없다.
@@ -196,18 +199,45 @@ def course_attributes(environment: dict | None, recorded: bool) -> tuple[dict, l
     )
 
 
-def register(db: Session, user: User, walk: SavedWalk, settings: Settings, now: datetime) -> tuple[WalkingCourse, str | None]:
-    """산책길을 추천 후보로 등록한다. 이미 등록했으면 갱신하고 켠다.
-
-    주변 환경 측정이 필요하면 측정 표를 함께 돌려준다. 호출한 쪽이 응답 뒤에 measure()를 부른다.
-    """
+def prepare(walk: SavedWalk) -> tuple[list[list[float]], float, str]:
+    """코스로 쓸 경로, 거리, 서비스 지역. 코스로 만들 수 없으면 CourseError를 던진다."""
     route = joined_route(walk)
     distance_km = route_km(route)
     if distance_km > MAX_COURSE_KM:
         raise CourseError(f"추천 코스는 {MAX_COURSE_KM:.0f}km까지 만들 수 있어요. 이 산책길은 {distance_km:.1f}km예요.")
     if distance_km < 0.1:
         raise CourseError("100m보다 짧은 산책길은 코스로 만들 수 없어요.")
-    area = area_label(route)
+    return route, distance_km, area_label(route)
+
+
+def candidate_error(walk: SavedWalk) -> str | None:
+    """이 산책길을 추천 후보로 쓸 수 없는 이유. 쓸 수 있으면 None이다."""
+    try:
+        prepare(walk)
+    except CourseError as error:
+        return str(error)
+    return None
+
+
+def auto_register(db: Session, user: User, walk: SavedWalk, settings: Settings, now: datetime) -> tuple[WalkingCourse | None, str | None]:
+    """산책길을 저장할 때 추천 후보로 자동 등록한다.
+
+    코스로 만들 수 없는 길(서비스 지역 밖, 너무 짧거나 길거나 끊긴 길)은 저장까지 막지 않도록 조용히 건너뛴다.
+    이유는 상세 조회에서 candidate_error로 다시 알려 준다.
+    """
+    try:
+        return register(db, user, walk, settings, now)
+    except CourseError as error:
+        logger.info("산책길 %s는 추천 후보로 만들 수 없어 건너뜁니다: %s", walk.id, error)
+        return None, None
+
+
+def register(db: Session, user: User, walk: SavedWalk, settings: Settings, now: datetime) -> tuple[WalkingCourse, str | None]:
+    """산책길을 추천 후보로 등록한다. 이미 등록했으면 갱신하고 켠다.
+
+    주변 환경 측정이 필요하면 측정 표를 함께 돌려준다. 호출한 쪽이 응답 뒤에 measure()를 부른다.
+    """
+    route, distance_km, area = prepare(walk)
     simplified = simplify(route)
 
     measuring = settings.environment_provider == "overpass"

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, inspect, select, text
 
 from app.config import get_settings
 from app.database import Base, SessionLocal
@@ -162,6 +162,55 @@ def test_registering_twice_updates_the_same_course(client):
     assert course_of(client, first)["name"] == "새 이름"
 
 
+# ---------- 저장하면 자동으로 후보가 된다
+@pytest.mark.parametrize("source", ["recorded", "imported"])
+def test_saving_a_walk_makes_it_a_candidate_without_any_extra_step(client, source):
+    walk = make_walk(client, source=source, title=f"{source} 길")
+    assert walk["course"] is not None and walk["course"]["active"] is True
+    assert walk["course_blocked"] is None
+    course = course_of(client, walk["course"]["id"])
+    assert course["is_personal"] is True and course["name"] == f"{source} 길"
+    # 기록한 길은 걸어 본 길이라 익숙한 길로, 가져온 GPX는 낯선 길로 본다.
+    assert course["is_familiar"] is (source == "recorded")
+
+
+def test_an_auto_registered_course_is_scored_with_the_seed_courses(client):
+    pet_id = dubu_id(client)
+    walk = make_walk(client, title="내 동네 한 바퀴")
+    body = client.post("/api/recommendations", json={"pet_id": pet_id}).json()
+    # TOP 3에 들지 못해도 후보로 점수를 받는다.
+    candidates = client.get(f"/api/recommendations/{body['id']}/candidates").json()
+    assert walk["course"]["id"] in [item["course_id"] for item in candidates]
+
+
+def test_a_walk_that_cannot_be_a_course_is_still_saved_and_says_why(client):
+    # 서비스 지역에서 멀리 떨어진 곳을 걸은 길
+    away, turn = (37.3000, 127.3000), (37.3030, 127.3000)
+    walk = make_walk(client, route=line(away, turn) + line(turn, away) + [away], title="먼 길")
+    assert walk["course"] is None
+    assert "서비스 지역" in walk["course_blocked"]
+    detail = client.get(f"/api/my-walks/{walk['id']}").json()
+    assert detail["course"] is None and "서비스 지역" in detail["course_blocked"]
+
+
+def test_removing_a_candidate_does_not_say_it_is_blocked(client):
+    walk = make_walk(client)
+    client.delete(f"/api/my-walks/{walk['id']}/course")
+    detail = client.get(f"/api/my-walks/{walk['id']}").json()
+    assert detail["course"]["active"] is False and detail["course_blocked"] is None
+
+
+def test_saving_the_same_walk_twice_does_not_register_it_twice(client):
+    body = {"title": "같은 길", "source_type": "recorded", "client_id": "same-walk-1", "points": points(out_and_back(PARK), start_time=NOW)}
+    first = client.post("/api/my-walks", json=body)
+    second = client.post("/api/my-walks", json=body)
+    assert (first.status_code, second.status_code) == (201, 200)
+    assert first.json()["course"]["id"] == second.json()["course"]["id"]
+    with SessionLocal() as db:
+        courses = db.scalars(select(WalkingCourse).where(WalkingCourse.saved_walk_id == first.json()["id"])).all()
+    assert len(courses) == 1
+
+
 # ---------- 빼기와 삭제
 def test_unregistered_course_leaves_recommendations_but_keeps_history(client):
     pet_id = dubu_id(client)
@@ -299,9 +348,9 @@ def overpass(monkeypatch):
 
 
 def test_osm_measurement_fills_in_real_values(client, overpass):
+    # 저장 응답은 바로 오고, 측정은 그 뒤에 끝난다.
     walk = make_walk(client)
-    # 등록 응답은 바로 오고, 측정은 그 뒤에 끝난다.
-    assert register(client, walk["id"]).json()["course"]["measurement"] == "pending"
+    assert walk["course"]["measurement"] == "pending"
     info = client.get(f"/api/my-walks/{walk['id']}").json()["course"]
     assert info["measurement"] == "done"
     assert info["environment_measured"] is True
@@ -321,14 +370,15 @@ def test_osm_measurement_fills_in_real_values(client, overpass):
 def test_osm_failure_still_registers_with_unknown_values(client, overpass):
     overpass["state"]["fail"] = True
     walk = make_walk(client)
-    response = register(client, walk["id"])
-    assert response.status_code == 200
     info = client.get(f"/api/my-walks/{walk['id']}").json()["course"]
     assert info["measurement"] == "failed"
     assert info["environment_measured"] is False
     assert any("다시 측정" in note for note in info["notes"])
     assert len(overpass["calls"]) == len(environment_service.OVERPASS_MIRRORS)
     assert course_of(client, info["id"])["data_sources"]["environment_unavailable"].startswith("OSM 응답 실패")
+    # 다시 측정하면 미러를 한 번 더 돈다.
+    assert register(client, walk["id"]).status_code == 200
+    assert len(overpass["calls"]) == 2 * len(environment_service.OVERPASS_MIRRORS)
 
 
 # ---------- 단위

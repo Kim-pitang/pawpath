@@ -30,6 +30,8 @@ flowchart LR
 
 ## 추천 파이프라인
 
+> 지금 기본값은 **추천 v2**(`rule-v2`)입니다. 4단계 구조, 5개 묶음 가중치, 안전 단계, 피드백 조정, 평가 지표는 [추천 알고리즘](RECOMMENDER.md)에 있습니다. 아래의 3번 코스 점수와 가중치 표는 `RECOMMENDER_VERSION=v1`의 동작입니다. 특성값, 시간대 점수, 코스 선호 학습은 두 버전이 함께 씁니다.
+
 ```mermaid
 flowchart TD
     P[반려동물 프로필] --> F[특성값 생성<br/>features.py]

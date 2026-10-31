@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app import api, models  # noqa: F401  models는 테이블 등록을 위해 불러온다
+from app import api, models, recommendation_api  # noqa: F401  models는 테이블 등록을 위해 불러온다
 from app.config import get_settings
 from app.database import SessionLocal, engine
 from app.seed import seed_all
@@ -85,3 +85,4 @@ async def limit_request_size(request: Request, call_next):
 
 
 app.include_router(api.router)
+app.include_router(recommendation_api.router)

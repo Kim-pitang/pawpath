@@ -14,7 +14,7 @@ from app.database import get_db
 from app.config import get_settings
 from app.models import AuthSession, CommunityTrail, Pet, Profile, Recommendation, SavedWalk, SavedWalkPhoto, TrailBookmark, TrailLike, TrailReview, TrailReviewPhoto, User, WalkFeedback, WalkHistory, WalkingCourse
 from app.recommender.features import build_features
-from app.recommender.safety import DEMO, FORECAST, assess_conditions, assess_course, assessment_payload
+from app.recommender.safety import assess_conditions, assess_course, assessment_payload
 from app.recommender.timeslots import evaluate_slot, hour_comfort, is_rainy
 from app.recommender.types import FeedbackInput
 from app.seed import DEFAULT_USER_ID
@@ -25,7 +25,7 @@ from app.services.llm_service import enhance_recommendation
 from app.services.photo_service import MAX_PHOTO_BYTES, MAX_PHOTOS_PER_WALK, PhotoError, clean_image
 from app.services.places_service import PLACE_LABELS, nearby_places
 from app.services import user_course_service
-from app.services.recommendation_service import active_courses, create_recommendation, load_state, scoring_config, to_course_data, to_profile, to_schedule, windows_of
+from app.services.recommendation_service import active_courses, create_recommendation, load_state, scoring_config, to_course_data, to_profile, to_schedule, weather_source_of, windows_of
 from app.services.report_service import build_report, is_simulated, walked_km
 from app.services import route_fit_service, route_generator
 from app.services.routing_service import Approach, build_router, plan_approach
@@ -803,7 +803,7 @@ def safety(
     now = now_local()
     result = _load_weather(db, profile, scenario)
     features = build_features(to_profile(pet))
-    source = DEMO if result.is_mock else FORECAST
+    source = weather_source_of(result)
     weather = {"source": result.source, "scenario": result.scenario, "is_mock": result.is_mock, "notice": result.notice}
 
     if course_id is None:
@@ -1092,6 +1092,8 @@ def _walk_detail(walk: SavedWalk, profile: Profile) -> schemas.SavedWalkDetail:
         **_walk_summary(walk).model_dump(),
         can_manage=profile_service.can_manage(profile, walk.profile_id),
         course=_personal_course(walk),
+        # 코스가 없으면 왜 추천 후보가 되지 못했는지 알려 준다.
+        course_blocked=user_course_service.candidate_error(walk) if walk.course is None else None,
         memo=walk.memo,
         share_token=walk.share_token,
         share_expires_at=walk.share_expires_at,
@@ -1139,15 +1141,24 @@ def preview_gpx_import(data: bytes = Depends(_read_gpx_body), db: Session = Depe
 def create_saved_walk(
     body: schemas.SavedWalkCreate,
     response: Response,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
     profile: Profile = Depends(current_profile),
 ) -> schemas.SavedWalkDetail:
+    """산책길을 저장하고 바로 내 추천 후보 코스로 넣는다.
+
+    기록한 길과 가져온 GPX 모두 후보가 된다. 코스로 만들 수 없는 길은 저장만 하고 이유를 상세에 담아 준다.
+    """
     if body.pet_id is not None:
         _get_pet(db, body.pet_id, user)
     walk, created = saved_walk_service.create_saved_walk(db, user, body, profile)
     if not created:
         response.status_code = status.HTTP_200_OK
+    elif walk.course is None:
+        course, token = user_course_service.auto_register(db, user, walk, get_settings(), now_local())
+        if course is not None and token:
+            background.add_task(user_course_service.measure, course.id, token)
     return _walk_detail(walk, profile)
 
 

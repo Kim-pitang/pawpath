@@ -207,6 +207,11 @@ function NavigationView({ courseId, recommendationId }: { courseId: number; reco
 
   useWakeLock(started && !tracking.finished && !returnTracking.finished);
 
+  // 추천에서 온 산책이면 출발을 남긴다. 추천 지표의 '산책 시작률'에 쓰며, 실패해도 안내는 그대로 한다.
+  useEffect(() => {
+    if (started && recommendationId) api.recommendationEvent(recommendationId, courseId, 'start').catch(() => undefined);
+  }, [started, recommendationId, courseId]);
+
   // 비동기 요청과 주기 확인에서도 항상 최신 위치와 진행도를 쓴다.
   const latest = useRef({ position, progress: tracking.progress, petId: selectedPet?.id });
   latest.current = { position, progress: tracking.progress, petId: selectedPet?.id };

@@ -186,9 +186,18 @@ export interface SafetyItem {
   status: 'ok' | 'caution' | 'danger' | 'unverified';
   score: number | null;
   value: string;
-  source: 'forecast' | 'demo' | 'observed' | 'estimated' | 'unknown';
+  source: 'forecast' | 'demo' | 'observed' | 'estimated' | 'unknown' | 'unavailable';
   source_label: string;
   detail: string | null;
+}
+
+/** 점수에 들어간 안전 항목의 출처별 비중. */
+export interface SafetyDataQuality {
+  shares: { realtime: number; observed: number; estimated: number; demo: number; missing: number };
+  missing_items: string[];
+  estimated_items: string[];
+  environment_collected_on: string | null;
+  insufficient: boolean;
 }
 
 export interface SafetyAssessment {
@@ -200,6 +209,9 @@ export interface SafetyAssessment {
   unverified: string[];
   penalty: number;
   disclaimer: string;
+  data_quality?: SafetyDataQuality;
+  /** 위험 수준일 때의 강한 경고 */
+  warning?: string | null;
 }
 
 export interface ScoreGroup {
@@ -209,6 +221,20 @@ export interface ScoreGroup {
   weight: number;
   contribution: number;
   evidence: string[];
+}
+
+/** v2 개인화 묶음. 데이터가 없는 묶음은 available이 false이고 score가 null이다. */
+export interface ScoreGroupDetail extends Omit<ScoreGroup, 'score'> {
+  score: number | null;
+  available: boolean;
+  source: string;
+}
+
+export interface ReasonBasis {
+  key: string;
+  label: string;
+  text: string;
+  source: string;
 }
 
 export interface RecommendedCourse {
@@ -234,10 +260,19 @@ export interface RecommendedCourse {
   alternative: { course_id: number; name: string; distance_km: number; duration_min: number } | null;
   score_breakdown: ScoreGroup[];
   factors: Factor[];
-  reason: { summary: string; details: string[]; llm_summary?: string };
+  reason: { summary: string; details: string[]; llm_summary?: string; basis?: ReasonBasis[] };
   cautions: string[];
   other_cautions: string[];
+  personalization_score?: number | null;
+  safety_penalty?: number;
+  skip_penalty?: number;
+  score_groups?: ScoreGroupDetail[];
+  /** 다녀온 코스만 남아 바꿔 넣은 새 코스 */
+  exploration?: boolean;
+  similar_to?: string | null;
 }
+
+export type RecommendationStatus = 'ok' | 'unsafe' | 'no_forecast' | 'no_window' | 'no_candidates';
 
 export interface Recommendation {
   id: number;
@@ -245,7 +280,10 @@ export interface Recommendation {
   pet_id: number;
   pet_name: string;
   walkable: boolean;
-  weather: WeatherMeta;
+  status?: RecommendationStatus;
+  data_notice?: string | null;
+  algorithm?: { version: string; ranker: string; base_weights: Record<string, number> };
+  weather: WeatherMeta & { fetched_at?: string | null; is_available?: boolean };
   features: {
     life_stage: string;
     ideal_walk_min: number;
@@ -552,6 +590,8 @@ export interface PersonalCourse {
 
 export interface SavedWalkDetail extends SavedWalkSummary {
   course: PersonalCourse | null;
+  /** 코스가 없을 때 추천 후보가 되지 못한 이유. 후보이거나 직접 뺐으면 비어 있다. */
+  course_blocked?: string | null;
   memo: string;
   share_token: string | null;
   share_expires_at: string | null;

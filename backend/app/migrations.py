@@ -19,7 +19,7 @@ ADDED_COLUMNS = {
     "auth_sessions": (("last_seen_at", "TIMESTAMP"), ("reauthenticated_at", "TIMESTAMP"), ("profile_id", "INTEGER")),
     "oauth_states": (("reauth_user_id", "INTEGER"),),
     "saved_walks": (("profile_id", "INTEGER"),),
-    "recommendations": (("profile_id", "INTEGER"),),
+    "recommendations": (("profile_id", "INTEGER"), ("algorithm_version", "VARCHAR(20)"), ("weather_fetched_at", "TIMESTAMP")),
     "walk_feedbacks": (("profile_id", "INTEGER"),),
 }
 # 컬럼을 나중에 더하면 create_all이 만드는 색인이 빠지므로 따로 만든다. 이미 있으면 건너뛴다.

@@ -196,6 +196,10 @@ class Recommendation(Base):
     # 응답 전문. 추천 당시의 점수와 근거를 그대로 보존해 '추천 결과 변화'에 쓴다.
     payload: Mapped[dict] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_local, index=True)
+    # 점수를 낸 알고리즘(rule-v1, rule-v2). 비어 있으면 버전을 남기기 전의 기록이며 rule-v1이다.
+    algorithm_version: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # 추천에 쓴 예보를 받아 온 시각. 시연용 시나리오는 추천 시각과 같다.
+    weather_fetched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class WalkHistory(Base):
@@ -474,3 +478,47 @@ class TrailReviewPhoto(Base):
     review: Mapped[TrailReview] = relationship(back_populates="photos")
 
 
+
+class RecommendationItem(Base):
+    """추천 1건의 후보 코스별 점수. TOP 3 밖의 후보와 제외된 코스도 남겨 버전별 비교와 편중 점검에 쓴다."""
+
+    __tablename__ = "recommendation_items"
+    __table_args__ = (UniqueConstraint("recommendation_id", "course_id", name="uq_recommendation_item_course"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    recommendation_id: Mapped[int] = mapped_column(ForeignKey("recommendations.id", ondelete="CASCADE"), index=True)
+    pet_id: Mapped[int] = mapped_column(ForeignKey("pets.id"), index=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("walking_courses.id"), index=True)
+    algorithm_version: Mapped[str] = mapped_column(String(20))
+    # TOP 3 안의 순위. 밖이면 비어 있다.
+    rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # 안전 단계와 점수로 정렬한 후보 순서. 제외된 코스는 비어 있다.
+    position: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    personalization_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    safety_penalty: Mapped[float] = mapped_column(Float, default=0.0)
+    skip_penalty: Mapped[float] = mapped_column(Float, default=0.0)
+    safety_level: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    safety_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # {"pet_fit": {"score": 90.1, "weight": 0.4167}, ...}
+    group_scores: Mapped[dict] = mapped_column(JSON, default=dict)
+    data_quality: Mapped[dict] = mapped_column(JSON, default=dict)
+    excluded_reasons: Mapped[list] = mapped_column(JSON, default=list)
+    duplicate_of: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    exploration: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_local)
+
+
+class RecommendationEvent(Base):
+    """추천 뒤 행동. 산책 완료와 피드백은 산책 기록에서 알 수 있어, 서버가 모르는 선택과 출발만 남긴다."""
+
+    __tablename__ = "recommendation_events"
+    __table_args__ = (UniqueConstraint("recommendation_id", "course_id", "event", name="uq_recommendation_event"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    recommendation_id: Mapped[int] = mapped_column(ForeignKey("recommendations.id", ondelete="CASCADE"), index=True)
+    pet_id: Mapped[int] = mapped_column(ForeignKey("pets.id"), index=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("walking_courses.id"))
+    # select: 추천 카드에서 '이 코스로 산책'을 누름, start: 길 안내에서 산책을 시작함
+    event: Mapped[str] = mapped_column(String(10))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_local)

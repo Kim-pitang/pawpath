@@ -14,9 +14,9 @@ from datetime import datetime
 from app.recommender.config import ScoringConfig
 from app.recommender.engine import recommend
 from app.recommender.explain import hour_label
-from app.recommender.safety import DEMO, FORECAST
 from app.recommender.types import CourseData, PetProfile, PreferenceState, RecommendationResult, Schedule
 from app.services import environment_service, osm_area_service
+from app.services.recommendation_service import weather_source_of
 from app.services.user_course_service import WALK_KMH, course_attributes, nearby_facilities, route_km, simplify
 from app.services.weather_service import WeatherResult
 
@@ -139,7 +139,7 @@ def fit_candidates(
         state=state,
         now=now,
         config=config,
-        weather_source=DEMO if weather.is_mock else FORECAST,
+        weather_source=weather_source_of(weather),
         top_n=len(courses),
     )
     fits = [CandidateFit(highlights=_highlights(course, facilities), unknown=sorted(course.unknown)) for course, facilities in built]

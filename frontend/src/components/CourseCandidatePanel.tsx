@@ -1,11 +1,11 @@
-import { Sparkles, Undo2 } from 'lucide-react';
+import { Undo2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import type { SavedWalkDetail } from '../lib/types';
 import { Button, Card, Chip, ErrorNotice, InfoNotice, SectionTitle } from './ui';
 
-/** 산책길을 내 추천 후보 코스로 등록하거나 뺀다. */
+/** 저장할 때 자동으로 들어간 추천 후보 상태를 보여 주고, 원하면 뺀다. */
 export default function CourseCandidatePanel({ walk, onChange }: { walk: SavedWalkDetail; onChange: (walk: SavedWalkDetail) => void }) {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +44,7 @@ export default function CourseCandidatePanel({ walk, onChange }: { walk: SavedWa
         {active && course ? (
           <>
             <p className="text-sm text-ink-soft">
-              이 산책길을 추천 후보에 넣었어요. 날씨와 반려동물에 맞으면 추천 목록에 나오고, 지도에서 길 안내도 받을 수 있어요.
+              저장할 때 추천 후보에 넣었어요. 날씨와 반려동물에 맞으면 추천 목록에 나오고, 지도에서 길 안내도 받을 수 있어요. 이 코스는 나에게만 보여요.
             </p>
             {course.notes.map((note) => (
               <InfoNotice key={note}>{note}</InfoNotice>
@@ -67,15 +67,16 @@ export default function CourseCandidatePanel({ walk, onChange }: { walk: SavedWa
               </Button>
             )}
           </>
+        ) : walk.course_blocked ? (
+          <p className="text-sm text-ink-soft" data-testid="course-blocked">
+            이 산책길은 추천 후보로 쓸 수 없어요. {walk.course_blocked}
+          </p>
         ) : (
           <>
-            <p className="text-sm text-ink-soft">
-              추천 후보에 넣으면 PawPath 코스와 함께 점수를 매겨 추천해요. 주변 도로, 조명, 노면, 나무, 공원은 OpenStreetMap 기록으로 측정하고, 혼잡도와 경사처럼 알 수
-              없는 값은 확인 불가로 표시해요. 이 코스는 나에게만 보여요.
-            </p>
-            <Button disabled={working} onClick={() => run(() => api.registerCourse(walk.id))}>
-              <Sparkles size={16} aria-hidden />
-              {working ? '등록하는 중이에요' : '추천 후보에 넣기'}
+            <p className="text-sm text-ink-soft">추천 후보에서 뺀 산책길이에요. 추천 목록과 지도에 나오지 않아요.</p>
+            <Button variant="ghost" disabled={working} onClick={() => run(() => api.registerCourse(walk.id))}>
+              <Undo2 size={16} aria-hidden />
+              {working ? '되돌리는 중이에요' : '다시 추천 후보로'}
             </Button>
           </>
         )}

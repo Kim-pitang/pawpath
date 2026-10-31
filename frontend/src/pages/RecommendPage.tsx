@@ -9,6 +9,7 @@ import {
   RefreshCw,
   Route,
   ShieldCheck,
+  Sparkles,
   Thermometer,
   TrendingUp,
 } from 'lucide-react';
@@ -23,13 +24,30 @@ import { useApp } from '../context/AppContext';
 import { api } from '../lib/api';
 import { signed, slotRange } from '../lib/format';
 import { CROWD_LABELS, FACILITY_LABELS, WEATHER_SOURCE_LABELS } from '../lib/labels';
-import type { Recommendation, RecommendedCourse } from '../lib/types';
+import type { Recommendation, RecommendationStatus, RecommendedCourse } from '../lib/types';
 
 const RANK_BADGE: Record<number, string> = {
   1: 'bg-leaf-500',
   2: 'bg-carrot-500',
   3: 'bg-sky-500',
 };
+
+/** 산책을 권하지 않을 때 이유별 제목. 데이터가 없는 것과 날씨가 나쁜 것을 구분한다. */
+const BLOCKED_TITLE: Record<RecommendationStatus, string> = {
+  ok: '',
+  unsafe: '오늘은 실내 놀이를 추천해요',
+  no_forecast: '날씨를 확인하지 못했어요',
+  no_window: '산책 가능 시간이 없어요',
+  no_candidates: '추천할 코스가 없어요',
+};
+
+function learningNotice(result: Recommendation): string {
+  const total = result.learning.feedback_total;
+  if (result.weights.feedback !== undefined) {
+    return `지금까지의 피드백 ${total}건을 학습해 점수에 반영했어요. 피드백 반영 비중은 ${Math.round(result.weights.feedback * 100)}%이고, 피드백이 쌓일수록 커져요.`;
+  }
+  return `지금까지의 피드백 ${total}건을 학습해 점수에 반영했어요. 과거 만족도 반영 강도가 ${Math.round(result.weights.preference * 100)}%로 올라갔어요.`;
+}
 
 export default function RecommendPage() {
   const { selectedPet, petsLoaded, scenario, loadRecommendation, cachedRecommendation, replaceRecommendation } = useApp();
@@ -93,6 +111,11 @@ export default function RecommendPage() {
         {result && !result.weather.is_mock && (
           <p className="mt-2 text-xs text-ink-muted">날씨 출처: {WEATHER_SOURCE_LABELS[result.weather.source] ?? result.weather.source}</p>
         )}
+        {result?.data_notice && (
+          <div className="mt-3" data-testid="data-notice">
+            <InfoNotice>{result.data_notice}</InfoNotice>
+          </div>
+        )}
       </Card>
 
       {error && <ErrorNotice message={error} />}
@@ -101,10 +124,7 @@ export default function RecommendPage() {
       {result && (
         <div className={`flex flex-col gap-4 transition-opacity ${loading ? 'opacity-60' : ''}`}>
           {result.learning.is_personalized ? (
-            <InfoNotice>
-              지금까지의 피드백 {result.learning.feedback_total}건을 학습해 점수에 반영했어요. 과거 만족도 반영 강도가{' '}
-              {Math.round(result.weights.preference * 100)}%로 올라갔어요.
-            </InfoNotice>
+            <InfoNotice>{learningNotice(result)}</InfoNotice>
           ) : (
             <p className="px-1 text-xs text-ink-muted">아직 피드백이 없어 기본 규칙으로 추천했어요. 산책 후 피드백을 남기면 개인화돼요.</p>
           )}
@@ -129,6 +149,11 @@ export default function RecommendPage() {
             <RefreshCw size={16} aria-hidden />
             다시 추천받기
           </Button>
+          {result.algorithm && (
+            <p className="px-1 text-center text-[11px] text-ink-muted">
+              추천 알고리즘 {result.algorithm.version} · 안전 평가를 먼저 하고, 위험 코스는 점수와 관계없이 뒤로 보내요.
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -215,6 +240,11 @@ function CourseCard({
   const disclaimer = course.cautions[course.cautions.length - 1];
   // 다녀오지 않은 코스의 작은 감소는 가중치 이동에 따른 것이라 표시하지 않는다.
   const showLearning = course.feedback_count > 0 ? course.learning_delta !== 0 : course.learning_delta >= 0.5;
+  const skipped = (course.score_groups ?? []).filter((group) => !group.available);
+  // 추천 화면에서 이 코스를 고른 것을 남긴다. 지표용이라 실패해도 이동은 그대로 한다.
+  const markSelected = () => {
+    api.recommendationEvent(recommendationId, course.course_id, 'select').catch(() => undefined);
+  };
 
   return (
     <Card className={course.rank === 1 ? 'border-leaf-300' : ''}>
@@ -241,8 +271,14 @@ function CourseCard({
           </div>
         </div>
 
-        {(showLearning || course.rank_change > 0) && (
+        {(showLearning || course.rank_change > 0 || course.exploration) && (
           <div className="mt-2 flex flex-wrap gap-1.5">
+            {course.exploration && (
+              <Chip tone="leaf">
+                <Sparkles size={13} aria-hidden />
+                새 코스 제안
+              </Chip>
+            )}
             {showLearning && (
               <Chip tone={course.learning_delta > 0 ? 'leaf' : 'carrot'}>
                 <TrendingUp size={13} aria-hidden />
@@ -321,14 +357,41 @@ function CourseCard({
                 key: group.key,
                 label: group.label,
                 value: group.score,
-                note: `비중 ${Math.round(group.weight * 100)}%`,
+                note: group.key === 'feedback' ? `조정 ${signed(group.contribution)}점` : `비중 ${Math.round(group.weight * 100)}%`,
               }))}
             />
-            <ul className="flex flex-col gap-1 text-xs leading-relaxed text-ink-soft">
-              {course.reason.details.map((detail) => (
-                <li key={detail}>{detail}</li>
-              ))}
-            </ul>
+            {course.personalization_score != null && (
+              <p className="text-xs text-ink-soft" data-testid="score-formula">
+                개인화 {course.personalization_score.toFixed(1)}점
+                {course.safety_penalty ? ` − 안전 감점 ${course.safety_penalty.toFixed(1)}점` : ''}
+                {course.skip_penalty ? ` − 최근 다른 코스를 고른 날 ${course.skip_penalty.toFixed(0)}점` : ''} = 추천 점수 {course.total_score.toFixed(1)}점
+              </p>
+            )}
+            {skipped.length > 0 && (
+              <p className="text-xs text-ink-muted" data-testid="skipped-groups">
+                반영하지 않은 항목: {skipped.map((group) => group.label).join(', ')} (데이터가 없어 다른 항목으로 나눠 계산했어요)
+              </p>
+            )}
+            {course.reason.basis && course.reason.basis.length > 0 && (
+              <dl className="flex flex-col gap-1.5 text-xs leading-relaxed" aria-label="추천 근거">
+                {course.reason.basis.map((item) => (
+                  <div key={item.key}>
+                    <dt className="font-semibold text-ink">{item.label}</dt>
+                    <dd className="text-ink-soft">
+                      {item.text} <span className="text-ink-muted">({item.source})</span>
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+            {/* 예전 추천에는 항목별 근거가 없어 세부 문장을 보여 준다. */}
+            {!course.reason.basis?.length && (
+              <ul className="flex flex-col gap-1 text-xs leading-relaxed text-ink-soft">
+                {course.reason.details.map((detail) => (
+                  <li key={detail}>{detail}</li>
+                ))}
+              </ul>
+            )}
             <p className="text-xs text-ink-muted">{course.safety.pet_rule_note}</p>
             <p className="text-xs text-ink-muted">{disclaimer}</p>
           </div>
@@ -339,7 +402,12 @@ function CourseCard({
             <MapIcon size={16} aria-hidden />
             지도 보기
           </LinkButton>
-          <LinkButton to={`/navigate?course=${course.course_id}&recommendation=${recommendationId}`} variant={course.rank === 1 ? 'primary' : 'ghost'} className="whitespace-nowrap !px-2">
+          <LinkButton
+            to={`/navigate?course=${course.course_id}&recommendation=${recommendationId}`}
+            onClick={markSelected}
+            variant={course.rank === 1 ? 'primary' : 'ghost'}
+            className="whitespace-nowrap !px-2"
+          >
             <Footprints size={16} aria-hidden />
             이 코스로 산책
           </LinkButton>
@@ -381,7 +449,7 @@ function IndoorCard({ result }: { result: Recommendation }) {
       <SectionTitle>
         <span className="flex items-center gap-1.5">
           <HomeIcon size={18} className="text-carrot-500" aria-hidden />
-          오늘은 실내 놀이를 추천해요
+          {BLOCKED_TITLE[result.status ?? 'unsafe'] || BLOCKED_TITLE.unsafe}
         </span>
       </SectionTitle>
       {result.blocked_reasons.length > 0 && (

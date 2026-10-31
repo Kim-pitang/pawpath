@@ -57,6 +57,7 @@ def make_full_account(owner) -> dict:
     pet = owner.post("/api/pets", json=PET_BODY).json()
     recommendation = owner.post("/api/recommendations", json={"pet_id": pet["id"]}).json()
     course_id = recommendation["courses"][0]["course_id"]
+    assert owner.post(f"/api/recommendations/{recommendation['id']}/events", json={"course_id": course_id, "event": "start"}).status_code == 204
     walk = owner.post("/api/walks", json={"pet_id": pet["id"], "course_id": course_id, "duration_min": 20}).json()
     assert owner.post("/api/feedback", json={"walk_id": walk["id"], **FIVE_STARS, "memo": SECRET_MEMO}).status_code == 201
     saved = make_walk(owner, title="두부의 비밀 경로")

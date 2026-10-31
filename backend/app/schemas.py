@@ -378,6 +378,8 @@ class PersonalCourseRead(BaseModel):
 
 class SavedWalkDetail(SavedWalkSummary):
     course: PersonalCourseRead | None = None
+    # 코스가 없을 때 추천 후보가 되지 못한 이유. 후보이거나 직접 뺐으면 비어 있다.
+    course_blocked: str | None = None
     memo: str
     share_token: str | None
     share_expires_at: datetime | None

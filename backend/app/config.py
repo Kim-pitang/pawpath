@@ -57,8 +57,10 @@ class Settings(BaseSettings):
     # 내 산책길을 추천 후보로 등록할 때 경로 주변 환경을 OSM에서 측정한다: overpass 또는 none(측정하지 않음)
     environment_provider: str = "overpass"
 
-    # 추천 가중치 JSON. 비워 두면 기본값. 예: {"weather": 0.3, "safety": 0.2}
+    # 추천 가중치 JSON. 비워 두면 기본값. 예: {"pet_fit": 0.3, "feedback": 0.1}
     recommender_weights: str = ""
+    # 추천 알고리즘 버전: v2(안전 단계 + 5개 묶음) 또는 v1(이전 6항목 가중합)
+    recommender_version: str = "v2"
 
     # 추천 이유 문장 생성: none(템플릿만) 또는 ollama
     llm_provider: str = "none"

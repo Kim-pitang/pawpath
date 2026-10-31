@@ -87,7 +87,7 @@ test.describe('산책길 만들기', () => {
     await expect(page.getByTestId('generate-fit')).toContainText('큰 도로변 비율이 높아요');
   });
 
-  test('현재 위치로 경로를 만들고 후보를 고른 뒤 내 산책길로 저장하면 추천 후보에 넣을 수 있다', async ({ page }) => {
+  test('현재 위치로 경로를 만들고 후보를 고른 뒤 내 산책길로 저장하면 바로 추천 후보가 된다', async ({ page }) => {
     const seen = await mockGenerate(page, () => ({
       status: 200,
       json: { target_min: 30, notice: null, scored_for: null, fit_notice: null, candidates: [candidate(0, 30, 4), candidate(0.0004, 28, 12)] },
@@ -111,11 +111,11 @@ test.describe('산책길 만들기', () => {
     await page.getByTestId('generate-save').click();
     await expect(page).toHaveURL(/\/my-walks\/\d+$/);
     await expect(page.getByText('자동 생성')).toBeVisible();
-    await page.getByTestId('course-candidate').getByRole('button', { name: '추천 후보에 넣기' }).click();
-    await expect(page.getByText('이 산책길을 추천 후보에 넣었어요')).toBeVisible();
+    // 따로 누르지 않아도 저장과 함께 후보가 된다.
+    await expect(page.getByText('저장할 때 추천 후보에 넣었어요')).toBeVisible();
     // e2e는 DB 하나를 같이 쓴다. 코스를 켜 둔 채 끝내면 뒤 테스트의 코스 수가 달라진다.
     await page.getByTestId('course-candidate').getByRole('button', { name: '추천 후보에서 빼기' }).click();
-    await expect(page.getByText('이 산책길을 추천 후보에 넣었어요')).toHaveCount(0);
+    await expect(page.getByText('저장할 때 추천 후보에 넣었어요')).toHaveCount(0);
   });
 
   test('기준에 맞는 경로가 없으면 안내만 보이고 저장 화면은 나오지 않는다', async ({ page }) => {

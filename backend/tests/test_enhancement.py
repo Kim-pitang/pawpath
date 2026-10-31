@@ -10,7 +10,7 @@ from app.config import Settings
 from app.database import Base, SessionLocal
 from app.migrations import ADDED_COLUMNS, ensure_schema
 from app.models import Pet, User, WalkingCourse
-from app.recommender.config import BASE_WEIGHTS, DEFAULT_CONFIG, ScoringConfig, parse_scoring_config
+from app.recommender.config import BASE_WEIGHTS, DEFAULT_CONFIG, V1, ScoringConfig, parse_scoring_config
 from app.recommender.engine import recommend
 from app.recommender.features import build_features
 from app.recommender.preference import apply_feedback, preferred_time_match, record_visit, user_preference_score
@@ -78,9 +78,13 @@ def test_invalid_json_is_rejected():
 def test_changing_weights_changes_the_ranking():
     pet = make_pet(size="large", weight_kg=28, activity_level="high", personality="active", path_preference="new", novelty_reaction="calm")
     run = lambda config: [item.course.id for item in recommend(pet, COURSES, make_forecast(), default_schedule(), EMPTY_STATE, NOW, config=config).courses]  # noqa: E731
-    activity_only = parse_scoring_config('{"weather": 0, "personality": 0, "activity": 1, "schedule": 0, "safety": 0, "preference": 0}')
-    schedule_only = parse_scoring_config('{"weather": 0, "personality": 0, "activity": 0, "schedule": 1, "safety": 0, "preference": 0}')
+    activity_only = parse_scoring_config('{"weather": 0, "personality": 0, "activity": 1, "schedule": 0, "safety": 0, "preference": 0}', V1)
+    schedule_only = parse_scoring_config('{"weather": 0, "personality": 0, "activity": 0, "schedule": 1, "safety": 0, "preference": 0}', V1)
     assert run(activity_only) != run(schedule_only)
+    # v2는 묶음 이름으로 바꾼다.
+    pet_only = parse_scoring_config('{"pet_fit": 1, "user_preference": 0, "distance_time": 0, "weather_env": 0}')
+    time_only = parse_scoring_config('{"pet_fit": 0, "user_preference": 0, "distance_time": 1, "weather_env": 0}')
+    assert run(pet_only) != run(time_only)
 
 
 def test_ranker_can_be_replaced_without_touching_the_engine():
@@ -90,9 +94,22 @@ def test_ranker_can_be_replaced_without_touching_the_engine():
         def score(self, contributions, factor_scores, penalty):
             return factor_scores["activity"]
 
-    result = recommend(make_pet(), COURSES, make_forecast(), default_schedule(), EMPTY_STATE, NOW, config=ScoringConfig(ranker=ShortestFirst()))
+    result = recommend(make_pet(), COURSES, make_forecast(), default_schedule(), EMPTY_STATE, NOW, config=ScoringConfig(ranker=ShortestFirst(), version=V1))
     assert result.ranker == "stub-model"
     scores = [next(f.score for f in item.factors if f.key == "activity") for item in result.courses]
+    assert scores == sorted(scores, reverse=True)
+
+
+def test_ranker_can_be_replaced_in_v2_and_receives_group_scores():
+    class PetFitOnly:
+        name = "stub-model"
+
+        def score(self, contributions, factor_scores, penalty):
+            return factor_scores["pet_fit"]
+
+    result = recommend(make_pet(), COURSES, make_forecast(), default_schedule(), EMPTY_STATE, NOW, config=ScoringConfig(ranker=PetFitOnly()))
+    assert result.ranker == "stub-model"
+    scores = [next(g.score for g in item.groups if g.key == "pet_fit") for item in result.courses]
     assert scores == sorted(scores, reverse=True)
 
 

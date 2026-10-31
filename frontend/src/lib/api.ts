@@ -205,6 +205,9 @@ export const api = {
   latestRecommendations: (petId: number, limit = 1) =>
     request<Recommendation[]>(`/recommendations?pet_id=${petId}&limit=${limit}`),
   explainRecommendation: (id: number) => post<Recommendation>(`/recommendations/${id}/explain`, {}),
+  /** 추천 뒤 행동(코스 선택, 산책 시작)을 남긴다. 지표용이라 실패해도 화면은 그대로 둔다. */
+  recommendationEvent: (id: number, courseId: number, event: 'select' | 'start') =>
+    post<void>(`/recommendations/${id}/events`, { course_id: courseId, event }),
 
   createWalk: (body: {
     pet_id: number;
