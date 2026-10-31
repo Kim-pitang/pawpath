@@ -207,6 +207,8 @@ class WalkRead(BaseModel):
     feedback: FeedbackBrief | None
     tracking_source: str = "manual"
     is_simulated: bool = False
+    # 커뮤니티 산책길로 걸었으면 그 번호. 산책을 마친 뒤 후기로 잇는 데 쓴다.
+    community_trail_id: int | None = None
 
 
 class FeedbackCreate(BaseModel):
@@ -263,9 +265,19 @@ class SavedWalkUpdate(BaseModel):
     share_memo: bool | None = None
 
 
+class SavedWalkTrailRead(BaseModel):
+    """이 산책길을 커뮤니티에 공유한 상태."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    visibility: Literal["public", "private"]
+
+
 class SavedWalkSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
+    community_trail: SavedWalkTrailRead | None = None
     id: int
     pet_id: int | None
     pet_name: str | None = None
@@ -371,6 +383,232 @@ class GpxPreview(BaseModel):
     warnings: list[str]
     duplicate_of: DuplicateWalk | None
     points: list[GpxPointRead]
+
+
+# 산책길 커뮤니티
+TrailVisibility = Literal["public", "private"]
+TrailSort = Literal["recent", "popular", "rating"]
+TrailDifficulty = Literal["easy", "moderate", "hard"]
+TrailFeature = Literal["park", "shade", "flat", "paved", "waterside", "forest", "quiet", "lit"]
+TrailSuitable = Literal["small", "medium", "large", "senior", "puppy", "active", "timid"]
+# 출발점과 도착점을 가리는 반경. 가리지 않는 선택지는 두지 않는다.
+HideRadius = Literal[100, 200, 300, 500]
+
+
+def _clean_text(value: object) -> object:
+    """줄바꿈과 탭을 뺀 제어 문자를 지우고 앞뒤 공백을 없앤다. 화면에서는 항상 글자 그대로 표시한다."""
+    return "".join(ch for ch in value if ch in "\n\t" or (ch >= " " and ch != "\x7f")).strip() if isinstance(value, str) else value
+
+
+TrailTitle = Annotated[str, BeforeValidator(_clean_text), StringConstraints(min_length=1, max_length=80)]
+TrailDescription = Annotated[str, BeforeValidator(_clean_text), StringConstraints(max_length=2000)]
+TrailRegion = Annotated[str, BeforeValidator(_clean_text), StringConstraints(max_length=30)]
+ReviewContent = Annotated[str, BeforeValidator(_clean_text), StringConstraints(min_length=1, max_length=1000)]
+
+
+class TrailPreviewRequest(BaseModel):
+    saved_walk_id: int
+    hide_radius_m: HideRadius = 200
+
+
+class TrailPreview(BaseModel):
+    saved_walk_id: int
+    hide_radius_m: int
+    hidden_m: float
+    region: str
+    distance_m: float
+    estimated_min: int
+    elevation_gain_m: float | None
+    difficulty: TrailDifficulty
+    start_label: str | None
+    end_label: str | None
+    can_navigate: bool
+    route: list[list[list[float]]]
+
+
+class TrailCreate(BaseModel):
+    saved_walk_id: int
+    title: TrailTitle
+    description: TrailDescription = ""
+    cover_photo_id: int | None = None
+    visibility: TrailVisibility = "public"
+    # 비우면 출발점 근처의 서비스 지역 이름을 쓴다.
+    region: TrailRegion | None = None
+    features: list[TrailFeature] = Field(default_factory=list, max_length=8)
+    suitable_for: list[TrailSuitable] = Field(default_factory=list, max_length=7)
+    hide_radius_m: HideRadius = 200
+
+
+class TrailUpdate(BaseModel):
+    title: TrailTitle | None = None
+    description: TrailDescription | None = None
+    cover_photo_id: int | None = None
+    visibility: TrailVisibility | None = None
+    region: TrailRegion | None = None
+    features: list[TrailFeature] | None = Field(default=None, max_length=8)
+    suitable_for: list[TrailSuitable] | None = Field(default=None, max_length=7)
+    hide_radius_m: HideRadius | None = None
+
+
+class TrailFilters(BaseModel):
+    q: str | None = Field(default=None, max_length=80)
+    region: str | None = Field(default=None, max_length=50)
+    min_km: float | None = Field(default=None, ge=0, le=1000)
+    max_km: float | None = Field(default=None, ge=0, le=1000)
+    min_minutes: int | None = Field(default=None, ge=0, le=100_000)
+    max_minutes: int | None = Field(default=None, ge=0, le=100_000)
+    difficulty: TrailDifficulty | None = None
+    suitable: TrailSuitable | None = None
+    feature: TrailFeature | None = None
+    sort: TrailSort = "recent"
+
+
+class TrailSummary(BaseModel):
+    """카드에 쓰는 공개 값. 원본 산책길의 이름, 메모, 걸은 시각, 공유 토큰, 반려동물 정보는 담지 않는다."""
+
+    id: int
+    title: str
+    description: str
+    region: str
+    author_name: str
+    cover_photo_id: int | None
+    visibility: TrailVisibility
+    features: list[str]
+    suitable_for: list[str]
+    distance_m: float
+    estimated_min: int
+    elevation_gain_m: float | None
+    difficulty: TrailDifficulty
+    preview: list[list[list[float]]]
+    view_count: int
+    like_count: int
+    bookmark_count: int
+    review_count: int
+    average_rating: float | None
+    liked: bool
+    bookmarked: bool
+    is_mine: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class TrailPage(BaseModel):
+    items: list[TrailSummary]
+    total: int
+    page: int
+    size: int
+    has_next: bool
+
+
+class TrailReactionPage(TrailPage):
+    # 작성자가 비공개로 돌려 지금은 볼 수 없는 산책길 수
+    hidden_count: int
+
+
+class TrailRegionRead(BaseModel):
+    region: str
+    count: int
+
+
+class TrailNearbyRequest(BaseModel):
+    """위치가 접근 로그에 남지 않도록 본문으로 받는다. 저장하지 않는다."""
+
+    latitude: float = Field(ge=-90, le=90, allow_inf_nan=False)
+    longitude: float = Field(ge=-180, le=180, allow_inf_nan=False)
+    radius_km: float = Field(default=5, gt=0, le=50, allow_inf_nan=False)
+    limit: int = Field(default=20, ge=1, le=50)
+
+
+class TrailNearby(TrailSummary):
+    distance_from_me_m: float
+
+
+class TrailRecommended(TrailSummary):
+    match_score: int
+    reasons: list[str]
+
+
+class ReviewPhotoRead(BaseModel):
+    id: int
+
+
+class ReviewRead(BaseModel):
+    id: int
+    trail_id: int
+    rating: int
+    content: str
+    author_name: str
+    is_mine: bool
+    # 이 산책길의 코스를 GPS로 절반 이상 걸은 기록이 있으면 참이다.
+    verified: bool
+    edited: bool
+    photos: list[ReviewPhotoRead]
+    created_at: datetime
+    updated_at: datetime
+
+
+class ReviewPage(BaseModel):
+    items: list[ReviewRead]
+    total: int
+    page: int
+    size: int
+    has_next: bool
+
+
+class MyReviewRead(ReviewRead):
+    trail_available: bool
+    trail_title: str | None
+
+
+class MyReviewPage(BaseModel):
+    items: list[MyReviewRead]
+    total: int
+    page: int
+    size: int
+    has_next: bool
+
+
+class ReviewCreate(BaseModel):
+    rating: int = Field(ge=1, le=5)
+    content: ReviewContent
+
+
+class ReviewUpdate(BaseModel):
+    rating: int | None = Field(default=None, ge=1, le=5)
+    content: ReviewContent | None = None
+
+
+class TrailOwnerRead(BaseModel):
+    saved_walk_id: int
+    hide_radius_m: int
+
+
+class TrailDetail(TrailSummary):
+    route: list[list[list[float]]]
+    start: list[float]
+    end: list[float]
+    start_label: str | None
+    end_label: str | None
+    can_navigate: bool
+    my_review: ReviewRead | None
+    # 이 산책길을 GPS로 걸은 기록이 있으면 후기에 산책 인증이 붙는다.
+    walked: bool
+    # 주인에게만 채워진다.
+    owner: TrailOwnerRead | None
+
+
+class LikeState(BaseModel):
+    liked: bool
+    like_count: int
+
+
+class BookmarkState(BaseModel):
+    bookmarked: bool
+    bookmark_count: int
+
+
+class TrailCourseRead(BaseModel):
+    course_id: int
 
 
 # 계정

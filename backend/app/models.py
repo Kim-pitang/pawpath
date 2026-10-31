@@ -1,7 +1,7 @@
 """PawPath ORM 모델."""
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, LargeBinary, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, LargeBinary, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.clock import now_local
@@ -109,10 +109,12 @@ class WalkingCourse(Base):
     saved_walk_id: Mapped[int | None] = mapped_column(ForeignKey("saved_walks.id"), nullable=True)
     # 추천 후보에서 뺀 코스. 산책 기록이 코스를 가리키므로 지우지 않고 끈다.
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # 커뮤니티 산책길로 길 안내를 받으려고 만든 코스. 산책길이 공개인 동안 누구나 볼 수 있고 추천 후보에는 들어가지 않는다.
+    community_trail_id: Mapped[int | None] = mapped_column(ForeignKey("community_trails.id"), nullable=True, unique=True, index=True)
 
     @property
     def is_personal(self) -> bool:
-        return self.owner_user_id is not None
+        return self.owner_user_id is not None and self.community_trail_id is None
 
 
 class WeatherRecord(Base):
@@ -268,6 +270,7 @@ class SavedWalk(Base):
     photos: Mapped[list["SavedWalkPhoto"]] = relationship(
         back_populates="walk", cascade="all, delete-orphan", order_by="SavedWalkPhoto.id"
     )
+    community_trail: Mapped["CommunityTrail | None"] = relationship(back_populates="walk", uselist=False, cascade="all, delete-orphan")
 
 
 class SavedWalkPoint(Base):
@@ -304,4 +307,114 @@ class SavedWalkPhoto(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_local)
 
     walk: Mapped[SavedWalk] = relationship(back_populates="photos")
+
+
+class CommunityTrail(Base):
+    """커뮤니티에 공유한 산책길. 좌표는 saved_walk_points에 한 벌만 두고, 여기에는 출발점과 도착점 주변을 가린 공개용 값만 둔다."""
+
+    __tablename__ = "community_trails"
+    __table_args__ = (Index("ix_community_trails_visibility_created", "visibility", "created_at"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    # 산책길 하나는 한 번만 공유한다.
+    saved_walk_id: Mapped[int] = mapped_column(ForeignKey("saved_walks.id", ondelete="CASCADE"), unique=True)
+    title: Mapped[str] = mapped_column(String(80))
+    description: Mapped[str] = mapped_column(Text, default="")
+    # 사진은 DB에 있어 주소 대신 사진 번호를 둔다. 고른 한 장만 공개된다.
+    cover_photo_id: Mapped[int | None] = mapped_column(ForeignKey("saved_walk_photos.id", ondelete="SET NULL"), nullable=True)
+    # public | private. 비공개여도 좋아요와 후기는 남겨 두어 다시 공개하면 돌아온다.
+    visibility: Mapped[str] = mapped_column(String(10), default="public")
+    region: Mapped[str] = mapped_column(String(50), index=True)
+    features: Mapped[list] = mapped_column(JSON, default=list)
+    suitable_for: Mapped[list] = mapped_column(JSON, default=list)
+    # 원본 출발점과 도착점에서 이 반경 안의 지점을 공개하지 않는다. 주인에게만 보여 준다.
+    hide_radius_m: Mapped[int] = mapped_column(Integer, default=200)
+    # 아래는 가린 뒤의 경로로 계산한 값이다. 목록을 그릴 때 전체 지점을 읽지 않으려고 저장한다.
+    distance_m: Mapped[float] = mapped_column(Float, index=True)
+    estimated_min: Mapped[int] = mapped_column(Integer, index=True)
+    elevation_gain_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # easy | moderate | hard
+    difficulty: Mapped[str] = mapped_column(String(10), index=True)
+    start_lat: Mapped[float] = mapped_column(Float)
+    start_lng: Mapped[float] = mapped_column(Float)
+    end_lat: Mapped[float] = mapped_column(Float)
+    end_lng: Mapped[float] = mapped_column(Float)
+    start_label: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    end_label: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    preview: Mapped[list] = mapped_column(JSON, default=list)
+    view_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_local)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_local, onupdate=now_local)
+
+    author: Mapped[User] = relationship()
+    walk: Mapped[SavedWalk] = relationship(back_populates="community_trail")
+    likes: Mapped[list["TrailLike"]] = relationship(back_populates="trail", cascade="all, delete-orphan")
+    bookmarks: Mapped[list["TrailBookmark"]] = relationship(back_populates="trail", cascade="all, delete-orphan")
+    reviews: Mapped[list["TrailReview"]] = relationship(back_populates="trail", cascade="all, delete-orphan")
+
+
+class TrailLike(Base):
+    __tablename__ = "trail_likes"
+    __table_args__ = (UniqueConstraint("user_id", "community_trail_id", name="uq_trail_like_user"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    community_trail_id: Mapped[int] = mapped_column(ForeignKey("community_trails.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_local)
+
+    trail: Mapped[CommunityTrail] = relationship(back_populates="likes")
+
+
+class TrailBookmark(Base):
+    __tablename__ = "trail_bookmarks"
+    __table_args__ = (UniqueConstraint("user_id", "community_trail_id", name="uq_trail_bookmark_user"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    community_trail_id: Mapped[int] = mapped_column(ForeignKey("community_trails.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_local)
+
+    trail: Mapped[CommunityTrail] = relationship(back_populates="bookmarks")
+
+
+class TrailReview(Base):
+    """산책길 후기. 보호자 한 명이 산책길마다 하나만 남긴다. 산책 인증 여부는 산책 기록에서 읽을 때 계산한다."""
+
+    __tablename__ = "trail_reviews"
+    __table_args__ = (
+        UniqueConstraint("user_id", "community_trail_id", name="uq_trail_review_user"),
+        CheckConstraint("rating BETWEEN 1 AND 5", name="ck_trail_review_rating"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # 탈퇴하면 보호자의 글도 함께 지운다. 평점은 읽을 때 집계하므로 바로 반영된다.
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    community_trail_id: Mapped[int] = mapped_column(ForeignKey("community_trails.id", ondelete="CASCADE"), index=True)
+    rating: Mapped[int] = mapped_column(Integer)
+    content: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_local)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_local, onupdate=now_local)
+
+    author: Mapped[User] = relationship()
+    trail: Mapped[CommunityTrail] = relationship(back_populates="reviews")
+    photos: Mapped[list["TrailReviewPhoto"]] = relationship(
+        back_populates="review", cascade="all, delete-orphan", order_by="TrailReviewPhoto.id"
+    )
+
+
+class TrailReviewPhoto(Base):
+    """후기 사진. 산책길 사진과 같은 방법으로 메타데이터를 지운 뒤 저장한다."""
+
+    __tablename__ = "trail_review_photos"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    review_id: Mapped[int] = mapped_column(ForeignKey("trail_reviews.id", ondelete="CASCADE"), index=True)
+    content_type: Mapped[str] = mapped_column(String(20))
+    data: Mapped[bytes] = mapped_column(LargeBinary, deferred=True)
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_local)
+
+    review: Mapped[TrailReview] = relationship(back_populates="photos")
+
 
