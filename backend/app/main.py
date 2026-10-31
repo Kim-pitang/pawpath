@@ -1,15 +1,35 @@
 """PawPath (댕댕 산책각) API 서버 진입점."""
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app import api, models  # noqa: F401  models는 테이블 등록을 위해 불러온다
 from app.config import get_settings
 from app.database import SessionLocal, engine
 from app.migrations import ensure_schema
 from app.seed import seed_all
+
+# 가장 긴 산책길(10만 지점)을 JSON으로 보낼 때 들어가는 크기를 기준으로 잡았다.
+MAX_REQUEST_BYTES = 25 * 1024 * 1024
+GOOGLE_CALLBACK_PATH = "/api/auth/google/callback"
+
+
+class RedactOAuthCallback(logging.Filter):
+    """Google이 주소에 붙여 보내는 승인 코드와 state를 접근 로그에서 지운다."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if isinstance(args, tuple) and len(args) >= 3 and isinstance(args[2], str) and args[2].startswith(GOOGLE_CALLBACK_PATH + "?"):
+            record.args = (*args[:2], GOOGLE_CALLBACK_PATH + "?[생략]", *args[3:])
+        return True
+
+
+# uvicorn이 로그 설정을 마친 뒤 이 모듈을 불러오므로 여기서 붙인 필터가 유지된다.
+logging.getLogger("uvicorn.access").addFilter(RedactOAuthCallback())
 
 
 @asynccontextmanager
@@ -29,7 +49,19 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origin_list,
+    # 로그인 세션 쿠키를 주고받는다. 허용 출처를 명시해 두었으므로 안전하다.
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def limit_request_size(request: Request, call_next):
+    length = request.headers.get("content-length")
+    if length and length.isdigit() and int(length) > MAX_REQUEST_BYTES:
+        return JSONResponse({"detail": "요청이 너무 커요."}, status_code=413)
+    return await call_next(request)
+
+
 app.include_router(api.router)

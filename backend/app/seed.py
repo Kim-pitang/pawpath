@@ -14,6 +14,11 @@ COURSE_FILES = (DATA_DIR / "courses.json", DATA_DIR / "courses_gaepo.json")
 DEFAULT_USER_ID = 1
 
 
+def new_user_defaults() -> dict:
+    """시연 보호자와 새로 가입한 보호자가 함께 쓰는 기본 일정."""
+    return {"available_windows": [{"start_hour": 16, "end_hour": 20}], "preferred_duration_min": 40, "walks_per_day": 1}
+
+
 def seed_courses(db: Session) -> None:
     """코드 기준으로 코스를 추가하거나 갱신한다. 다시 실행해도 안전하다."""
     existing = {course.code: course for course in db.scalars(select(WalkingCourse))}
@@ -33,9 +38,7 @@ def seed_default_user(db: Session) -> User:
         user = User(
             id=DEFAULT_USER_ID,
             name="보호자",
-            available_windows=[{"start_hour": 16, "end_hour": 20}],
-            preferred_duration_min=40,
-            walks_per_day=1,
+            **new_user_defaults(),
         )
         db.add(user)
     return user

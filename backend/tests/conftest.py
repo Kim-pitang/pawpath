@@ -14,6 +14,11 @@ os.environ["ROUTING_PROVIDER"] = "none"
 os.environ["LLM_PROVIDER"] = "none"
 os.environ["RECOMMENDER_WEIGHTS"] = "{}"
 os.environ["SERVICE_AREA"] = "mangwon"
+os.environ["AUTH_REQUIRED"] = "false"
+# 가짜 Google 클라이언트. 토큰 교환은 테스트가 가짜 Google 서버로 바꿔 끼우므로 실제 Google을 부르지 않는다.
+os.environ["GOOGLE_CLIENT_ID"] = "test-client.apps.googleusercontent.com"
+os.environ["GOOGLE_CLIENT_SECRET"] = "test-google-secret"
+os.environ["GOOGLE_REDIRECT_URI"] = "http://testserver/api/auth/google/callback"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

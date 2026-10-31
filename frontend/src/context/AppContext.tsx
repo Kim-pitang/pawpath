@@ -1,8 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { api } from '../lib/api';
-import type { Pet, Recommendation, Schedule, WeatherScenario } from '../lib/types';
+import { api, UNAUTHORIZED_EVENT } from '../lib/api';
+import type { Account, Pet, Recommendation, Schedule, WeatherScenario } from '../lib/types';
 
 interface AppState {
+  /** 로그인 상태. 처음 읽는 동안은 null이다. */
+  account: Account | null;
+  refreshAccount: () => Promise<Account>;
+  signOut: () => Promise<void>;
+  /** 세션이 만료되었을 때처럼 화면 위에 알릴 계정 안내. */
+  authNotice: string | null;
+  clearAuthNotice: () => void;
   pets: Pet[];
   petsLoaded: boolean;
   loadError: string | null;
@@ -37,6 +44,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
   const [cache, setCache] = useState<Record<string, Recommendation>>({});
   const inFlight = useRef<Record<string, Promise<Recommendation>>>({});
+  const [account, setAccount] = useState<Account | null>(null);
+  const accountRef = useRef<Account | null>(null);
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
+
+  const refreshAccount = useCallback(async () => {
+    const next = await api.authMe();
+    accountRef.current = next;
+    setAccount(next);
+    return next;
+  }, []);
 
   const refreshPets = useCallback(async () => {
     const list = await api.listPets();
@@ -47,12 +64,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    refreshAccount().catch((error: Error) => {
+      setLoadError(error.message);
+      setPetsLoaded(true);
+    });
+  }, [refreshAccount]);
+
+  // 어느 API든 401을 받으면 계정 상태를 다시 읽는다. 로그인해 있었다면 만료를 알린다.
+  useEffect(() => {
+    const onUnauthorized = () => {
+      const wasSignedIn = accountRef.current?.authenticated ?? false;
+      refreshAccount()
+        .then((next) => {
+          if (wasSignedIn && !next.authenticated) setAuthNotice('로그인이 만료되었어요. 다시 로그인해 주세요.');
+        })
+        .catch(() => undefined);
+    };
+    window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
+  }, [refreshAccount]);
+
+  // 계정이 바뀌면 그 보호자의 반려동물과 일정을 새로 읽고, 다른 계정의 추천 캐시를 비운다.
+  const accountKey = account ? (account.user ? `user:${account.user.id}` : account.auth_required ? 'locked' : 'guest') : null;
+  useEffect(() => {
+    if (!accountKey) return;
+    setCache({});
+    if (accountKey === 'locked') {
+      setPets([]);
+      setSchedule(null);
+      setPetsLoaded(true);
+      return;
+    }
+    // 이전 계정의 반려동물로 새 계정의 API를 부르지 않도록 목록을 먼저 비운다.
+    setPets([]);
+    setPetsLoaded(false);
     refreshPets().catch((error: Error) => {
       setLoadError(error.message);
       setPetsLoaded(true);
     });
     api.getSchedule().then(setSchedule).catch(() => undefined);
-  }, [refreshPets]);
+  }, [accountKey, refreshPets]);
+
+  const signOut = useCallback(async () => {
+    await api.logout();
+    setAuthNotice(null);
+    await refreshAccount();
+  }, [refreshAccount]);
+  const clearAuthNotice = useCallback(() => setAuthNotice(null), []);
 
   const selectedPet = useMemo(
     () => pets.find((pet) => pet.id === selectedId) ?? pets[0] ?? null,
@@ -101,6 +159,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AppState>(
     () => ({
+      account,
+      refreshAccount,
+      signOut,
+      authNotice,
+      clearAuthNotice,
       pets,
       petsLoaded,
       loadError,
@@ -117,6 +180,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       replaceRecommendation,
     }),
     [
+      account,
+      refreshAccount,
+      signOut,
+      authNotice,
+      clearAuthNotice,
       pets,
       petsLoaded,
       loadError,

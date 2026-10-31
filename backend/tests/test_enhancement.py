@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, inspect, text
 
 from app.config import Settings
 from app.database import Base, SessionLocal
-from app.migrations import ADDED_COLUMNS, ensure_schema
+from app.migrations import ADDED_COLUMNS, ADDED_UNIQUE_INDEXES, ensure_schema
 from app.models import Pet, User, WalkingCourse
 from app.recommender.config import BASE_WEIGHTS, DEFAULT_CONFIG, ScoringConfig, parse_scoring_config
 from app.recommender.engine import recommend
@@ -219,6 +219,8 @@ def _old_schema_engine(tmp_path):
     engine = create_engine(f"sqlite:///{tmp_path}/old.db")
     Base.metadata.create_all(engine)
     with engine.begin() as connection:
+        for index, _, _ in ADDED_UNIQUE_INDEXES:
+            connection.execute(text(f"DROP INDEX {index}"))
         for table, columns in ADDED_COLUMNS.items():
             for name, _ in columns:
                 connection.execute(text(f"ALTER TABLE {table} DROP COLUMN {name}"))
@@ -234,9 +236,15 @@ def test_old_database_gets_new_columns_and_keeps_its_data(tmp_path):
     assert "pets.preferred_distance_km" in added
     assert "walk_histories.tracking_source" in added
     assert "walking_courses.environment" in added
+    assert "users.login_id" in added
+    assert "users.google_sub" in added
     with engine.connect() as connection:
         row = connection.execute(text("SELECT name, feedback_total, preferred_distance_km FROM pets")).one()
+        assert connection.execute(text("SELECT login_id, password_hash FROM users WHERE id = 1")).one() == (None, None)
     assert row == ("옛날두부", 3, None)
+    # 아이디 중복을 막는 고유 색인도 함께 생긴다.
+    indexes = {index["name"]: index["unique"] for index in inspect(engine).get_indexes("users")}
+    assert indexes.get("ix_users_login_id") and indexes.get("ix_users_google_sub")
 
 
 def test_migration_can_run_repeatedly(tmp_path):

@@ -1,5 +1,5 @@
 import { CalendarCheck, Home, Map as MapIcon, PawPrint, Sparkles } from 'lucide-react';
-import { Link, NavLink, Outlet } from 'react-router-dom';
+import { Link, Navigate, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { PawPathMark, Wordmark } from './Logo';
 
@@ -12,7 +12,12 @@ const NAV_ITEMS = [
 ];
 
 export default function Layout() {
-  const { selectedPet } = useApp();
+  const { selectedPet, account, authNotice } = useApp();
+  const location = useLocation();
+  const here = location.pathname + location.search;
+
+  // 로그인 필수 서버에서 로그인하지 않았으면 로그인 화면으로 보낸다.
+  if (account?.auth_required && !account.authenticated) return <Navigate to="/login" replace state={{ from: here }} />;
 
   return (
     <div className="min-h-dvh pb-24 md:pb-10">
@@ -38,17 +43,35 @@ export default function Layout() {
               </NavLink>
             ))}
           </nav>
-          {selectedPet && (
-            <Link
-              to="/pets"
-              className="flex min-h-9 items-center gap-1.5 rounded-full border border-line bg-white px-3 text-sm font-semibold text-ink"
-            >
-              <PawPrint size={15} className="text-carrot-500" aria-hidden />
-              {selectedPet.name}
-            </Link>
-          )}
+          <div className="flex items-center gap-2">
+            {account && !account.authenticated && (
+              <Link to="/login" state={{ from: here }} className="flex min-h-9 items-center px-1 text-sm font-semibold text-leaf-800 underline">
+                로그인
+              </Link>
+            )}
+            {selectedPet && (
+              <Link
+                to="/pets"
+                className="flex min-h-9 items-center gap-1.5 rounded-full border border-line bg-white px-3 text-sm font-semibold text-ink"
+              >
+                <PawPrint size={15} className="text-carrot-500" aria-hidden />
+                {selectedPet.name}
+              </Link>
+            )}
+          </div>
         </div>
       </header>
+
+      {authNotice && (
+        <div className="mx-auto max-w-md px-4 pt-3 md:max-w-5xl">
+          <div className="flex items-center justify-between gap-2 rounded-2xl bg-carrot-50 p-3 text-sm text-carrot-700" role="alert" data-testid="auth-notice">
+            <span>{authNotice}</span>
+            <Link to="/login" state={{ from: here }} className="shrink-0 font-bold underline">
+              로그인
+            </Link>
+          </div>
+        </div>
+      )}
 
       <main className="mx-auto max-w-md px-4 pt-4 md:max-w-5xl">
         <Outlet />

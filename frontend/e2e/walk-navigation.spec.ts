@@ -193,6 +193,10 @@ test.describe('GPS를 쓸 수 없을 때', () => {
     await page.getByRole('button', { name: '시연용 위치로 걷기' }).click();
     await expect(page.getByTestId('walk-progress')).toBeVisible();
     await expect(page.getByTestId('walk-environment')).toContainText('안전');
+    // 출발점 25m 안에서 복귀를 고르면 바로 도착이 맞으므로, 코스를 조금 걸은 뒤 비를 내리게 한다.
+    await expect(async () => {
+      expect(Number(await page.getByTestId('walk-progress').getAttribute('aria-valuenow'))).toBeGreaterThanOrEqual(10);
+    }).toPass({ timeout: 20000 });
 
     await page.getByRole('button', { name: '시연: 지금부터 비 내리기' }).click();
     const panel = page.getByTestId('alternative-panel');

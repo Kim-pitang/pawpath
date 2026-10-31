@@ -444,3 +444,116 @@ export interface WalkReport {
   simulated_walks_excluded: number;
   total_simulated_walks: number;
 }
+
+// 나만의 산책길
+export type Visibility = 'private' | 'link' | 'public';
+export type WalkSourceType = 'recorded' | 'imported';
+export type SavedWalkSort = 'recent' | 'distance';
+
+export interface WalkPointInput {
+  latitude: number;
+  longitude: number;
+  altitude: number | null;
+  accuracy: number | null;
+  recorded_at: string | null;
+  segment: number;
+}
+
+export interface SavedWalkInput {
+  title: string;
+  pet_id: number | null;
+  memo: string;
+  visibility: Visibility;
+  share_memo: boolean;
+  source_type: WalkSourceType;
+  client_id: string;
+  duration_sec?: number;
+  points: WalkPointInput[];
+}
+
+export interface SavedWalkSummary {
+  id: number;
+  pet_id: number | null;
+  pet_name: string | null;
+  title: string;
+  source_type: WalkSourceType;
+  started_at: string;
+  ended_at: string | null;
+  distance_m: number;
+  duration_sec: number | null;
+  average_speed_mps: number | null;
+  has_timestamps: boolean;
+  point_count: number;
+  visibility: Visibility;
+  preview: number[][][];
+}
+
+export interface WalkPhoto {
+  id: number;
+  content_type: string;
+  size_bytes: number;
+  created_at: string;
+}
+
+export interface SavedWalkDetail extends SavedWalkSummary {
+  memo: string;
+  share_token: string | null;
+  share_expires_at: string | null;
+  share_memo: boolean;
+  route: number[][][];
+  photos: WalkPhoto[];
+}
+
+export interface SharedWalk {
+  title: string;
+  distance_m: number;
+  duration_sec: number | null;
+  memo: string | null;
+  start: number[];
+  end: number[];
+  route: number[][][];
+}
+
+export interface PublicWalk {
+  token: string;
+  title: string;
+  distance_m: number;
+  duration_sec: number | null;
+  preview: number[][][];
+}
+
+export interface GpxPreview {
+  name: string | null;
+  version: string;
+  track_count: number;
+  segment_count: number;
+  point_count: number;
+  invalid_point_count: number;
+  has_timestamps: boolean;
+  distance_m: number;
+  duration_sec: number | null;
+  started_at: string | null;
+  ended_at: string | null;
+  average_speed_mps: number | null;
+  warnings: string[];
+  duplicate_of: { id: number; title: string } | null;
+  points: { segment: number; latitude: number; longitude: number; altitude: number | null; recorded_at: string | null }[];
+}
+
+// 계정
+export interface AccountUser {
+  id: number;
+  name: string;
+  /** Google 로그인 사용자는 아이디가 없다. */
+  login_id: string | null;
+  email: string | null;
+  provider: 'password' | 'google';
+}
+
+export interface Account {
+  authenticated: boolean;
+  auth_required: boolean;
+  google_enabled: boolean;
+  user: AccountUser | null;
+}
+

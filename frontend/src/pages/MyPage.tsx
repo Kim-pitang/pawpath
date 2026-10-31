@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import DivergingBars from '../components/charts/DivergingBars';
 import HBarChart from '../components/charts/HBarChart';
 import ScoreTrendChart from '../components/charts/ScoreTrendChart';
+import AccountCard from '../components/AccountCard';
 import { Card, EmptyState, ErrorNotice, InfoNotice, LinkButton, Loading, PageTitle, SectionTitle } from '../components/ui';
 import { useApp } from '../context/AppContext';
 import { api } from '../lib/api';
@@ -18,6 +19,8 @@ export default function MyPage() {
     if (!petId) return;
     let active = true;
     setInsights(null);
+    // 계정이 바뀌어 반려동물이 달라지면 이전 오류를 남기지 않는다.
+    setError(null);
     api
       .insights(petId)
       .then((result) => active && setInsights(result))
@@ -36,11 +39,14 @@ export default function MyPage() {
 
   if (petsLoaded && !selectedPet) {
     return (
-      <Card>
-        <EmptyState title="먼저 반려동물을 등록해 주세요">
-          <LinkButton to="/pets/new">반려동물 등록하기</LinkButton>
-        </EmptyState>
-      </Card>
+      <div className="flex flex-col gap-4">
+        <AccountCard />
+        <Card>
+          <EmptyState title="먼저 반려동물을 등록해 주세요">
+            <LinkButton to="/pets/new">반려동물 등록하기</LinkButton>
+          </EmptyState>
+        </Card>
+      </div>
     );
   }
   if (error) return <ErrorNotice message={error} />;
@@ -54,10 +60,16 @@ export default function MyPage() {
   return (
     <div className="flex flex-col gap-4">
       <PageTitle sub="산책이 쌓일수록 추천이 똑똑해져요.">{insights.pet_name}의 산책 리포트</PageTitle>
+      <AccountCard />
 
-      <LinkButton to="/report" variant="ghost" className="w-full">
-        주간 활동 리포트 보기
-      </LinkButton>
+      <div className="grid grid-cols-2 gap-2">
+        <LinkButton to="/report" variant="ghost" className="!px-2">
+          주간 활동 리포트 보기
+        </LinkButton>
+        <LinkButton to="/my-walks" variant="ghost" className="!px-2">
+          나의 산책길
+        </LinkButton>
+      </div>
       {stats.simulated_walk_count > 0 && (
         <InfoNotice>시연용 산책 {stats.simulated_walk_count}건은 아래 활동 통계에서 제외했어요. 피드백 학습에는 반영돼요.</InfoNotice>
       )}

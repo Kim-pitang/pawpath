@@ -4,15 +4,57 @@
 
 - 모든 요청과 응답은 JSON입니다.
 - 시각은 서비스 지역(Asia/Seoul) 기준이며 타임존 표기가 없습니다. 예: `2026-10-31T16:00:00`
-- MVP는 인증 없이 기본 보호자 1명으로 동작합니다.
+- 로그인은 선택입니다. 로그인 세션 쿠키(`pawpath_session`)가 있으면 그 보호자의 데이터만 다루고, 없으면 시연 보호자(id 1)로 동작합니다. `AUTH_REQUIRED=true`면 로그인하지 않은 요청은 `401`입니다.
+- 다른 보호자의 반려동물, 산책 기록, 산책길, 사진은 있어도 `404`로 응답합니다.
 
 ## 공통 오류
 
 | 상태 | 의미 | 응답 |
 |---|---|---|
 | 404 | 대상 없음 | `{"detail": "반려동물을 찾을 수 없습니다"}` |
-| 409 | 이미 피드백을 남긴 산책 | `{"detail": "이미 피드백을 남긴 산책입니다"}` |
-| 422 | 입력값 오류 | FastAPI 검증 오류 형식 |
+| 401 | 로그인이 필요하거나 세션이 만료됨 | `{"detail": "로그인이 만료되었어요. 다시 로그인해 주세요."}` (만료 시 쿠키 삭제) |
+| 409 | 이미 피드백을 남긴 산책, 이미 쓰는 아이디, 사진 5장 초과 | `{"detail": "이미 피드백을 남긴 산책입니다"}` |
+| 429 | 로그인을 연달아 틀림 | `{"detail": "로그인 시도가 너무 많아요. 10분 뒤에 다시 시도해 주세요."}` |
+| 410 | 기간이 끝난 공유 링크 | `{"detail": "공유 기간이 끝난 링크예요"}` |
+| 413 | 요청, GPX 파일, 사진이 너무 큼 | `{"detail": "파일이 너무 커요. 10MB까지 가져올 수 있어요."}` |
+| 422 | 입력값 오류, 읽을 수 없는 GPX | FastAPI 검증 오류 형식, GPX는 이유 문장 |
+
+## 계정
+
+### `POST /auth/signup`
+
+```json
+{ "login_id": "dubu-mom", "password": "8자 이상", "name": "두부 보호자" }
+```
+
+아이디는 공백을 지우고 소문자로 바꾼 뒤, 3~30자의 영문 소문자, 숫자, `.`, `_`, `-`(영문이나 숫자로 시작)인지 확인합니다. 비밀번호는 8~128자입니다. 가입하면 바로 로그인 쿠키를 주고 `201`을 돌려줍니다. 같은 아이디가 있으면 `409`입니다. 새 계정은 반려동물 없이 기본 일정(16~20시)으로 시작합니다.
+
+### `POST /auth/login` · `POST /auth/logout` · `GET /auth/me`
+
+로그인은 `{ "login_id", "password" }`를 받아 쿠키를 줍니다. 틀리면 아이디가 없는지 비밀번호가 틀렸는지 구분하지 않고 `401`, 같은 아이디로 5번 연달아 틀리면 10분 동안 `429`입니다. 로그아웃은 서버의 세션을 지우고 쿠키를 지웁니다. 세 요청 모두 아래 형식을 돌려줍니다.
+
+```json
+{ "authenticated": true, "auth_required": false, "user": { "id": 2, "name": "두부 보호자", "login_id": "dubu-mom" } }
+```
+
+`/auth/me`는 만료된 쿠키를 지우고 로그인하지 않은 상태로 알려 줍니다. `google_enabled`는 서버에 Google 클라이언트가 설정되어 있는지입니다. `user.provider`는 `password` 또는 `google`이고, Google 사용자는 `login_id`가 `null`이며 Google이 확인한 이메일이 `email`에 들어갑니다.
+
+### `GET /auth/google/start?next=/my-walks`
+
+브라우저를 이 주소로 보내면(페이지 이동) Google 로그인 화면으로 `302` 리디렉션합니다. PKCE(S256), state, nonce를 붙이고, state를 `pawpath_google_state` 쿠키(HttpOnly, 10분, 경로 `/api/auth/google`)로도 줍니다. `next`는 로그인 뒤 돌아갈 앱 안의 경로이며 다른 사이트 주소면 `/`로 바꿉니다. Google 클라이언트가 설정되지 않았으면 `404`입니다.
+
+### `GET /auth/google/callback`
+
+Google이 돌려보내는 주소이며 콘솔의 리디렉션 URI와 같아야 합니다. 서버가 승인 코드를 클라이언트 비밀값과 PKCE 검증값으로 교환하고, ID 토큰의 발급자, 대상, 만료, nonce를 확인한 뒤 세션 쿠키를 주고 `next`로 `302` 리디렉션합니다. 같은 Google 계정(`sub`)은 늘 같은 보호자이고, 처음이면 보호자를 새로 만듭니다.
+
+실패하면 `/login?error=이유`로 보냅니다.
+
+| 이유 | 상황 |
+|---|---|
+| `google_cancelled` | Google 화면에서 사용자가 취소 |
+| `google_state` | state가 없거나 브라우저 쿠키와 다름, 이미 썼거나 10분이 지남 |
+| `google_failed` | 토큰 교환 실패, ID 토큰 확인 실패, Google의 다른 오류 |
+| `google_unavailable` | 서버에 Google 클라이언트가 설정되지 않음 |
 
 ## 반려동물
 
@@ -362,6 +404,95 @@
 ### `GET /feedback/{pet_id}`
 
 해당 반려동물의 피드백 목록(최신순)입니다.
+
+## 나만의 산책길
+
+직접 기록하거나 GPX로 가져온 산책길입니다. 추천 코스의 `/walks`와 별개이며 추천 학습에는 쓰지 않습니다.
+
+### `POST /my-walks`
+
+```json
+{
+  "title": "새롬관 옆 양재천 산책",
+  "pet_id": 1,
+  "memo": "",
+  "visibility": "private",
+  "share_memo": false,
+  "source_type": "recorded",
+  "client_id": "rec-2f6c0a6e-1b7e-4f0a-9d7a-5d1c2b3a4e5f",
+  "duration_sec": 1260,
+  "points": [
+    { "latitude": 37.4895, "longitude": 127.0664, "altitude": null, "accuracy": 6, "recorded_at": "2026-10-31T16:00:00", "segment": 0 }
+  ]
+}
+```
+
+- `points`는 2개 이상 10만 개 이하이고 순서대로 저장합니다. `segment`가 바뀌는 곳(일시정지, GPX `trkseg`)은 선을 잇지 않고 거리에 넣지 않습니다.
+- `visibility`: `private`(기본), `link`, `public`. `private`가 아니면 공유 토큰을 함께 만듭니다.
+- `source_type`: `recorded`(직접 기록) 또는 `imported`(GPX). 기록은 같은 좌표가 이어진 지점을 빼고, `duration_sec`(일시정지를 뺀 시간)을 씁니다. GPX는 시각으로 시간을 계산하고, 시각이 없으면 `null`입니다.
+- 거리, 평균 속도, 시작과 끝 시각은 서버가 좌표로 다시 계산합니다. 100m 넘게 움직이면서 시속 252km(초속 70m)를 넘는 이동, 시각이 없거나 같으면 5km를 넘는 간격은 구간을 나눠 거리에서 뺍니다.
+- `client_id`가 같은 요청을 다시 보내면 새로 만들지 않고 저장된 산책길을 `200`으로 돌려줍니다. 처음 저장하면 `201`입니다.
+
+### `GET /my-walks?sort=recent&pet_id=1&visibility=link`
+
+목록입니다. `sort`는 `recent`(기본) 또는 `distance`, `pet_id`와 `visibility`는 선택입니다. 각 항목은 전체 좌표 대신 약 80개로 줄인 `preview` 경로를 담습니다.
+
+### `GET /my-walks/{walk_id}` · `PATCH /my-walks/{walk_id}` · `DELETE /my-walks/{walk_id}`
+
+상세에는 `route`(구간별 전체 경로), `memo`, `share_token`, `share_expires_at`이 더해집니다. `PATCH`는 보낸 항목만 바꾸며 `title`, `pet_id`, `memo`, `visibility`, `share_memo`를 받습니다. `pet_id`만 `null`로 비울 수 있습니다. 비공개로 바꾸면 공유 토큰을 지웁니다. `DELETE`는 지점까지 함께 지우고 `204`를 돌려줍니다.
+
+### `GET /my-walks/{walk_id}/gpx`
+
+GPX 1.1 파일(`application/gpx+xml`, UTF-8)입니다. 구간, 시각(UTC), 고도를 담습니다. `Content-Disposition`에 한글 이름(`filename*`)과 영문 대체 이름(`filename`)을 함께 줍니다.
+
+### `POST /my-walks/import/preview`
+
+GPX 파일 원본을 요청 본문으로 보냅니다(`Content-Type: application/gpx+xml`). 저장하지 않고 검증 결과와 미리보기를 돌려줍니다.
+
+| 필드 | 내용 |
+|---|---|
+| `name`, `version` | 파일의 이름과 GPX 버전 |
+| `track_count`, `segment_count`, `point_count`, `invalid_point_count` | 트랙, 구간, 지점 수와 버린 좌표 수 |
+| `has_timestamps`, `distance_m`, `duration_sec`, `average_speed_mps` | 시각 유무와 계산 결과 |
+| `warnings` | 버린 좌표, 시각 없음, 여러 트랙, 순서가 뒤바뀐 시각, 순간 이동 |
+| `duplicate_of` | 같은 경로가 이미 있으면 `{id, title}` |
+| `points` | 파일 순서 그대로의 지점. 이 값을 `POST /my-walks`에 `source_type: "imported"`로 보내 저장 |
+
+10MB를 넘으면 `413`, 빈 파일, XML 오류, GPX가 아닌 파일, 지원하지 않는 버전, 좌표가 없는 파일, DOCTYPE과 엔티티 선언이 있는 파일은 이유와 함께 `422`입니다.
+
+### `POST /my-walks/{walk_id}/photos` · `GET /my-walks/{walk_id}/photos/{photo_id}` · `DELETE /my-walks/{walk_id}/photos/{photo_id}`
+
+사진 원본을 요청 본문으로 보냅니다. 형식은 `Content-Type`이 아니라 파일 내용으로 판단하며 JPG와 PNG만 받습니다. JPEG는 EXIF(촬영 위치), XMP, IPTC, 주석과 끝 표시 뒤에 붙은 보조 이미지를, PNG는 `eXIf`, `tEXt`, `zTXt`, `iTXt`, `tIME` 조각을 지우고 저장합니다. 산책길마다 5장, 장당 5MB까지이며 넘으면 `409`, `413`입니다. 손상된 파일은 `422`입니다.
+
+`GET`은 사진 파일을 `Cache-Control: private`, `X-Content-Type-Options: nosniff`와 함께 돌려줍니다. 상세 응답의 `photos`에는 `id`, `content_type`, `size_bytes`, `created_at`만 담습니다. 사진은 공유 응답과 공개 목록에 나오지 않습니다.
+
+### `POST /my-walks/{walk_id}/share` · `DELETE /my-walks/{walk_id}/share`
+
+```json
+{ "expires_in_days": 7, "share_memo": false }
+```
+
+공유 링크를 만듭니다. 비공개면 `link`로 바꾸고 32자 무작위 토큰을 만듭니다. `expires_in_days`는 1~365일이며 비우면 기간이 없습니다. 공개 산책길은 기간을 두지 않습니다. 기간이 끝난 뒤 다시 만들면 새 토큰을 씁니다. `DELETE`는 공유를 해제하고 비공개로 돌립니다.
+
+## 공유
+
+로그인 없이 누구나 호출할 수 있습니다(`AUTH_REQUIRED=true`여도 열림). 비공개 산책길과 해제된 링크는 없는 링크와 같은 `404`, 기간이 끝난 링크는 `410`입니다.
+
+### `GET /shared/{token}`
+
+```json
+{ "title": "새롬관 옆 양재천 산책", "distance_m": 1350.4, "duration_sec": 1260, "memo": null, "start": [37.4895, 127.0664], "end": [37.4901, 127.0672], "route": [[[37.4895, 127.0664], [37.4898, 127.0667]]] }
+```
+
+걸은 시각, GPS 정확도, 반려동물, 보호자 정보는 담지 않습니다. `memo`는 `share_memo`가 켜져 있을 때만 들어갑니다.
+
+### `GET /shared/{token}/gpx`
+
+공유용 GPX입니다. 언제 걸었는지 드러나지 않도록 시각과 고도를 빼고, 파일 이름에도 날짜를 넣지 않습니다.
+
+### `GET /public-walks`
+
+공개로 설정한 산책길 목록입니다. 각 항목은 `token`, `title`, `distance_m`, `duration_sec`, `preview`만 담습니다.
 
 ## 시스템
 

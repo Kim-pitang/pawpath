@@ -1,4 +1,4 @@
-import type { Difficulty, Level, NoveltyReaction, PathPreference, Personality, Size, TimeBucket, WeatherScenario } from './types';
+import type { Visibility, WalkSourceType, Difficulty, Level, NoveltyReaction, PathPreference, Personality, Size, TimeBucket, WeatherScenario } from './types';
 
 export const SIZE_LABELS: Record<Size, string> = { small: '소형견', medium: '중형견', large: '대형견' };
 export const ACTIVITY_LABELS: Record<Level, string> = { low: '낮음', medium: '보통', high: '높음' };
@@ -75,3 +75,12 @@ export const WEATHER_SOURCE_LABELS: Record<string, string> = {
   mock: '모의 날씨',
   'mock-fallback': '모의 날씨 (API 연결 실패)',
 };
+
+export const VISIBILITY_LABELS: Record<Visibility, string> = { private: '비공개', link: '링크 공유', public: '공개' };
+export const VISIBILITY_HINTS: Record<Visibility, string> = {
+  private: '나만 볼 수 있어요. 공유 링크로도 열리지 않아요.',
+  link: '링크를 받은 사람만 볼 수 있어요.',
+  public: '공개된 산책길 목록에 올라가 누구나 볼 수 있어요.',
+};
+export const WALK_SOURCE_LABELS: Record<WalkSourceType, string> = { recorded: '직접 기록', imported: 'GPX 가져옴' };
+

@@ -47,3 +47,31 @@ export function signed(value: number, digits = 1): string {
   if (Number(fixed) === 0) return fixed;
   return `${value > 0 ? '+' : '−'}${fixed}`;
 }
+
+export function dateLabel(date: Date): string {
+  return `${date.getMonth() + 1}월 ${date.getDate()}일`;
+}
+
+export function distanceLabel(meters: number): string {
+  return meters < 1000 ? `${Math.round(meters)}m` : `${(meters / 1000).toFixed(2)}km`;
+}
+
+export function durationLabel(seconds: number | null): string {
+  if (seconds === null) return '시간 정보 없음';
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours > 0) return `${hours}시간 ${minutes}분`;
+  if (minutes > 0) return `${minutes}분 ${Math.round(seconds % 60)}초`;
+  return `${Math.round(seconds)}초`;
+}
+
+export function speedLabel(metersPerSecond: number | null): string {
+  return metersPerSecond === null ? '-' : `${(metersPerSecond * 3.6).toFixed(1)}km/h`;
+}
+
+export function clockLabel(ms: number): string {
+  const total = Math.floor(ms / 1000);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${pad(Math.floor(total / 3600))}:${pad(Math.floor((total % 3600) / 60))}:${pad(total % 60)}`;
+}
+

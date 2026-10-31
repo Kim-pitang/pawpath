@@ -52,6 +52,14 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     seed_demo_pet: bool = True
+    # 참이면 로그인해야 앱을 쓸 수 있다. 거짓이면 로그인하지 않은 사용자는 시연 보호자로 동작한다.
+    auth_required: bool = False
+
+    # Google 로그인(선택). Google Cloud 콘솔에서 만든 OAuth 클라이언트 값. 둘 다 있어야 켜진다. 비밀값은 .env에만 둔다.
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    # 콘솔에 등록한 "승인된 리디렉션 URI"와 글자 하나까지 같아야 한다.
+    google_redirect_uri: str = "http://localhost:5173/api/auth/google/callback"
 
     @model_validator(mode="after")
     def apply_service_area(self) -> "Settings":
@@ -63,6 +71,10 @@ class Settings(BaseSettings):
         if self.service_longitude is None:
             self.service_longitude = area.longitude
         return self
+
+    @property
+    def google_enabled(self) -> bool:
+        return bool(self.google_client_id and self.google_client_secret)
 
     @property
     def service_area_label(self) -> str:

@@ -1,4 +1,4 @@
-import { CheckCircle2, Footprints, PawPrint, Star, TrendingUp } from 'lucide-react';
+import { CheckCircle2, Footprints, PawPrint, Route, Star, TrendingUp } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button, Card, Chip, ChoiceGroup, EmptyState, ErrorNotice, LinkButton, PageTitle, SectionTitle } from '../components/ui';
@@ -92,6 +92,17 @@ export default function WalkPage() {
     <div className="flex flex-col gap-4">
       <PageTitle sub="피드백이 다음 추천을 바꿔요.">산책 기록</PageTitle>
       {error && <ErrorNotice message={error} />}
+
+      <div className="grid grid-cols-2 gap-2">
+        <LinkButton to="/record" className="!px-2">
+          <Footprints size={18} aria-hidden />
+          GPS로 산책 기록
+        </LinkButton>
+        <LinkButton to="/my-walks" variant="ghost" className="!px-2">
+          <Route size={18} aria-hidden />
+          나의 산책길
+        </LinkButton>
+      </div>
 
       {result && <FeedbackResult feedback={result} petName={selectedPet?.name ?? ''} onSeeChange={() => navigate('/recommend')} />}
 

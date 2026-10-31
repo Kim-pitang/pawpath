@@ -1,19 +1,26 @@
 """REST API 라우터."""
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import schemas
 from app.clock import now_local
 from app.database import get_db
-from app.models import Pet, Recommendation, User, WalkFeedback, WalkHistory, WalkingCourse
+from app.config import get_settings
+from app.models import Pet, Recommendation, SavedWalk, SavedWalkPhoto, User, WalkFeedback, WalkHistory, WalkingCourse
 from app.recommender.features import build_features
 from app.recommender.safety import DEMO, FORECAST, assess_conditions, assess_course, assessment_payload
 from app.recommender.timeslots import evaluate_slot, hour_comfort, is_rainy
 from app.recommender.types import FeedbackInput
 from app.seed import DEFAULT_USER_ID
+from app.services import auth_service, google_auth_service, saved_walk_service
 from app.services.alternative_service import ALL_DAY, evaluate_alternative
+from app.services.gpx_service import MAX_GPX_BYTES, GpxError, build_gpx, content_disposition, parse_gpx
 from app.services.llm_service import enhance_recommendation
+from app.services.photo_service import MAX_PHOTO_BYTES, MAX_PHOTOS_PER_WALK, PhotoError, clean_image
 from app.services.places_service import PLACE_LABELS, nearby_places
 from app.services.recommendation_service import active_courses, create_recommendation, load_state, to_course_data, to_profile, windows_of
 from app.services.report_service import build_report, is_simulated, walked_km
@@ -22,10 +29,23 @@ from app.services.walk_service import build_insights, record_walk, submit_feedba
 from app.services.weather_service import WeatherResult, get_weather
 
 router = APIRouter(prefix="/api")
+logger = logging.getLogger(__name__)
 
 
-def current_user(db: Session = Depends(get_db)) -> User:
-    """MVP는 인증 없이 기본 보호자 1명으로 동작한다."""
+def current_user(request: Request, db: Session = Depends(get_db)) -> User:
+    """로그인한 보호자. 로그인이 필수가 아니면 로그인하지 않은 요청은 시연 보호자(id 1)로 처리한다.
+
+    모든 사용자 데이터 API가 이 값으로 반려동물과 산책길의 주인을 확인한다.
+    """
+    token = request.cookies.get(auth_service.SESSION_COOKIE)
+    if token:
+        user = auth_service.user_for_token(db, token, now_local())
+        if user is None:
+            # 만료된 세션으로 시연 보호자의 데이터를 보여 주지 않도록 막고, 쿠키를 지운다.
+            raise HTTPException(401, "로그인이 만료되었어요. 다시 로그인해 주세요.", headers={"Set-Cookie": auth_service.EXPIRED_COOKIE})
+        return user
+    if get_settings().auth_required:
+        raise HTTPException(401, "로그인이 필요해요.")
     user = db.get(User, DEFAULT_USER_ID)
     if user is None:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "초기 데이터가 준비되지 않았습니다")
@@ -42,6 +62,132 @@ def _get_pet(db: Session, pet_id: int, user: User) -> Pet:
 @router.get("/health", tags=["시스템"])
 def health() -> dict:
     return {"status": "ok", "service": "PawPath"}
+
+
+# 계정
+def _account(user: User | None) -> schemas.AccountRead:
+    settings = get_settings()
+    return schemas.AccountRead(
+        authenticated=user is not None,
+        auth_required=settings.auth_required,
+        google_enabled=settings.google_enabled,
+        user=None
+        if user is None
+        else schemas.AccountUser(
+            id=user.id,
+            name=user.name,
+            login_id=user.login_id,
+            email=user.google_email,
+            provider="google" if user.google_sub else "password",
+        ),
+    )
+
+
+def _is_https(request: Request) -> bool:
+    # HTTPS로 접속했을 때만 Secure를 붙인다. localhost 개발 서버는 HTTP다.
+    return request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+
+
+def _start_session(request: Request, response: Response, db: Session, user: User) -> None:
+    token = auth_service.create_session(db, user, now_local())
+    response.set_cookie(
+        auth_service.SESSION_COOKIE,
+        token,
+        max_age=auth_service.SESSION_DAYS * 24 * 3600,
+        httponly=True,
+        samesite="lax",
+        secure=_is_https(request),
+        path="/",
+    )
+
+
+@router.post("/auth/signup", response_model=schemas.AccountRead, status_code=status.HTTP_201_CREATED, tags=["계정"])
+def signup(body: schemas.SignupRequest, request: Request, response: Response, db: Session = Depends(get_db)) -> schemas.AccountRead:
+    try:
+        user = auth_service.signup(db, body.login_id, body.password, body.name)
+    except auth_service.AuthError as error:
+        raise HTTPException(error.status_code, error.message) from error
+    _start_session(request, response, db, user)
+    return _account(user)
+
+
+@router.post("/auth/login", response_model=schemas.AccountRead, tags=["계정"])
+def login(body: schemas.LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)) -> schemas.AccountRead:
+    try:
+        user = auth_service.login(db, body.login_id, body.password)
+    except auth_service.AuthError as error:
+        raise HTTPException(error.status_code, error.message) from error
+    _start_session(request, response, db, user)
+    return _account(user)
+
+
+@router.post("/auth/logout", response_model=schemas.AccountRead, tags=["계정"])
+def logout(request: Request, response: Response, db: Session = Depends(get_db)) -> schemas.AccountRead:
+    token = request.cookies.get(auth_service.SESSION_COOKIE)
+    if token:
+        auth_service.end_session(db, token)
+    response.delete_cookie(auth_service.SESSION_COOKIE, path="/", httponly=True, samesite="lax")
+    return _account(None)
+
+
+@router.get("/auth/google/start", tags=["계정"])
+def google_start(request: Request, next_path: str = Query(default="/", alias="next"), db: Session = Depends(get_db)) -> RedirectResponse:
+    """Google 로그인 화면으로 보낸다. 로그인 뒤에는 next 경로(앱 안의 경로만)로 돌아온다."""
+    settings = get_settings()
+    if not settings.google_enabled:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "이 서버에는 Google 로그인이 설정되어 있지 않아요.")
+    state, url = google_auth_service.begin(db, settings, google_auth_service.safe_next(next_path), now_local())
+    response = RedirectResponse(url, status_code=status.HTTP_302_FOUND)
+    response.set_cookie(
+        google_auth_service.STATE_COOKIE,
+        state,
+        max_age=google_auth_service.STATE_MINUTES * 60,
+        httponly=True,
+        samesite="lax",
+        secure=_is_https(request),
+        path=google_auth_service.STATE_COOKIE_PATH,
+    )
+    return response
+
+
+@router.get("/auth/google/callback", tags=["계정"])
+def google_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Google이 돌려보내는 주소. 성공하면 세션 쿠키를 주고 앱으로, 실패하면 이유와 함께 로그인 화면으로 보낸다."""
+
+    def finish(location: str) -> RedirectResponse:
+        response = RedirectResponse(location, status_code=status.HTTP_302_FOUND)
+        response.delete_cookie(google_auth_service.STATE_COOKIE, path=google_auth_service.STATE_COOKIE_PATH, httponly=True, samesite="lax")
+        return response
+
+    settings = get_settings()
+    if not settings.google_enabled:
+        return finish("/login?error=google_unavailable")
+    if error:
+        return finish("/login?error=google_cancelled" if error == "access_denied" else "/login?error=google_failed")
+    try:
+        user, next_path = google_auth_service.complete(db, settings, code, state, request.cookies.get(google_auth_service.STATE_COOKIE), now_local())
+    except google_auth_service.GoogleAuthError as failure:
+        logger.warning("Google 로그인 실패: %s", failure.detail)
+        return finish(f"/login?error={failure.reason}")
+    response = finish(next_path)
+    _start_session(request, response, db, user)
+    return response
+
+
+@router.get("/auth/me", response_model=schemas.AccountRead, tags=["계정"])
+def me(request: Request, response: Response, db: Session = Depends(get_db)) -> schemas.AccountRead:
+    """로그인 상태. 만료된 쿠키는 지우고 로그인하지 않은 상태로 알려 준다."""
+    token = request.cookies.get(auth_service.SESSION_COOKIE)
+    user = auth_service.user_for_token(db, token, now_local()) if token else None
+    if token and user is None:
+        response.delete_cookie(auth_service.SESSION_COOKIE, path="/", httponly=True, samesite="lax")
+    return _account(user)
 
 
 # 반려동물
@@ -436,3 +582,222 @@ def list_feedback(pet_id: int, db: Session = Depends(get_db), user: User = Depen
     _get_pet(db, pet_id, user)
     records = db.scalars(select(WalkFeedback).where(WalkFeedback.pet_id == pet_id).order_by(WalkFeedback.id.desc()))
     return [_feedback_response(record) for record in records]
+
+
+# 나만의 산책길
+GPX_MEDIA_TYPE = "application/gpx+xml"
+
+
+def _get_saved_walk(db: Session, walk_id: int, user: User) -> SavedWalk:
+    walk = db.get(SavedWalk, walk_id)
+    if walk is None or walk.user_id != user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "산책길을 찾을 수 없습니다")
+    return walk
+
+
+def _walk_summary(walk: SavedWalk) -> schemas.SavedWalkSummary:
+    summary = schemas.SavedWalkSummary.model_validate(walk)
+    summary.pet_name = walk.pet.name if walk.pet else None
+    return summary
+
+
+def _walk_detail(walk: SavedWalk) -> schemas.SavedWalkDetail:
+    return schemas.SavedWalkDetail(
+        **_walk_summary(walk).model_dump(),
+        memo=walk.memo,
+        share_token=walk.share_token,
+        share_expires_at=walk.share_expires_at,
+        share_memo=walk.share_memo,
+        route=saved_walk_service.route_segments(walk.points),
+        photos=[schemas.PhotoRead.model_validate(photo) for photo in walk.photos],
+    )
+
+
+async def _read_limited(request: Request, limit: int, message: str) -> bytes:
+    """파일을 끝까지 받기 전에 크기를 확인한다."""
+    too_large = HTTPException(413, message)
+    length = request.headers.get("content-length")
+    if length and length.isdigit() and int(length) > limit:
+        raise too_large
+    chunks: list[bytes] = []
+    total = 0
+    async for chunk in request.stream():
+        total += len(chunk)
+        if total > limit:
+            raise too_large
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+async def _read_gpx_body(request: Request) -> bytes:
+    return await _read_limited(request, MAX_GPX_BYTES, f"파일이 너무 커요. {MAX_GPX_BYTES // (1024 * 1024)}MB까지 가져올 수 있어요.")
+
+
+async def _read_photo_body(request: Request) -> bytes:
+    return await _read_limited(request, MAX_PHOTO_BYTES, f"사진이 너무 커요. {MAX_PHOTO_BYTES // (1024 * 1024)}MB까지 올릴 수 있어요.")
+
+
+@router.post("/my-walks/import/preview", response_model=schemas.GpxPreview, tags=["나만의 산책길"])
+def preview_gpx_import(data: bytes = Depends(_read_gpx_body), db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    """GPX 원본을 본문으로 받아 검증하고 저장 전 미리보기를 돌려준다. 저장은 하지 않는다."""
+    try:
+        parsed = parse_gpx(data)
+    except GpxError as error:
+        raise HTTPException(422, str(error)) from error
+    return saved_walk_service.preview_gpx(db, user, parsed)
+
+
+@router.post("/my-walks", response_model=schemas.SavedWalkDetail, status_code=status.HTTP_201_CREATED, tags=["나만의 산책길"])
+def create_saved_walk(
+    body: schemas.SavedWalkCreate,
+    response: Response,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> schemas.SavedWalkDetail:
+    if body.pet_id is not None:
+        _get_pet(db, body.pet_id, user)
+    walk, created = saved_walk_service.create_saved_walk(db, user, body)
+    if not created:
+        response.status_code = status.HTTP_200_OK
+    return _walk_detail(walk)
+
+
+@router.get("/my-walks", response_model=list[schemas.SavedWalkSummary], tags=["나만의 산책길"])
+def list_saved_walks(
+    sort: schemas.SavedWalkSort = "recent",
+    pet_id: int | None = None,
+    visibility: schemas.Visibility | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> list[schemas.SavedWalkSummary]:
+    return [_walk_summary(walk) for walk in saved_walk_service.list_saved_walks(db, user, sort, pet_id, visibility)]
+
+
+@router.get("/my-walks/{walk_id}", response_model=schemas.SavedWalkDetail, tags=["나만의 산책길"])
+def get_saved_walk(walk_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> schemas.SavedWalkDetail:
+    return _walk_detail(_get_saved_walk(db, walk_id, user))
+
+
+@router.patch("/my-walks/{walk_id}", response_model=schemas.SavedWalkDetail, tags=["나만의 산책길"])
+def update_saved_walk(
+    walk_id: int,
+    body: schemas.SavedWalkUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> schemas.SavedWalkDetail:
+    walk = _get_saved_walk(db, walk_id, user)
+    changes = body.model_dump(exclude_unset=True)
+    # 반려동물 연결만 비울 수 있다. 나머지 항목을 null로 보내면 저장하지 않고 알려 준다.
+    cleared = [key for key, value in changes.items() if value is None and key != "pet_id"]
+    if cleared:
+        raise HTTPException(422, f"비울 수 없는 항목이에요: {', '.join(cleared)}")
+    if changes.get("pet_id") is not None:
+        _get_pet(db, changes["pet_id"], user)
+    return _walk_detail(saved_walk_service.update_saved_walk(db, walk, changes))
+
+
+@router.delete("/my-walks/{walk_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["나만의 산책길"])
+def delete_saved_walk(walk_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> None:
+    db.delete(_get_saved_walk(db, walk_id, user))
+    db.commit()
+
+
+@router.get("/my-walks/{walk_id}/gpx", tags=["나만의 산책길"])
+def export_saved_walk(walk_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> Response:
+    walk = _get_saved_walk(db, walk_id, user)
+    return Response(
+        build_gpx(walk.title, saved_walk_service.to_gpx_points(walk)),
+        media_type=GPX_MEDIA_TYPE,
+        headers={"Content-Disposition": content_disposition(walk.title, walk.started_at)},
+    )
+
+
+@router.post("/my-walks/{walk_id}/share", response_model=schemas.SavedWalkDetail, tags=["나만의 산책길"])
+def share_saved_walk(
+    walk_id: int,
+    body: schemas.ShareRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> schemas.SavedWalkDetail:
+    walk = _get_saved_walk(db, walk_id, user)
+    return _walk_detail(saved_walk_service.enable_share(db, walk, body, now_local()))
+
+
+@router.delete("/my-walks/{walk_id}/share", response_model=schemas.SavedWalkDetail, tags=["나만의 산책길"])
+def unshare_saved_walk(walk_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> schemas.SavedWalkDetail:
+    return _walk_detail(saved_walk_service.disable_share(db, _get_saved_walk(db, walk_id, user)))
+
+
+def _get_photo(db: Session, walk: SavedWalk, photo_id: int) -> SavedWalkPhoto:
+    photo = db.get(SavedWalkPhoto, photo_id)
+    if photo is None or photo.walk_id != walk.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "사진을 찾을 수 없습니다")
+    return photo
+
+
+@router.post("/my-walks/{walk_id}/photos", response_model=schemas.PhotoRead, status_code=status.HTTP_201_CREATED, tags=["나만의 산책길"])
+def upload_photo(
+    walk_id: int,
+    data: bytes = Depends(_read_photo_body),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> SavedWalkPhoto:
+    """사진 원본을 본문으로 받는다. 형식은 파일 내용으로 판단하고, 촬영 위치 같은 메타데이터를 지운 뒤 저장한다."""
+    walk = _get_saved_walk(db, walk_id, user)
+    if len(walk.photos) >= MAX_PHOTOS_PER_WALK:
+        raise HTTPException(status.HTTP_409_CONFLICT, f"사진은 {MAX_PHOTOS_PER_WALK}장까지 올릴 수 있어요.")
+    try:
+        content_type, cleaned = clean_image(data)
+    except PhotoError as error:
+        raise HTTPException(422, str(error)) from error
+    photo = SavedWalkPhoto(walk=walk, content_type=content_type, data=cleaned, size_bytes=len(cleaned))
+    db.add(photo)
+    db.commit()
+    return photo
+
+
+@router.get("/my-walks/{walk_id}/photos/{photo_id}", tags=["나만의 산책길"])
+def get_photo(walk_id: int, photo_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> Response:
+    photo = _get_photo(db, _get_saved_walk(db, walk_id, user), photo_id)
+    return Response(
+        photo.data,
+        media_type=photo.content_type,
+        headers={"Cache-Control": "private, max-age=86400", "X-Content-Type-Options": "nosniff", "Content-Disposition": "inline"},
+    )
+
+
+@router.delete("/my-walks/{walk_id}/photos/{photo_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["나만의 산책길"])
+def delete_photo(walk_id: int, photo_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> None:
+    db.delete(_get_photo(db, _get_saved_walk(db, walk_id, user), photo_id))
+    db.commit()
+
+
+def _get_shared(db: Session, token: str) -> SavedWalk:
+    walk = saved_walk_service.find_shared(db, token)
+    if walk is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "공유가 해제되었거나 없는 링크예요")
+    if saved_walk_service.is_expired(walk, now_local()):
+        raise HTTPException(status.HTTP_410_GONE, "공유 기간이 끝난 링크예요")
+    return walk
+
+
+@router.get("/shared/{token}", response_model=schemas.SharedWalkRead, tags=["공유"])
+def get_shared_walk(token: str, db: Session = Depends(get_db)) -> dict:
+    return saved_walk_service.shared_payload(_get_shared(db, token))
+
+
+@router.get("/shared/{token}/gpx", tags=["공유"])
+def export_shared_walk(token: str, db: Session = Depends(get_db)) -> Response:
+    """공유용 GPX. 언제 걸었는지 드러나지 않도록 시각과 고도를 뺀다."""
+    walk = _get_shared(db, token)
+    return Response(
+        build_gpx(walk.title, saved_walk_service.to_gpx_points(walk), include_details=False),
+        media_type=GPX_MEDIA_TYPE,
+        headers={"Content-Disposition": content_disposition(walk.title, None)},
+    )
+
+
+@router.get("/public-walks", response_model=list[schemas.PublicWalkSummary], tags=["공유"])
+def list_public_walks(db: Session = Depends(get_db)) -> list[dict]:
+    return [saved_walk_service.public_summary(walk) for walk in saved_walk_service.list_public_walks(db)]
+

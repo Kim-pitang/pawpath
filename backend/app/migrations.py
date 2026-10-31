@@ -12,7 +12,10 @@ ADDED_COLUMNS = {
     "pets": (("preferred_distance_km", "FLOAT"), ("preferred_time_bucket", "VARCHAR(10)")),
     "walking_courses": (("environment", "JSON"),),
     "walk_histories": (("tracking_source", "VARCHAR(12)"), ("distance_km", "FLOAT")),
+    "users": (("login_id", "VARCHAR(30)"), ("password_hash", "VARCHAR(200)"), ("google_sub", "VARCHAR(64)"), ("google_email", "VARCHAR(254)")),
 }
+# 컬럼을 나중에 더하면 create_all이 만드는 고유 색인이 빠지므로 따로 만든다. 이미 있으면 건너뛴다.
+ADDED_UNIQUE_INDEXES = (("ix_users_login_id", "users", "login_id"), ("ix_users_google_sub", "users", "google_sub"))
 
 
 def ensure_schema(engine: Engine) -> list[str]:
@@ -27,4 +30,6 @@ def ensure_schema(engine: Engine) -> list[str]:
                 if name not in existing:
                     connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {column_type}"))
                     added.append(f"{table}.{name}")
+        for index, table, column in ADDED_UNIQUE_INDEXES:
+            connection.execute(text(f"CREATE UNIQUE INDEX IF NOT EXISTS {index} ON {table} ({column})"))
     return added

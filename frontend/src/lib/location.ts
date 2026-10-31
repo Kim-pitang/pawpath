@@ -6,6 +6,10 @@ export type GpsStatus = 'off' | 'requesting' | 'active' | 'denied' | 'unavailabl
 export interface WalkPosition {
   point: LatLng;
   accuracy: number | null;
+  /** 실제 GPS일 때만 있다. 산책 기록에 저장한다. */
+  altitude?: number | null;
+  /** 좌표를 받은 시각(밀리초). */
+  timestamp?: number;
 }
 
 export const GPS_MESSAGES: Partial<Record<GpsStatus, string>> = {
@@ -37,8 +41,12 @@ export function useGeolocation(enabled: boolean): { status: GpsStatus; position:
 
     setState({ status: 'requesting', position: null });
     const watchId = navigator.geolocation.watchPosition(
+      // position.timestamp는 쓰지 않는다. WebKit은 마이크로초로 줘서 밀리초로 계산하면 시각이 수만 년 뒤가 된다.
       ({ coords }) =>
-        setState({ status: 'active', position: { point: [coords.latitude, coords.longitude], accuracy: coords.accuracy } }),
+        setState({
+          status: 'active',
+          position: { point: [coords.latitude, coords.longitude], accuracy: coords.accuracy, altitude: coords.altitude, timestamp: Date.now() },
+        }),
       (error) =>
         // 일시적으로 신호를 놓쳐도 마지막 위치는 유지한다. 신호가 돌아오면 감시가 이어서 갱신한다.
         setState((previous) => ({
