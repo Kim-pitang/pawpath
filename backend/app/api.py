@@ -11,13 +11,13 @@ from app import schemas
 from app.clock import now_local, to_local
 from app.database import get_db
 from app.config import get_settings
-from app.models import CommunityTrail, Pet, Recommendation, SavedWalk, SavedWalkPhoto, TrailBookmark, TrailLike, TrailReview, TrailReviewPhoto, User, WalkFeedback, WalkHistory, WalkingCourse
+from app.models import AuthSession, CommunityTrail, Pet, Recommendation, SavedWalk, SavedWalkPhoto, TrailBookmark, TrailLike, TrailReview, TrailReviewPhoto, User, WalkFeedback, WalkHistory, WalkingCourse
 from app.recommender.features import build_features
 from app.recommender.safety import DEMO, FORECAST, assess_conditions, assess_course, assessment_payload
 from app.recommender.timeslots import evaluate_slot, hour_comfort, is_rainy
 from app.recommender.types import FeedbackInput
 from app.seed import DEFAULT_USER_ID
-from app.services import auth_service, community_service, google_auth_service, saved_walk_service
+from app.services import account_service, auth_service, backup_service, community_service, google_auth_service, saved_walk_service
 from app.services.alternative_service import ALL_DAY, evaluate_alternative
 from app.services.gpx_service import MAX_GPX_BYTES, GpxError, build_gpx, content_disposition, parse_gpx
 from app.services.llm_service import enhance_recommendation
@@ -33,6 +33,8 @@ from app.services.weather_service import WeatherResult, get_weather
 
 router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
+ACCOUNT_PAGE = "/account"
+SESSION_EXPIRED = "로그인이 만료되었어요. 다시 로그인해 주세요."
 
 
 def current_user(request: Request, db: Session = Depends(get_db)) -> User:
@@ -45,7 +47,7 @@ def current_user(request: Request, db: Session = Depends(get_db)) -> User:
         user = auth_service.user_for_token(db, token, now_local())
         if user is None:
             # 만료된 세션으로 시연 보호자의 데이터를 보여 주지 않도록 막고, 쿠키를 지운다.
-            raise HTTPException(401, "로그인이 만료되었어요. 다시 로그인해 주세요.", headers={"Set-Cookie": auth_service.EXPIRED_COOKIE})
+            raise HTTPException(401, SESSION_EXPIRED, headers={"Set-Cookie": auth_service.EXPIRED_COOKIE})
         return user
     if get_settings().auth_required:
         raise HTTPException(401, "로그인이 필요해요.")
@@ -65,15 +67,20 @@ def viewer(request: Request, db: Session = Depends(get_db)) -> User | None:
     return db.get(User, DEFAULT_USER_ID)
 
 
-def signed_in_user(request: Request, db: Session = Depends(get_db)) -> User:
-    """실제로 로그인한 보호자. 커뮤니티에 글을 남기는 API는 시연 보호자를 인정하지 않는다."""
+def signed_in_session(request: Request, db: Session = Depends(get_db)) -> AuthSession:
+    """실제로 로그인한 세션. 시연 보호자로 넘어가면 안 되는 계정 API가 쓴다."""
     token = request.cookies.get(auth_service.SESSION_COOKIE)
     if not token:
         raise HTTPException(401, "로그인이 필요해요.")
-    user = auth_service.user_for_token(db, token, now_local())
-    if user is None:
-        raise HTTPException(401, "로그인이 만료되었어요. 다시 로그인해 주세요.", headers={"Set-Cookie": auth_service.EXPIRED_COOKIE})
-    return user
+    session = auth_service.find_session(db, token, now_local())
+    if session is None:
+        raise HTTPException(401, SESSION_EXPIRED, headers={"Set-Cookie": auth_service.EXPIRED_COOKIE})
+    return session
+
+
+def signed_in_user(session: AuthSession = Depends(signed_in_session), db: Session = Depends(get_db)) -> User:
+    """실제로 로그인한 보호자. 커뮤니티에 글을 남기는 API는 시연 보호자를 인정하지 않는다."""
+    return db.get(User, session.user_id)
 
 
 def signed_in_viewer(request: Request, db: Session = Depends(get_db)) -> User | None:
@@ -131,17 +138,28 @@ def _is_https(request: Request) -> bool:
     return request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
 
 
-def _start_session(request: Request, response: Response, db: Session, user: User) -> None:
-    token = auth_service.create_session(db, user, now_local())
+def _set_session_cookie(request: Request, response: Response, token: str, lifetime: timedelta) -> None:
     response.set_cookie(
         auth_service.SESSION_COOKIE,
         token,
-        max_age=auth_service.SESSION_DAYS * 24 * 3600,
+        max_age=int(lifetime.total_seconds()),
         httponly=True,
         samesite="lax",
         secure=_is_https(request),
         path="/",
     )
+
+
+def _start_session(request: Request, response: Response, db: Session, user: User) -> None:
+    token = auth_service.create_session(db, user, now_local())
+    _set_session_cookie(request, response, token, timedelta(days=auth_service.SESSION_DAYS))
+
+
+def _renew_after_reauth(request: Request, response: Response, db: Session, session: AuthSession) -> None:
+    """토큰만 바꾼다. 로그인 세션의 남은 기간은 늘리지 않는다."""
+    now = now_local()
+    token = auth_service.reauthenticate(db, session, now)
+    _set_session_cookie(request, response, token, session.expires_at - now)
 
 
 @router.post("/auth/signup", response_model=schemas.AccountRead, status_code=status.HTTP_201_CREATED, tags=["계정"])
@@ -174,12 +192,30 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)) 
 
 
 @router.get("/auth/google/start", tags=["계정"])
-def google_start(request: Request, next_path: str = Query(default="/", alias="next"), db: Session = Depends(get_db)) -> RedirectResponse:
-    """Google 로그인 화면으로 보낸다. 로그인 뒤에는 next 경로(앱 안의 경로만)로 돌아온다."""
+def google_start(
+    request: Request,
+    next_path: str = Query(default="/", alias="next"),
+    reauth: bool = False,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Google 로그인 화면으로 보낸다. 로그인 뒤에는 next 경로(앱 안의 경로만)로 돌아온다.
+
+    reauth면 로그인 중인 Google 보호자의 본인 재확인이고, 끝나면 계정 화면으로 돌아온다.
+    """
     settings = get_settings()
     if not settings.google_enabled:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "이 서버에는 Google 로그인이 설정되어 있지 않아요.")
-    state, url = google_auth_service.begin(db, settings, google_auth_service.safe_next(next_path), now_local())
+    reauth_user_id = None
+    if reauth:
+        token = request.cookies.get(auth_service.SESSION_COOKIE)
+        user = auth_service.user_for_token(db, token, now_local()) if token else None
+        if user is None:
+            return RedirectResponse("/login", status_code=status.HTTP_302_FOUND)
+        if not user.google_sub:
+            return RedirectResponse(f"{ACCOUNT_PAGE}?error=google_mismatch", status_code=status.HTTP_302_FOUND)
+        reauth_user_id = user.id
+        next_path = ACCOUNT_PAGE
+    state, url = google_auth_service.begin(db, settings, google_auth_service.safe_next(next_path), now_local(), reauth_user_id)
     response = RedirectResponse(url, status_code=status.HTTP_302_FOUND)
     response.set_cookie(
         google_auth_service.STATE_COOKIE,
@@ -201,25 +237,38 @@ def google_callback(
     error: str | None = None,
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
-    """Google이 돌려보내는 주소. 성공하면 세션 쿠키를 주고 앱으로, 실패하면 이유와 함께 로그인 화면으로 보낸다."""
+    """Google이 돌려보내는 주소. 성공하면 세션 쿠키를 주고 앱으로, 실패하면 이유와 함께 로그인 화면으로 보낸다.
+
+    본인 재확인이면 새 세션을 만들지 않고 지금 세션에 기록하며, 실패 이유는 계정 화면에 알린다.
+    """
 
     def finish(location: str) -> RedirectResponse:
         response = RedirectResponse(location, status_code=status.HTTP_302_FOUND)
         response.delete_cookie(google_auth_service.STATE_COOKIE, path=google_auth_service.STATE_COOKIE_PATH, httponly=True, samesite="lax")
         return response
 
+    failure_page = ACCOUNT_PAGE if (state or "").startswith(google_auth_service.REAUTH_STATE_PREFIX) else "/login"
+
     settings = get_settings()
     if not settings.google_enabled:
         return finish("/login?error=google_unavailable")
     if error:
-        return finish("/login?error=google_cancelled" if error == "access_denied" else "/login?error=google_failed")
+        return finish(f"{failure_page}?error=google_cancelled" if error == "access_denied" else f"{failure_page}?error=google_failed")
     try:
-        user, next_path = google_auth_service.complete(db, settings, code, state, request.cookies.get(google_auth_service.STATE_COOKIE), now_local())
+        user, next_path, reauth = google_auth_service.complete(db, settings, code, state, request.cookies.get(google_auth_service.STATE_COOKIE), now_local())
     except google_auth_service.GoogleAuthError as failure:
         logger.warning("Google 로그인 실패: %s", failure.detail)
-        return finish(f"/login?error={failure.reason}")
+        return finish(f"{failure_page}?error={failure.reason}")
     response = finish(next_path)
-    _start_session(request, response, db, user)
+    if not reauth:
+        _start_session(request, response, db, user)
+        return response
+    session_token = request.cookies.get(auth_service.SESSION_COOKIE)
+    session = auth_service.find_session(db, session_token, now_local()) if session_token else None
+    if session is None or session.user_id != user.id:
+        # 확인하는 사이 세션이 끝났거나 다른 계정으로 바뀌었다.
+        return finish("/login?error=google_state")
+    _renew_after_reauth(request, response, db, session)
     return response
 
 
@@ -231,6 +280,55 @@ def me(request: Request, response: Response, db: Session = Depends(get_db)) -> s
     if token and user is None:
         response.delete_cookie(auth_service.SESSION_COOKIE, path="/", httponly=True, samesite="lax")
     return _account(user)
+
+
+@router.post("/auth/reauth", response_model=schemas.ReauthRead, tags=["계정"])
+def reauth_with_password(
+    body: schemas.ReauthRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    session: AuthSession = Depends(signed_in_session),
+) -> schemas.ReauthRead:
+    """비밀번호로 본인을 다시 확인한다. 쿠키의 토큰이 바뀌고, 탈퇴처럼 되돌릴 수 없는 작업이 잠시 열린다."""
+    try:
+        auth_service.confirm_password(db.get(User, session.user_id), body.password)
+    except auth_service.AuthError as error:
+        raise HTTPException(error.status_code, error.message) from error
+    _renew_after_reauth(request, response, db, session)
+    return schemas.ReauthRead(reauth_required=False)
+
+
+@router.get("/auth/account", response_model=schemas.AccountSummary, tags=["계정"])
+def account_summary(db: Session = Depends(get_db), session: AuthSession = Depends(signed_in_session)) -> schemas.AccountSummary:
+    """탈퇴하면 지워질 데이터와 로그인 유지 기간."""
+    user = db.get(User, session.user_id)
+    settings = get_settings()
+    backups_on = settings.backup_enabled and backup_service.sqlite_path(settings.database_url) is not None
+    return schemas.AccountSummary(
+        provider="google" if user.google_sub else "password",
+        reauth_required=auth_service.needs_reauth(session, now_local()),
+        session_expires_at=session.expires_at,
+        session_idle_days=auth_service.SESSION_IDLE_DAYS,
+        data=schemas.AccountDataCounts(**account_service.data_counts(db, user.id)),
+        backup_retention_days=settings.backup_retention_days if backups_on else None,
+    )
+
+
+@router.delete("/auth/account", status_code=status.HTTP_204_NO_CONTENT, tags=["계정"])
+def delete_account(response: Response, db: Session = Depends(get_db), session: AuthSession = Depends(signed_in_session)) -> None:
+    """계정과 데이터를 바로 지운다. 되돌릴 수 없으므로 본인을 다시 확인한 세션만 할 수 있다."""
+    now = now_local()
+    if auth_service.needs_reauth(session, now):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "탈퇴하려면 본인을 다시 확인해 주세요.")
+    user = db.get(User, session.user_id)
+    try:
+        account_service.delete_account(db, user, get_settings(), now)
+    except account_service.AccountError as error:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(error)) from error
+    response.delete_cookie(auth_service.SESSION_COOKIE, path="/", httponly=True, samesite="lax")
+    # 이 브라우저가 들고 있던 사진 캐시도 함께 지운다.
+    response.headers["Clear-Site-Data"] = '"cache"'
 
 
 # 반려동물

@@ -41,6 +41,10 @@ class AuthSession(Base):
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime)
     expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    # 마지막으로 쓴 시각. 비어 있으면 만든 시각으로 본다. 오래 쓰지 않은 세션을 끝내는 데 쓴다.
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # 탈퇴처럼 되돌릴 수 없는 작업 전에 본인을 다시 확인한 시각. 비어 있으면 로그인한 시각으로 본다.
+    reauthenticated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class Pet(Base):
@@ -227,6 +231,8 @@ class OAuthState(Base):
     code_verifier: Mapped[str] = mapped_column(String(128))
     next_path: Mapped[str] = mapped_column(String(300))
     expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    # 로그인이 아니라 본인 재확인일 때 그 보호자. 다른 Google 계정으로 돌아오면 거부한다.
+    reauth_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class SavedWalk(Base):

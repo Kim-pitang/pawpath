@@ -686,3 +686,35 @@ class AccountRead(BaseModel):
     google_enabled: bool
     user: AccountUser | None
 
+
+class ReauthRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=128)
+
+
+class ReauthRead(BaseModel):
+    reauth_required: bool
+
+
+class AccountDataCounts(BaseModel):
+    pets: int
+    walks: int
+    feedback: int
+    recommendations: int
+    saved_walks: int
+    photos: int
+    personal_courses: int
+    shared_walks: int
+    community_trails: int
+    trail_reviews: int
+
+
+class AccountSummary(BaseModel):
+    provider: Literal["password", "google"]
+    # 참이면 탈퇴 전에 본인을 다시 확인해야 한다.
+    reauth_required: bool
+    session_expires_at: datetime
+    session_idle_days: int
+    data: AccountDataCounts
+    # 자동 백업을 쓰지 않으면 비어 있다.
+    backup_retention_days: int | None
+

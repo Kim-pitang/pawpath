@@ -77,6 +77,14 @@ class Settings(BaseSettings):
     # 콘솔에 등록한 "승인된 리디렉션 URI"와 글자 하나까지 같아야 한다.
     google_redirect_uri: str = "http://localhost:5173/api/auth/google/callback"
 
+    # 자동 백업. SQLite일 때 서버가 스스로 돌린다. 정책과 복구 방법은 docs/BACKUP.md에 있다.
+    backup_enabled: bool = True
+    # DB 사본과 탈퇴 기록이 들어간다. DB와 다른 디스크를 권장한다.
+    backup_dir: str = "./backups"
+    backup_interval_hours: int = Field(default=24, ge=1)
+    # 이 기간이 지난 백업을 지운다. 탈퇴한 보호자의 데이터가 백업에 남는 최대 기간이기도 하다.
+    backup_retention_days: int = Field(default=14, ge=1)
+
     @model_validator(mode="after")
     def apply_service_area(self) -> "Settings":
         area = SERVICE_AREAS.get(self.service_area)

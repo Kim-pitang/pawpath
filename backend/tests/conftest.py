@@ -21,6 +21,9 @@ os.environ["ENVIRONMENT_PROVIDER"] = "none"
 os.environ["GOOGLE_CLIENT_ID"] = "test-client.apps.googleusercontent.com"
 os.environ["GOOGLE_CLIENT_SECRET"] = "test-google-secret"
 os.environ["GOOGLE_REDIRECT_URI"] = "http://testserver/api/auth/google/callback"
+# 자동 백업을 끄고, 탈퇴 기록이 프로젝트의 backups 폴더에 쌓이지 않게 임시 폴더를 쓴다.
+os.environ["BACKUP_ENABLED"] = "false"
+os.environ["BACKUP_DIR"] = f"{_db_dir}/backups"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

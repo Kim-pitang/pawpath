@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from app.database import SessionLocal, engine
 from app.migrations import ensure_schema
 from app.models import CommunityTrail, Pet, SavedWalk, SavedWalkPoint, TrailBookmark, TrailLike, TrailReview, TrailReviewPhoto, WalkHistory, WalkingCourse
-from app.services import auth_service, community_service
+from app.services import account_service, auth_service, community_service
 from app.services.gpx_service import GpxPoint, parse_gpx
 from app.services.saved_walk_service import haversine_m
 from tests.test_api_e2e import PET_BODY, dubu_id
@@ -951,6 +951,67 @@ def test_trail_course_is_independent_of_the_personal_course(client):
     assert alice.get(f"/api/my-walks/{walk['id']}").json()["course"]["id"] == personal
     assert alice.delete(f"/api/my-walks/{walk['id']}").status_code == 204
     assert alice.get(f"/api/courses/{trail_course}").status_code == 404
+
+
+# ---------- 계정 탈퇴
+def test_deleting_the_author_removes_everything_but_keeps_other_users_working(client):
+    alice, bob = member(), member("bobby", "밥")
+    trail = share(alice)
+    other_trail = share(bob, make_walk(bob, points=line(lng=126.92)), title="밥의 길")
+    path = f"/api/community/trails/{trail['id']}"
+    bob.post(f"{path}/like")
+    bob.post(f"{path}/bookmark")
+    bob.post(f"{path}/reviews", json={"rating": 5, "content": "좋아요"})
+    alice.post(f"/api/community/trails/{other_trail['id']}/like")
+    alice.post(f"/api/community/trails/{other_trail['id']}/bookmark")
+    review = alice.post(f"/api/community/trails/{other_trail['id']}/reviews", json={"rating": 1, "content": "앨리스의 후기"}).json()
+    alice.post(f"/api/community/reviews/{review['id']}/photos", content=JPEG)
+    pet = make_pet(bob)
+    walk = walk_trail(bob, pet["id"], trail["id"])
+    feedback = bob.post("/api/feedback", json={"walk_id": walk["id"], "walk_rating": 5, "pet_rating": 5, "difficulty": "just_right", "weather_rating": 5, "would_revisit": True})
+    assert feedback.status_code == 201
+    alice_id = alice.get("/api/auth/me").json()["user"]["id"]
+
+    with SessionLocal() as db:
+        account_service.delete_user_data(db, alice_id)
+        db.commit()
+
+    # 공개 목록과 다른 보호자의 화면이 깨지지 않는다.
+    listed = client.get("/api/community/trails").json()
+    assert [item["id"] for item in listed["items"]] == [other_trail["id"]]
+    assert (listed["items"][0]["like_count"], listed["items"][0]["review_count"], listed["items"][0]["average_rating"]) == (0, 0, None)
+    assert client.get(path).status_code == 404
+    assert client.get(f"/api/community/reviews/{review['id']}/photos/1").status_code == 404
+    assert bob.get("/api/community/my/bookmarks").json() == {"items": [], "total": 0, "page": 1, "size": 12, "has_next": False, "hidden_count": 0}
+    assert bob.get("/api/community/my/reviews").json()["items"] == []
+    walks = bob.get("/api/walks").json()
+    assert [item["id"] for item in walks] == [walk["id"]]
+    assert walks[0]["course_name"] == "삭제된 커뮤니티 산책길"
+    assert bob.get(f"/api/pets/{pet['id']}/insights").status_code == 200
+    assert bob.get("/api/walks/report", params={"pet_id": pet["id"]}).status_code == 200
+    assert bob.get(f"/api/courses/{walk['course_id']}").status_code == 404
+
+    with SessionLocal() as db:
+        assert db.scalar(select(func.count()).select_from(CommunityTrail).where(CommunityTrail.user_id == alice_id)) == 0
+        assert db.scalar(select(func.count()).select_from(SavedWalk).where(SavedWalk.user_id == alice_id)) == 0
+        for model in (TrailLike, TrailBookmark, TrailReview, TrailReviewPhoto):
+            assert db.scalar(select(func.count()).select_from(model).where(model.id > 0)) == 0, model.__name__
+        assert db.scalar(select(func.count()).select_from(WalkHistory).where(WalkHistory.course_id == walk["course_id"])) == 1
+
+
+def test_deleting_a_reviewer_recalculates_the_rating(client):
+    alice, bob, carol = member(), member("bobby", "밥"), member("carol", "캐럴")
+    trail = share(alice)
+    path = f"/api/community/trails/{trail['id']}"
+    bob.post(f"{path}/reviews", json={"rating": 1, "content": "별로예요"})
+    carol.post(f"{path}/reviews", json={"rating": 5, "content": "좋아요"})
+    carol.post(f"{path}/like")
+    assert client.get(path).json()["average_rating"] == 3.0
+    with SessionLocal() as db:
+        account_service.delete_user_data(db, bob.get("/api/auth/me").json()["user"]["id"])
+        db.commit()
+    detail = client.get(path).json()
+    assert (detail["average_rating"], detail["review_count"], detail["like_count"]) == (5.0, 1, 1)
 
 
 # ---------- DB 호환

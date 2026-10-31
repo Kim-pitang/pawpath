@@ -13,6 +13,8 @@ ADDED_COLUMNS = {
     "walking_courses": (("environment", "JSON"), ("owner_user_id", "INTEGER"), ("saved_walk_id", "INTEGER"), ("is_active", "BOOLEAN DEFAULT TRUE"), ("community_trail_id", "INTEGER")),
     "walk_histories": (("tracking_source", "VARCHAR(12)"), ("distance_km", "FLOAT")),
     "users": (("login_id", "VARCHAR(30)"), ("password_hash", "VARCHAR(200)"), ("google_sub", "VARCHAR(64)"), ("google_email", "VARCHAR(254)")),
+    "auth_sessions": (("last_seen_at", "TIMESTAMP"), ("reauthenticated_at", "TIMESTAMP")),
+    "oauth_states": (("reauth_user_id", "INTEGER"),),
 }
 # 컬럼을 나중에 더하면 create_all이 만드는 고유 색인이 빠지므로 따로 만든다. 이미 있으면 건너뛴다.
 ADDED_UNIQUE_INDEXES = (
