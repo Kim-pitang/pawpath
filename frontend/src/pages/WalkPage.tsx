@@ -33,6 +33,8 @@ export default function WalkPage() {
   // 길 안내를 마치고 넘어오면 방금 끝낸 산책의 피드백부터 받는다.
   const [activeWalk, setActiveWalk] = useState<Walk | null>((location.state as { walk?: Walk } | null)?.walk ?? null);
   const [result, setResult] = useState<Feedback | null>(null);
+  // 커뮤니티 산책길을 걷고 피드백을 남겼으면 그 길의 후기로 잇는다.
+  const [reviewTrailId, setReviewTrailId] = useState<number | null>(null);
   const [duration, setDuration] = useState(30);
   // 출발 시각은 시간대 학습에 쓰여서, 나중에 기록할 때는 실제 시각을 받는다.
   const [when, setWhen] = useState<When>('now');
@@ -125,6 +127,7 @@ export default function WalkPage() {
 
   const onFeedbackDone = async (feedback: Feedback) => {
     setResult(feedback);
+    setReviewTrailId(activeWalk?.community_trail_id ?? null);
     setActiveWalk(null);
     invalidateRecommendations();
     await Promise.all([loadWalks(), refreshPets()]);
@@ -164,6 +167,11 @@ export default function WalkPage() {
       </div>
 
       {result && <FeedbackResult feedback={result} petName={selectedPet?.name ?? ''} onSeeChange={() => navigate('/recommend')} />}
+      {result && reviewTrailId && (
+        <LinkButton to={`/community/trails/${reviewTrailId}#reviews`} variant="accent">
+          이 산책길에 후기 남기기
+        </LinkButton>
+      )}
 
       {activeWalk && selectedPet ? (
         <FeedbackForm walk={activeWalk} petName={selectedPet.name} onDone={onFeedbackDone} onDelete={() => removeWalk(activeWalk)} />

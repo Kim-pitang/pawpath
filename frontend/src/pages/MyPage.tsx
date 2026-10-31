@@ -41,6 +41,9 @@ export default function MyPage() {
     return (
       <div className="flex flex-col gap-4">
         <AccountCard />
+        <LinkButton to="/community/my" variant="ghost">
+          내 산책길 관리 (커뮤니티)
+        </LinkButton>
         <Card>
           <EmptyState title="먼저 반려동물을 등록해 주세요">
             <LinkButton to="/pets/new">반려동물 등록하기</LinkButton>
@@ -68,6 +71,9 @@ export default function MyPage() {
         </LinkButton>
         <LinkButton to="/my-walks" variant="ghost" className="!px-2">
           나의 산책길
+        </LinkButton>
+        <LinkButton to="/community/my" variant="ghost" className="col-span-2 !px-2">
+          내 산책길 관리 (커뮤니티)
         </LinkButton>
       </div>
       {stats.simulated_walk_count > 0 && (
