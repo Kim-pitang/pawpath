@@ -153,6 +153,46 @@ class WalkingRouteRequest(BaseModel):
     to_longitude: float = Field(ge=-180, le=180)
 
 
+class GenerateRouteRequest(BaseModel):
+    latitude: float = Field(ge=-90, le=90, allow_inf_nan=False)
+    longitude: float = Field(ge=-180, le=180, allow_inf_nan=False)
+    duration_min: int = Field(ge=20, le=90)
+    # 반려동물을 주면 후보를 그 아이의 성향·날씨·일정에 맞춰 평가하고 순서를 매긴다. 없으면 길이와 시간만 본다.
+    pet_id: int | None = None
+    weather_scenario: WeatherScenario = "live"
+
+
+class RouteFitRead(BaseModel):
+    """후보가 이 반려동물과 이 시간대에 맞는 정도. 점수는 추천 엔진이 저장된 코스와 같은 기준으로 계산한다."""
+
+    score: float | None
+    level: str | None
+    summary: str
+    details: list[str]
+    cautions: list[str]
+    highlights: list[str]
+    start_label: str | None
+    unknown: list[str]
+    excluded: list[str]
+
+
+class GeneratedRouteRead(BaseModel):
+    route: list[list[float]]
+    distance_m: float
+    duration_min: float
+    repeated_pct: float
+    start_snap_m: float
+    fit: RouteFitRead | None = None
+
+
+class GenerateRouteResponse(BaseModel):
+    target_min: int
+    candidates: list[GeneratedRouteRead]
+    notice: str | None
+    scored_for: str | None = None
+    fit_notice: str | None = None
+
+
 class AlternativeRequest(BaseModel):
     """위치는 없어도 된다. 없으면 복귀 경로 대신 안내 문구를 돌려준다."""
 
@@ -229,7 +269,7 @@ class FeedbackRead(FeedbackBrief):
 
 # 나만의 산책길
 Visibility = Literal["private", "link", "public"]
-WalkSourceType = Literal["recorded", "imported"]
+WalkSourceType = Literal["recorded", "imported", "generated"]
 SavedWalkSort = Literal["recent", "distance"]
 
 

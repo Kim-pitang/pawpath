@@ -23,9 +23,10 @@ from app.services.llm_service import enhance_recommendation
 from app.services.photo_service import MAX_PHOTO_BYTES, MAX_PHOTOS_PER_WALK, PhotoError, clean_image
 from app.services.places_service import PLACE_LABELS, nearby_places
 from app.services import user_course_service
-from app.services.recommendation_service import active_courses, create_recommendation, load_state, to_course_data, to_profile, windows_of
+from app.services.recommendation_service import active_courses, create_recommendation, load_state, scoring_config, to_course_data, to_profile, to_schedule, windows_of
 from app.services.report_service import build_report, is_simulated, walked_km
-from app.services.routing_service import Approach, plan_approach
+from app.services import route_fit_service, route_generator
+from app.services.routing_service import Approach, build_router, plan_approach
 from app.services.walk_service import build_insights, record_walk, submit_feedback
 from app.services.weather_service import WeatherResult, get_weather
 
@@ -387,6 +388,119 @@ def course_nearby(
 def walking_route(body: schemas.WalkingRouteRequest) -> Approach:
     """두 지점 사이의 도보 경로. 코스를 벗어났을 때 돌아갈 길을 다시 찾는 데 쓴다."""
     return plan_approach((body.from_latitude, body.from_longitude), (body.to_latitude, body.to_longitude))
+
+
+def generation_gate() -> route_generator.GenerationGate:
+    route_generator.gate.cooldown_s = get_settings().generation_cooldown_seconds
+    return route_generator.gate
+
+
+def generation_router():
+    """경유점 경로를 한 번에 받는 라우터. 길찾기를 쓰지 않거나 지원하지 않으면 None."""
+    built = build_router(get_settings())
+    return built if hasattr(built, "route_via") else None
+
+
+NO_CANDIDATE_NOTICE = (
+    "이 위치와 시간에는 기준에 맞는 순환 경로를 찾지 못했어요. 시간을 늘리거나 출발 위치를 바꿔 보세요. "
+    "강변처럼 되돌아와야 하는 길이 많은 곳에서는 짧은 산책 경로가 만들어지지 않을 수 있어요."
+)
+
+
+def _fit_payload(fit: route_fit_service.CandidateFit) -> dict:
+    return {
+        "score": fit.score,
+        "level": fit.level,
+        "summary": fit.summary,
+        "details": fit.details,
+        "cautions": fit.cautions,
+        "highlights": fit.highlights,
+        "start_label": fit.start_label,
+        "unknown": fit.unknown,
+        "excluded": fit.excluded,
+    }
+
+
+@router.post("/routes/generate", response_model=schemas.GenerateRouteResponse, tags=["경로"])
+def generate_route(
+    body: schemas.GenerateRouteRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+    gate: route_generator.GenerationGate = Depends(generation_gate),
+    path_router=Depends(generation_router),
+) -> dict:
+    """출발점과 원하는 산책 시간으로 순환 경로 후보를 만든다. 공용 길찾기 서버를 쓰므로 수 초 걸린다.
+
+    pet_id를 주면 후보를 그 반려동물의 성향, 날씨, 일정, 지난 피드백으로 평가해 맞는 순서로 돌려준다.
+    위치는 계산에만 쓰고 저장하지 않는다. 마음에 드는 후보는 내 산책길로 저장해 쓴다.
+    """
+    if path_router is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "길찾기를 사용하지 않아 경로를 만들 수 없어요.")
+    pet = _get_pet(db, body.pet_id, user) if body.pet_id is not None else None
+    try:
+        gate.acquire(user.id)
+    except route_generator.GenerationBusy as busy:
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, str(busy), headers={"Retry-After": str(busy.retry_after_s)})
+    rest = True
+    report = None
+    settings = get_settings()
+    try:
+        result = route_generator.generate(
+            (body.latitude, body.longitude),
+            body.duration_min,
+            path_router,
+            interval_s=settings.routing_min_interval_seconds,
+            max_total_s=settings.generation_max_seconds,
+            bearing_count=settings.generation_bearings,
+            radius_scales=settings.generation_radius_scale_list,
+            spreads=settings.generation_spread_list,
+            max_requests=settings.generation_max_requests,
+            # 반려동물을 알면 넉넉히 만든 뒤 엔진 점수로 추리고, 모르면 길 품질 순으로 바로 자른다.
+            max_results=max(settings.generation_pool_size, settings.generation_max_results) if pet is not None else settings.generation_max_results,
+        )
+        if pet is not None and result.candidates:
+            weather = _load_weather(db, user, body.weather_scenario)
+            report = route_fit_service.fit_candidates(
+                [c.points for c in result.candidates],
+                to_profile(pet),
+                to_schedule(user),
+                load_state(db, pet),
+                weather,
+                now_local(),
+                scoring_config(),
+                body.duration_min,
+            )
+    except route_generator.RouteGenerationError:
+        rest = False  # 우리 쪽 요청 때문이 아닌 서버 장애라 바로 다시 시도할 수 있게 한다.
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "길찾기 서버에서 경로를 받지 못했어요. 잠시 뒤 다시 시도해 주세요.")
+    finally:
+        gate.release(user.id, rest)
+
+    order = (report.order if report else list(range(len(result.candidates))))[: settings.generation_max_results]
+    fit_notice = None
+    if report:
+        if report.blocked_reasons and all(fit.score is None for fit in report.fits):
+            fit_notice = "지금은 산책을 권하지 않는 조건이에요: " + " / ".join(report.blocked_reasons[:2])
+        elif not report.environment_measured:
+            fit_notice = "주변 환경(도로, 조명, 나무, 공원)을 측정하지 못한 경로가 있어요. 그 항목은 '확인 불가'로 보고 계산했어요."
+    return {
+        "target_min": body.duration_min,
+        "candidates": [
+            {
+                "route": c.points,
+                "distance_m": c.distance_m,
+                "duration_min": c.duration_min,
+                "repeated_pct": c.repeated_pct,
+                "start_snap_m": c.start_snap_m,
+                "fit": _fit_payload(report.fits[index]) if report else None,
+            }
+            for index in order
+            for c in [result.candidates[index]]
+        ],
+        "notice": None if result.candidates else NO_CANDIDATE_NOTICE,
+        "scored_for": pet.name if report else None,
+        "fit_notice": fit_notice,
+    }
 
 
 @router.post("/routes/alternative", tags=["경로"])
