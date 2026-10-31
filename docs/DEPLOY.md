@@ -1,6 +1,6 @@
 # 배포
 
-서버에서 DB, API, 웹, 길찾기를 모두 컨테이너로 돌립니다. 정의는 저장소 최상위의 `compose.prod.yaml`입니다. 개발용 `docker-compose.yml`(DB만)과는 이름(`pawpath-prod`)과 볼륨이 달라 섞이지 않습니다.
+배포 서버에서 DB, API, 웹, 길찾기를 모두 컨테이너로 돌립니다. 정의는 저장소 최상위의 `compose.prod.yaml`입니다. 개발용 `docker-compose.yml`(DB만)과는 이름(`pawpath-prod`)과 볼륨이 달라 섞이지 않습니다. 로컬 개발 실행은 [설치, 설정, 테스트](SETUP.md)를, 로컬과 배포의 DB 차이는 [PostgreSQL 운영](POSTGRES.md)을 보세요.
 
 | 서비스 | 이미지 | 하는 일 | 밖으로 여는 포트 |
 |---|---|---|---|

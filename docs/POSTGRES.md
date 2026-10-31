@@ -1,6 +1,12 @@
 # PostgreSQL 운영
 
-개발과 배포 모두 PostgreSQL 18(`postgres:18.6-bookworm`)을 씁니다. 개발 DB는 저장소 최상위의 `docker-compose.yml`로 띄우고, 배포 서버는 `compose.prod.yaml`에서 같은 이미지를 씁니다([배포](DEPLOY.md)). SQLite는 Docker 없이 돌리는 경우와 기본 테스트용으로 남아 있습니다.
+배포 서버는 PostgreSQL 18(`postgres:18.6-bookworm`)을 씁니다. 로컬 개발의 기본은 Docker가 필요 없는 SQLite이고, 배포와 같은 DB로 개발하려면 저장소 최상위의 `docker-compose.yml`로 같은 이미지의 PostgreSQL을 띄웁니다. 백엔드 테스트의 기본도 임시 SQLite입니다.
+
+| 환경 | DB | 백엔드 실행 |
+|---|---|---|
+| 로컬 개발 (기본) | SQLite 파일 `backend/pawpath.db` | `./dev.sh` 또는 `uv run uvicorn` |
+| 로컬 개발 (PostgreSQL) | `docker-compose.yml`의 `db` 컨테이너만 | `./dev.sh`(DB 컨테이너를 대신 띄움) 또는 `uv run uvicorn`. 백엔드는 컨테이너가 아님 |
+| 배포 | `compose.prod.yaml`의 `db` | `compose.prod.yaml`의 `backend` 컨테이너([배포](DEPLOY.md)) |
 
 ## 처음 띄우기
 
@@ -63,7 +69,7 @@ uv run python -m app.transfer ./pawpath.db
 
 ## 백업과 복구
 
-자동 백업(`app.backup`)은 SQLite만 다룹니다. PostgreSQL은 `pg_dump`로 백업합니다. 백업 파일에는 비밀번호 해시, 경로, 사진이 들어 있으니 주인만 읽게 두세요.
+자동 백업(`app.backup`)은 SQLite만 다룹니다. PostgreSQL은 `pg_dump`로 백업합니다. 백업 파일에는 보호자 정보, 경로, 사진이 들어 있으니 주인만 읽게 두세요.
 
 ```bash
 # 백업 (사용자 지정 형식, 압축됨)
@@ -106,4 +112,4 @@ docker compose exec -T db psql -U pawpath -d pawpath_test -c "drop schema public
 - 탈퇴한 보호자의 데이터가 지운 직후 디스크에서 사라지는지는 보장하지 않습니다. PostgreSQL은 지운 행을 VACUUM이 공간을 재사용할 때까지 데이터 파일에 남기고, WAL 파일에도 남습니다. SQLite에서 확인하던 "파일에 남지 않음" 테스트는 PostgreSQL에서 건너뜁니다.
 - 자동 백업과 보존 기간 정리는 배포 서버의 cron(`scripts/backup_postgres.sh`)만 합니다. 복구 뒤 처리(`deletions.jsonl` 재적용 등)는 자동화하지 않았습니다.
 - 배포 서버의 DB는 `compose.prod.yaml`로 띄운 PostgreSQL이며, 기존 SQLite 데이터를 옮겨 운영하고 있습니다. 데이터 이전 절차는 [배포](DEPLOY.md#처음-배포하기-sqlite-데이터가-있을-때)에 있습니다.
-- 백엔드는 컨테이너로 띄우지 않습니다. `docker compose`는 DB만 띄우고, 백엔드는 지금처럼 `./dev.sh` 또는 `uv run uvicorn`으로 띄웁니다.
+- 로컬 개발의 `docker-compose.yml`은 DB만 띄우고 백엔드는 `./dev.sh` 또는 `uv run uvicorn`으로 띄웁니다. 배포는 `compose.prod.yaml`이 백엔드까지 컨테이너로 띄웁니다([배포](DEPLOY.md)).

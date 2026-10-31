@@ -1,157 +1,145 @@
-# PawPath 시스템 아키텍처
+# 시스템 아키텍처
 
-PawPath(댕댕 산책각)는 반려동물의 특성, 보호자의 일정, 날씨, 동네 환경을 함께 계산해 산책 시간과 코스를 추천하고, 산책 후 피드백을 학습해 다음 추천을 바꾸는 서비스입니다.
+mungo(PawPath)의 구조, 데이터 흐름, 설계 결정을 실제 코드 기준(커밋 `5f74f2d`)으로 설명합니다. 추천 알고리즘의 산식과 임계값은 [추천 알고리즘](RECOMMENDER.md), API 계약은 [API 명세](API.md)가 기준입니다.
 
-## 구성
+## 시스템 개요
+
+mungo는 반려동물의 특성, 보호자의 일정, 시간별 날씨, 코스 주변 환경을 함께 계산해 산책 시간과 코스를 추천하고, 그 코스로 GPS 길 안내를 하고, 산책 후 피드백을 학습해 다음 추천을 바꾸는 모바일 웹 서비스입니다.
+
+| 설계 원칙 | 구조에 반영한 방식 |
+|---|---|
+| 추천 판단은 직접 구현한 엔진이 한다 | `backend/app/recommender`는 DB와 웹 프레임워크에 의존하지 않는 순수 Python 모듈. LLM은 확정된 결과의 문장만 다듬음 |
+| 외부 서비스가 실패해도 끝까지 동작한다 | 날씨는 모의 날씨로, 길찾기는 직선으로, LLM은 계산 문장으로 대체. 시드 코스와 시설은 미리 수집해 저장소에 둠 |
+| 위치는 필요한 만큼만 쓴다 | 길 안내 진행 계산은 브라우저에서. 좌표는 길찾기 요청 본문으로만 보내고 저장·로그하지 않음 |
+| 설치 없이 재현할 수 있다 | API 키 없이 동작. `./dev.sh` 하나로 SQLite와 함께 실행, 배포는 Docker Compose |
+
+## 전체 구조
 
 ```mermaid
 flowchart LR
-    U[보호자 모바일 웹] --> FE[React + Vite<br/>화면 6종, Leaflet 지도]
-    FE -->|REST /api| API[FastAPI 라우터]
-    API --> S[서비스 계층]
-    S --> ENG[추천 엔진<br/>순수 Python 모듈]
-    S --> DB[(SQLite 또는 PostgreSQL)]
-    S --> WS[날씨 서비스]
-    WS -->|실시간| OM[Open-Meteo]
-    WS -->|캐시| DB
-    WS -->|실패 시| MOCK[Mock 제공자]
-    FE -->|지도 타일| OSM[OpenStreetMap]
-    S -->|길찾기, 복귀, 재탐색| OSRM[OSRM 도보 경로]
-    S -.->|선택: 문장 보강| LLM[로컬 Ollama]
+    U["보호자 휴대폰 브라우저"] --> FE["React + Vite<br/>화면, Leaflet 지도, 길 안내·기록 계산"]
+    FE -->|"REST /api, 세션 쿠키"| API["FastAPI 라우터<br/>api.py, recommendation_api.py"]
+    API --> S["서비스 계층<br/>services/"]
+    S --> ENG["추천 엔진<br/>recommender/"]
+    S --> DB[("SQLite 또는 PostgreSQL")]
+    S --> WS["날씨 서비스"]
+    WS -->|"시간별 예보"| OM["Open-Meteo"]
+    WS -->|"30분 캐시"| DB
+    WS -->|"실패 시"| MOCK["모의 날씨"]
+    FE -->|"지도 타일"| OSM["OpenStreetMap"]
+    S -->|"출발점 길찾기, 복귀, 재탐색, 경로 생성"| OSRM["OSRM 도보 경로"]
+    S -->|"내 산책길 환경 측정"| OP["Overpass"]
+    S -.->|"선택: 문장 보강"| LLM["로컬 Ollama"]
+    S -.->|"선택: 로그인"| G["Google OAuth / OIDC"]
 ```
 
 | 계층 | 위치 | 역할 |
 |---|---|---|
-| 화면 | `frontend/src/pages` | 대시보드, 프로필, 추천, 지도, 산책 기록, 마이페이지 |
-| API | `backend/app/api.py` | 요청 검증과 응답 구성 |
-| 서비스 | `backend/app/services` | DB와 엔진 연결, 날씨 폴백, 피드백 반영 |
+| 화면 | `frontend/src/pages`, `components` | 홈, 추천, 지도, 길 안내, 산책 기록, 나만의 산책길, 커뮤니티, 마이, 계정과 가족 프로필 |
+| 화면 로직 | `frontend/src/lib` | API 호출과 세션 만료 처리, 길 안내 계산, 위치 수집, 산책 기록 계산 |
+| API | `backend/app/api.py`, `recommendation_api.py` | 요청 검증(Pydantic 스키마)과 응답 구성, 권한 확인 |
+| 서비스 | `backend/app/services` | DB와 엔진 연결, 외부 API 호출과 폴백, 피드백 반영, 계정, 백업 |
 | 추천 엔진 | `backend/app/recommender` | 모든 추천 판단. DB와 웹 프레임워크에 의존하지 않음 |
-| 코스 데이터 | `scripts/build_courses.py` → `backend/app/data/courses.json` | 경로와 시설을 미리 수집해 저장. 실행 중 외부 의존 없음 |
+| 코스 데이터 | `scripts/build_courses.py`, `enrich_courses.py` → `backend/app/data/` | 경로와 시설, 환경값을 미리 수집해 저장. 실행 중 외부 의존 없음 |
 
-## 추천 파이프라인
+## 프론트엔드 구조
 
-> 지금 기본값은 **추천 v2**(`rule-v2`)입니다. 4단계 구조, 5개 묶음 가중치, 안전 단계, 피드백 조정, 평가 지표는 [추천 알고리즘](RECOMMENDER.md)에 있습니다. 아래의 3번 코스 점수와 가중치 표는 `RECOMMENDER_VERSION=v1`의 동작입니다. 특성값, 시간대 점수, 코스 선호 학습은 두 버전이 함께 씁니다.
+React 19, TypeScript, Vite, Tailwind CSS 4, React Router 7, Leaflet입니다. 휴대폰 브라우저를 주 무대로 한 모바일 웹이며, 폰에서는 아래 메뉴, 넓은 화면에서는 머리글 메뉴로 이동합니다.
+
+| 위치 | 역할 |
+|---|---|
+| `src/App.tsx` | 라우팅. 프로필 선택이 필요한 화면은 `RequireProfile`로 감쌈 |
+| `src/context/AppContext.tsx` | 계정, 프로필과 전환, 세션 만료, 반려동물과 선택, 일정 같은 앱 전역 상태 |
+| `src/pages/` | 화면 27개(홈, 추천, 지도, 길 안내, 기록, 산책길, 커뮤니티, 마이, 리포트, 계정, 프로필 등) |
+| `src/components/` | 지도(`CourseMap`, `NavigationMap`, `WalkRouteMap`), 안전 평가(`SafetyPanel`), 차트, 공통 UI, 세션 만료 대화상자 |
+| `src/lib/api.ts` | REST 호출. `401`이면 요청을 멈춰 두고 다시 로그인을 받은 뒤 이어서 보냄 |
+| `src/lib/navigation.ts` | 길 안내 계산(경로 투영, 진행도, 회전, 이탈, 완주). 지도와 서버에 의존하지 않는 순수 모듈 |
+| `src/lib/recording.ts` | 산책 기록 계산(오차·순간 이동 거르기, 일시정지와 끊김 구간, 기기 임시 저장과 복구) |
+| `src/lib/location.ts` | `watchPosition` 기반 위치 수집 |
+| `src/lib/photos.ts` | 사진을 브라우저에서 1600px JPEG로 다시 그려 올림 |
+
+브라우저는 HTTPS나 localhost에서만 위치를 허용하므로, 휴대폰 시연은 HTTPS 터널이나 배포 주소로 엽니다.
+
+## 백엔드 구조
+
+Python 3.12, FastAPI, SQLAlchemy 2, Pydantic, Alembic, HTTPX입니다.
+
+| 위치 | 역할 |
+|---|---|
+| `app/main.py` | 앱 생성, 라우터 연결, 요청 크기 제한, 접근 로그 정리, 시작 시 구조 올리기와 시드, 자동 백업 일정 |
+| `app/api.py` | 반려동물, 일정, 날씨, 코스, 경로, 안전, 산책 기록, 피드백, 산책길, 공유, 커뮤니티, 계정, 프로필 API |
+| `app/recommendation_api.py` | 추천 생성, 이벤트, 후보, 지표, LLM 설명 |
+| `app/schemas.py`, `models.py` | 요청·응답 스키마, ORM 모델 |
+| `app/services/` | 날씨, 길찾기, LLM, 대체 경로, 리포트, 시설 검색, GPX, 나만의 산책길, 내 산책길 코스, 환경 측정, 경로 생성, 커뮤니티, 계정, Google 로그인, 탈퇴, 백업, 사진, 데이터 이전 |
+| `app/recommender/` | 추천 엔진 ([추천 알고리즘](RECOMMENDER.md)) |
+| `alembic/`, `app/migrations.py` | DB 구조 리비전. Alembic 이전 DB는 예전 방식으로 0001까지 올린 뒤 이어서 적용 |
+| `app/backup.py`, `app/transfer.py`, `app/recommendation_report.py`, `app/gpx_import.py` | 운영 명령(백업과 복구, SQLite → PostgreSQL 이전, 추천 지표, GPX 코스 적재) |
+
+API는 모두 `/api` 아래에 있고 경로는 91개입니다. `GET /api/health`로 상태를 확인합니다.
+
+## 데이터베이스 구조
+
+같은 SQLAlchemy 모델과 Alembic 리비전으로 SQLite와 PostgreSQL을 함께 지원합니다. 로컬 기본 실행은 SQLite 파일, 배포는 PostgreSQL 18.6입니다. 두 DB의 차이와 운영 방법은 [PostgreSQL 운영](POSTGRES.md)에 있습니다.
 
 ```mermaid
-flowchart TD
-    P[반려동물 프로필] --> F[특성값 생성<br/>features.py]
-    F --> T[시간대 점수<br/>timeslots.py]
-    W[시간별 예보] --> T
-    SCH[보호자 일정] --> T
-    H[학습 상태] --> T
-    T --> C[코스 × 출발 시각 평가<br/>course_scoring.py]
-    CO[코스 데이터] --> C
-    H --> C
-    SAFE[안전 지수<br/>safety.py] --> C
-    C --> R[위험 코스 제외, 상위 3개 선정<br/>engine.py]
-    R --> E[근거 기반 설명<br/>explain.py]
-    FB[산책 피드백] --> L[온라인 학습<br/>preference.py]
-    L --> H
+erDiagram
+    users ||--o{ pets : owns
+    users ||--o{ profiles : has
+    profiles ||--o{ walk_histories : walked_by
+    profiles ||--o{ saved_walks : created_by
+    profiles ||--o{ recommendations : requested_by
+    pets ||--o{ recommendations : receives
+    pets ||--o{ walk_histories : walks
+    pets ||--o{ walk_feedbacks : rates
+    pets ||--o{ pet_course_preferences : learns
+    walking_courses ||--o{ walk_histories : used_in
+    walking_courses ||--o{ walk_feedbacks : rated_in
+    walking_courses ||--o{ pet_course_preferences : scored_in
+    walking_courses ||--o{ recommendations : top_course
+    weather_records ||--o{ recommendations : basis
+    recommendations ||--o{ walk_histories : leads_to
+    walk_histories ||--o| walk_feedbacks : has
+    users ||--o{ saved_walks : records
+    users ||--o{ auth_sessions : signs_in
+    saved_walks ||--o{ saved_walk_photos : has
+    pets |o--o{ saved_walks : walked_with
+    saved_walks ||--o{ saved_walk_points : has
+    saved_walks ||--o| community_trails : shared_as
+    community_trails ||--o| walking_courses : guided_by
+    community_trails ||--o{ trail_likes : has
+    community_trails ||--o{ trail_bookmarks : has
+    community_trails ||--o{ trail_reviews : has
+    trail_reviews ||--o{ trail_review_photos : has
+    recommendations ||--o{ recommendation_items : ranks
+    recommendations ||--o{ recommendation_events : logs
 ```
 
-### 1. 특성값 (`features.py`)
-
-나이, 크기, 체중, 활동량, 성격, 산책 선호도, 더위 민감도, 낯선 환경 반응을 다음 값으로 변환합니다.
-
-- 생애 단계(크기별 노령 기준), 권장 산책 시간과 거리
-- 낯선 길 허용도, 혼잡 허용도, 오르막 허용도
-- 쾌적 체감온도 구간과 산책 제외 온도
-
-이 값들은 일반적인 산책 지침을 참고한 서비스 휴리스틱이며 수의학적 기준이 아닙니다.
-
-### 2. 시간대 점수 (`timeslots.py`)
-
-지금부터 24시간 안의 가능 시간대를 정시 단위로 평가합니다.
-
-```
-시간대 점수 = 0.55 × 날씨 쾌적도 + 0.15 × 일정 적합 + 0.10 × 일조 + 0.10 × 학습된 시간대 선호 + 0.10 × 가까운 시간
-```
-
-- 날씨 쾌적도는 체감온도, 강수, 바람, 자외선을 반려동물 기준으로 평가하며, 산책 구간의 평균과 최악값을 함께 봅니다.
-- 강한 비(시간당 3mm 이상), 제외 온도, 강풍인 시간은 추천에서 제외합니다.
-- 추위와 더위가 심하면 권장 시간을 줄이고, 비가 오기 전까지만 걷도록 시간을 맞춥니다.
-- 산책 희망 횟수만큼, 3시간 이상 떨어진 시간대를 고릅니다.
-
-### 3. 코스 점수 (`course_scoring.py`)
-
-코스마다 가능한 출발 시각을 모두 평가해 가장 좋은 시각을 찾습니다. 각 항목은 0~100점이며 최종 점수는 가중합입니다.
-
-| 항목 | 초기 가중치 | 계산 근거 |
-|---|---:|---|
-| 날씨 적합도 | 25% | 구간 쾌적도, 그늘, 포장 여부, 강변 바람, 비 겹침 |
-| 반려동물 성향 적합도 | 25% | 익숙함과 낯선 길 허용도, 혼잡도, 성격별 선호 |
-| 활동량 적합도 | 15% | 권장 거리 대비 코스 거리, 오르막. 추위와 더위에는 권장 거리를 줄임 |
-| 보호자 일정 적합도 | 15% | 희망 시간 대비 소요 시간, 가능 시간 초과 여부 |
-| 안전 시설 적합도 | 10% | 조명(해 진 뒤 비중 상승), 차량 노출, 공원, 포장, 확인된 시설 |
-| 과거 선호도 | 10% (학습에 따라 최대 30%) | 학습된 코스 선호도. 피드백이 없으면 정확히 50점 |
-
-다섯 항목의 가중치는 항상 고정입니다. 피드백이 n건 쌓이면 과거 선호도의 반영 강도만 `g = 10% + 20% × n/(n+2)`로 높입니다.
-
-```
-최종 점수 = Σ(가중치 × 항목 점수) + 10% × 50 + g × (과거 선호도 − 50)
-```
-
-피드백이 없으면 `g = 10%`이므로 기획서의 가중합과 정확히 같습니다. 중립값에서 벗어난 만큼만 강해지므로, 좋은 피드백은 항상 점수를 올리고 평가하지 않은 코스는 깎이지 않습니다.
-
-### 4. 피드백 학습 (`preference.py`)
-
-외부 AI 호출 없이 직접 구현한 온라인 학습입니다.
-
-| 학습 대상 | 방식 | 효과 |
-|---|---|---|
-| 코스 선호도 | 최근 피드백 가중 베이즈 축소 평균 (사전값 50) | 표본이 적을 때 극단값을 막고, 최근 경험을 더 반영 |
-| 코스 특성 가중치 | 정규화 LMS 선형 모델 (특성 11개) | 피드백이 비슷한 코스로 일반화되어, 가 보지 않은 코스도 예측 |
-| 시간대 선호 | 시간대별 축소 평균 | 실제로 좋았던 시간대를 우선 |
-
-피드백은 산책 만족도, 반려동물 만족도, 재방문 의향, 난이도를 합쳐 0~100점 신호로 바꿉니다. 코스 선호도에서는 날씨 만족도를 뺍니다. 비 오는 날의 나쁜 경험은 코스 탓이 아닐 수 있어서, 날씨가 나빴던 산책은 표본 가중치를 절반으로 줄입니다.
-
-그 밖의 규칙은 다음과 같습니다.
-
-- 익숙한 길을 좋아하는 반려동물은 좋았던 코스에 가산점을 받습니다.
-- 새로운 길을 좋아하는 반려동물은 세 번 이상 간 코스에서 감점됩니다.
-- 싫어한 코스는 자주 가도 "익숙해서 좋은 코스"로 치지 않습니다.
-
-엔진은 같은 날씨에서 학습 상태만 비운 기준선을 함께 계산합니다. 응답의 `learning_delta`와 `rank_change`는 이 기준선과의 차이이므로 피드백의 효과만 보여 줍니다.
-
-### 5. 추천 이유 (`explain.py`, `explain_guard.py`)
-
-계산 결과와 코스 데이터로 문장을 조립합니다. 데이터에 없는 시설은 문장에 나올 수 없고, 팀 추정값을 사실처럼 말하지 않습니다. LLM을 켜면 이 사실들을 다듬은 문장을 검증해 쓰지만, 점수는 바뀌지 않습니다. 예:
-
-> 낯선 길을 싫어하는 두부를 위해 익숙한 공원 코스를 골랐어요. 비가 오기 전 짧게 다녀올 수 있어요.
-
-## GPS 길 안내
-
-코스 안내 계산은 브라우저에서 합니다(`frontend/src/lib/navigation.ts`). 서버와 지도에 의존하지 않는 순수 모듈이라 테스트로 검증합니다.
-
-| 단계 | 방식 |
+| 테이블 | 내용 |
 |---|---|
-| 위치 수집 | `watchPosition`. 오차 100m를 넘는 측정값은 진행도에 쓰지 않음 |
-| 진행도 계산 | 현재 위치를 경로에 투영. 직전 진행도 근처부터 찾고 되돌아가지 않게 함 |
-| 회전 안내 | 경로 좌표에서 꼭짓점 앞뒤 구간의 방향 차이로 좌회전, 우회전, 유턴을 판정. 40도 미만은 안내하지 않음 |
-| 이탈 판정 | 코스에서 35m 초과 (GPS 정확도에 따라 최대 60m까지 완화) |
-| 완주 판정 | 코스에 들어온 뒤 끝점 25m 이내 |
-| 출발점 안내 | `POST /courses/{id}/approach`. 서버가 OSRM을 호출하고, 실패하면 직선으로 대체 |
+| `users` | 보호자, 산책 가능 시간, 희망 시간, 횟수, Google 고유 ID와 이메일(시연 보호자는 비어 있음). 예전 비밀번호 로그인 컬럼(`login_id`, `email`, `password_hash`)은 쓰지 않음 |
+| `profiles` | 가족 프로필. 계정당 최대 5개(대표 1개), 이름, 아바타, 일정, 삭제 시각(`deleted_at`) |
+| `auth_sessions` | 로그인 세션. 토큰의 SHA-256 값, 만료 시각, 마지막 사용 시각, 본인 재확인 시각 (추가 테이블) |
+| `oauth_states` | 진행 중인 Google 로그인. state의 SHA-256 값, nonce, PKCE 검증값, 돌아갈 경로, 만료 시각, 본인 재확인 대상. 한 번 쓰면 삭제 (추가 테이블) |
+| `pets` | 프로필과 학습 상태(특성 가중치, 시간대 선호, 피드백 수) |
+| `walking_courses` | 코스, 경로, 시설, 출처 정보 |
+| `weather_records` | 시간별 날씨. 실제 날씨 캐시이자 추천 근거 |
+| `recommendations` | 추천 결과 전문. 당시 점수와 근거, 알고리즘 버전, 날씨 기준 시각을 보존 |
+| `recommendation_items` | 추천 당시 후보 전부의 순위, 총점, 묶음별 점수와 가중치, 안전 수준, 제외 이유 (추천 v2) |
+| `recommendation_events` | 추천 카드 선택, 산책 시작 (추천 v2) |
+| `walk_histories` | 산책 기록 |
+| `walk_feedbacks` | 피드백과 선호도 변화 전후 값. 산책 1회당 1건 |
+| `pet_course_preferences` | 반려동물별 코스 선호도와 방문 수 (추가 테이블) |
+| `saved_walks` | 나만의 산책길. 이름, 메모, 거리, 시간, 공개 범위, 공유 토큰과 기간, 중복 확인용 경로 해시, 썸네일 경로 (추가 테이블) |
+| `saved_walk_points` | 산책길의 GPS 지점. 순서, 구간, 위경도, 고도, 시각, 정확도 (추가 테이블) |
+| `saved_walk_photos` | 산책길 사진. 메타데이터를 지운 이미지와 형식, 크기 (추가 테이블) |
+| `community_trails` | 공유한 산책길. 제목, 설명, 대표 사진 번호, 공개 여부, 지역, 특징, 추천 대상, 가리는 반경, 가린 뒤 계산한 거리, 시간, 오르막, 난이도, 출발과 도착, 썸네일, 조회수 (추가 테이블) |
+| `trail_likes`, `trail_bookmarks` | 좋아요와 저장. 보호자와 산책길 조합이 고유 (추가 테이블) |
+| `trail_reviews` | 후기. 별점 1~5(CHECK), 글. 보호자와 산책길 조합이 고유 (추가 테이블) |
+| `trail_review_photos` | 후기 사진. 메타데이터를 지운 이미지 (추가 테이블) |
 
-왕복 코스는 같은 길을 두 번 지나므로 가장 가까운 점만 찾으면 진행도가 앞뒤로 튑니다. 그래서 탐색 범위를 직전 진행도 근처로 제한하고, 거리가 비슷하면 앞쪽을 택합니다. 반환점을 지나면 약 30~45m 뒤부터 복귀 구간으로 인식합니다.
+`walking_courses`에는 커뮤니티 산책길의 길 안내를 위해 `community_trail_id`(고유)를 더했습니다. `walking_courses`에는 내 산책길 코스를 위해 `owner_user_id`(주인, 공용 코스는 비어 있음), `saved_walk_id`(원본 산책길), `is_active`(추천 후보 여부)를 더했습니다. 산책 기록이 코스를 가리키므로 추천에서 빼거나 산책길을 지워도 코스는 지우지 않고 끕니다.
 
-**위치 정보:** 길 안내 중의 위치는 저장하지 않습니다. 길찾기 요청은 좌표가 접근 로그에 남지 않도록 본문으로 받고, 오류 로그에도 좌표를 남기지 않습니다. 외부로 나가는 경우는 출발점 3km 이내에서 길찾기를 요청할 때뿐입니다.
-
-## 나만의 산책길과 GPX
-
-사용자가 직접 기록하거나 GPX로 가져온 경로입니다. 추천 코스에 묶인 `walk_histories`를 바꾸지 않고 테이블 두 개를 더했습니다. 산책길은 `saved_walk_service.py`, GPX 읽기와 쓰기는 DB를 모르는 `gpx_service.py`가 맡습니다.
-
-| 단계 | 방식 |
-|---|---|
-| 위치 수집 | 길 안내와 같은 `useGeolocation`(`watchPosition`). 시각은 좌표를 받은 시각을 씀. WebKit이 `position.timestamp`를 마이크로초로 주기 때문 |
-| 오차 거르기 (`lib/recording.ts`) | 정확도 50m 초과, 제자리 흔들림(3m 또는 정확도의 절반, 최대 10m 미만 이동), 초속 12m를 넘는 30m 이상 이동을 버림. 튄 위치가 40m 안에 3번 연달아 찍히면 실제 위치로 보고 새 구간 시작 |
-| 끊김 처리 | 60초 넘게 위치가 오지 않았다 돌아오면 새 구간. 구간 사이는 선을 잇지 않고 거리에 넣지 않음 |
-| 유실 방지 | 좌표마다 `localStorage`에 임시 저장. 다시 열면 마지막 위치를 받은 시각 기준으로 일시정지해 닫혀 있던 시간을 빼고 복구. `client_id`로 재전송해도 한 번만 저장 |
-| 서버 계산 | 거리와 평균 속도를 하버사인 거리로 다시 계산. 100m 넘게 움직이면서 시속 252km를 넘는 이동(시각이 없거나 같으면 5km 넘는 간격)은 구간을 나눔 |
-| GPX 읽기 | 표준 라이브러리 expat. DOCTYPE과 엔티티 선언을 만나면 즉시 거부해 XXE와 엔티티 폭탄을 막음. 10MB, 10만 지점 제한. 확장 태그는 무시하고 좌표, 고도, 시각만 읽음 |
-| GPX 쓰기 | GPX 1.1, UTF-8, 시각은 UTC. XML에 넣을 수 없는 제어 문자는 지움 |
-| 공유 | `secrets.token_urlsafe(24)` 토큰(32자). 비공개면 토큰이 남아 있어도 열지 않음. 응답은 공유 전용 스키마로 만들어 개인정보 필드가 들어갈 자리가 없음 |
-
-## 계정과 권한
+## 인증 흐름
 
 모든 사용자 데이터 API는 `current_user` 하나로 주인(대표 계정)을 정하고, 반려동물과 산책길이 그 계정의 것인지 확인합니다. 로그인을 넣으면서 이 함수만 바꾸고 각 API의 권한 검사는 그대로 썼습니다.
 
@@ -244,7 +232,188 @@ Google을 다녀오면 페이지를 새로 열므로, 화면에 입력하던 내
 
 `backup_service`가 SQLite 온라인 백업으로 사본을 만들고, 복구도 같은 방법으로 지금 DB를 트랜잭션으로 덮어씁니다. 파일을 바꿔치기하지 않으므로 복구 중에 멈춰도 깨지지 않고, 서버의 열린 연결도 새 내용을 읽습니다. 기준과 절차는 [백업 및 복구 정책](BACKUP.md)에 있습니다.
 
-## 내 산책길을 추천 후보로
+## 추천 흐름
+
+추천에서 산책, 피드백, 다음 추천까지 한 바퀴입니다. 실제 코드의 호출 순서를 따릅니다.
+
+```mermaid
+flowchart TD
+    A["① 사용자·반려동물 정보 입력<br/>PUT /schedule, POST /pets"] --> C
+    B["② 날씨·환경 데이터<br/>Open-Meteo 시간별 예보, 미리 수집한 코스 환경"] --> C
+    C["③ 출발 시각과 코스 점수 계산<br/>timeslots.py, course_scoring.py"] --> D
+    D["④ 안전 평가와 랭킹<br/>safety.py 차단·단계, engine.py TOP 3"] --> E
+    E["⑤ 추천 결과 제공<br/>POST /recommendations, 근거와 출처 저장"] --> F
+    F["⑥ 산책 실행과 기록<br/>GPS 길 안내, POST /walks"] --> G
+    G["⑦ 피드백 수집<br/>POST /feedback"] --> H
+    H["⑧ 개인화 반영<br/>preference.py 학습 상태 갱신"] -.->|"다음 추천"| C
+    E -.->|"선택"| L["LLM 문장<br/>POST /recommendations/{id}/explain"]
+```
+
+| 단계 | 처리 | 저장 |
+|---|---|---|
+| ① 입력 | 반려동물 프로필, 보호자 일정(프로필마다), 선호 거리와 시간대 | `pets`, `users`/`profiles` |
+| ② 데이터 | 서비스 지역 좌표의 시간별 예보(30분 캐시, 실패 시 모의 날씨), 코스 경로·시설·환경값 | `weather_records`, `walking_courses` |
+| ③ 점수 | 특성값 계산, 출발 시각 평가, 코스 × 시각 점수(4개 묶음 + 피드백 조정) | |
+| ④ 안전·랭킹 | 차단 조건 제외, 안전 단계 → 점수 순, 경로 겹침 제거, 탐색 | |
+| ⑤ 결과 | TOP 3, 출발 시각, 묶음별 점수와 근거, 안전 평가, 제외 코스와 이유. 후보 전부의 점수 | `recommendations`, `recommendation_items` |
+| ⑥ 산책 | 카드 선택과 산책 시작 이벤트, 길 안내, 완주 또는 끝내기 | `recommendation_events`, `walk_histories` |
+| ⑦ 피드백 | 만족도, 반려동물 만족도, 난이도, 날씨 만족도, 재방문 의향 | `walk_feedbacks` |
+| ⑧ 학습 | 코스 선호, 코스 특성 가중치, 시간대 선호 갱신. 선호 거리, 걸음 속도는 기록에서 계산 | `pet_course_preferences`, `pets`의 학습 상태 |
+
+### 추천 파이프라인
+
+> 지금 기본값은 **추천 v2**(`rule-v2`)입니다. 4단계 구조, 5개 묶음 가중치, 안전 단계, 피드백 조정, 평가 지표는 [추천 알고리즘](RECOMMENDER.md)에 있습니다. 아래의 3번 코스 점수와 가중치 표는 `RECOMMENDER_VERSION=v1`의 동작입니다. 특성값, 시간대 점수, 코스 선호 학습은 두 버전이 함께 씁니다.
+
+```mermaid
+flowchart TD
+    P[반려동물 프로필] --> F[특성값 생성<br/>features.py]
+    F --> T[시간대 점수<br/>timeslots.py]
+    W[시간별 예보] --> T
+    SCH[보호자 일정] --> T
+    H[학습 상태] --> T
+    T --> C[코스 × 출발 시각 평가<br/>course_scoring.py]
+    CO[코스 데이터] --> C
+    H --> C
+    SAFE[안전 지수<br/>safety.py] --> C
+    C --> R[위험 코스 제외, 상위 3개 선정<br/>engine.py]
+    R --> E[근거 기반 설명<br/>explain.py]
+    FB[산책 피드백] --> L[온라인 학습<br/>preference.py]
+    L --> H
+```
+
+#### 1. 특성값 (`features.py`)
+
+나이, 크기, 체중, 활동량, 성격, 산책 선호도, 더위 민감도, 낯선 환경 반응을 다음 값으로 변환합니다.
+
+- 생애 단계(크기별 노령 기준), 권장 산책 시간과 거리
+- 낯선 길 허용도, 혼잡 허용도, 오르막 허용도
+- 쾌적 체감온도 구간과 산책 제외 온도
+
+이 값들은 일반적인 산책 지침을 참고한 서비스 휴리스틱이며 수의학적 기준이 아닙니다.
+
+#### 2. 시간대 점수 (`timeslots.py`)
+
+지금부터 24시간 안의 가능 시간대를 정시 단위로 평가합니다.
+
+```
+시간대 점수 = 0.55 × 날씨 쾌적도 + 0.15 × 일정 적합 + 0.10 × 일조 + 0.10 × 학습된 시간대 선호 + 0.10 × 가까운 시간
+```
+
+- 날씨 쾌적도는 체감온도, 강수, 바람, 자외선을 반려동물 기준으로 평가하며, 산책 구간의 평균과 최악값을 함께 봅니다.
+- 강한 비(시간당 3mm 이상), 제외 온도, 강풍인 시간은 추천에서 제외합니다.
+- 추위와 더위가 심하면 권장 시간을 줄이고, 비가 오기 전까지만 걷도록 시간을 맞춥니다.
+- 산책 희망 횟수만큼, 3시간 이상 떨어진 시간대를 고릅니다.
+
+#### 3. 코스 점수 (`course_scoring.py`)
+
+코스마다 가능한 출발 시각을 모두 평가해 가장 좋은 시각을 찾습니다. 각 항목은 0~100점이며 최종 점수는 가중합입니다.
+
+| 항목 | 초기 가중치 | 계산 근거 |
+|---|---:|---|
+| 날씨 적합도 | 25% | 구간 쾌적도, 그늘, 포장 여부, 강변 바람, 비 겹침 |
+| 반려동물 성향 적합도 | 25% | 익숙함과 낯선 길 허용도, 혼잡도, 성격별 선호 |
+| 활동량 적합도 | 15% | 권장 거리 대비 코스 거리, 오르막. 추위와 더위에는 권장 거리를 줄임 |
+| 보호자 일정 적합도 | 15% | 희망 시간 대비 소요 시간, 가능 시간 초과 여부 |
+| 안전 시설 적합도 | 10% | 조명(해 진 뒤 비중 상승), 차량 노출, 공원, 포장, 확인된 시설 |
+| 과거 선호도 | 10% (학습에 따라 최대 30%) | 학습된 코스 선호도. 피드백이 없으면 정확히 50점 |
+
+다섯 항목의 가중치는 항상 고정입니다. 피드백이 n건 쌓이면 과거 선호도의 반영 강도만 `g = 10% + 20% × n/(n+2)`로 높입니다.
+
+```
+최종 점수 = Σ(가중치 × 항목 점수) + 10% × 50 + g × (과거 선호도 − 50)
+```
+
+피드백이 없으면 `g = 10%`이므로 기획서의 가중합과 정확히 같습니다. 중립값에서 벗어난 만큼만 강해지므로, 좋은 피드백은 항상 점수를 올리고 평가하지 않은 코스는 깎이지 않습니다.
+
+#### 4. 피드백 학습 (`preference.py`)
+
+외부 AI 호출 없이 직접 구현한 온라인 학습입니다.
+
+| 학습 대상 | 방식 | 효과 |
+|---|---|---|
+| 코스 선호도 | 최근 피드백 가중 베이즈 축소 평균 (사전값 50) | 표본이 적을 때 극단값을 막고, 최근 경험을 더 반영 |
+| 코스 특성 가중치 | 정규화 LMS 선형 모델 (특성 11개) | 피드백이 비슷한 코스로 일반화되어, 가 보지 않은 코스도 예측 |
+| 시간대 선호 | 시간대별 축소 평균 | 실제로 좋았던 시간대를 우선 |
+
+피드백은 산책 만족도, 반려동물 만족도, 재방문 의향, 난이도를 합쳐 0~100점 신호로 바꿉니다. 코스 선호도에서는 날씨 만족도를 뺍니다. 비 오는 날의 나쁜 경험은 코스 탓이 아닐 수 있어서, 날씨가 나빴던 산책은 표본 가중치를 절반으로 줄입니다.
+
+그 밖의 규칙은 다음과 같습니다.
+
+- 익숙한 길을 좋아하는 반려동물은 좋았던 코스에 가산점을 받습니다.
+- 새로운 길을 좋아하는 반려동물은 세 번 이상 간 코스에서 감점됩니다.
+- 싫어한 코스는 자주 가도 "익숙해서 좋은 코스"로 치지 않습니다.
+
+엔진은 같은 날씨에서 학습 상태만 비운 기준선을 함께 계산합니다. 응답의 `learning_delta`와 `rank_change`는 이 기준선과의 차이이므로 피드백의 효과만 보여 줍니다.
+
+#### 5. 추천 이유 (`explain.py`, `explain_guard.py`)
+
+계산 결과와 코스 데이터로 문장을 조립합니다. 데이터에 없는 시설은 문장에 나올 수 없고, 팀 추정값을 사실처럼 말하지 않습니다. LLM을 켜면 이 사실들을 다듬은 문장을 검증해 쓰지만, 점수는 바뀌지 않습니다. 예:
+
+> 낯선 길을 싫어하는 두부를 위해 익숙한 공원 코스를 골랐어요. 비가 오기 전 짧게 다녀올 수 있어요.
+
+### 안전 지수
+
+`recommender/safety.py`가 항목별 상태(양호, 주의, 위험, 확인 불가)와 출처를 평가합니다.
+
+| 항목 | 데이터 | 출처 |
+|---|---|---|
+| 기온, 강수, 바람, 자외선 | Open-Meteo | 예보 (시나리오면 모의) |
+| 시간대 | 예보의 낮밤 정보 | 예보 |
+| 조명 | OSM `lit` 태그. 경로의 50% 이상 기록이 있을 때만 사용 | OSM 기록, 없으면 확인 불가(팀 추정 병기) |
+| 그늘 | OSM 나무 기록 근접 비율. 기록이 없으면 사실로 쓰지 않음 | OSM 기록, 없으면 확인 불가(팀 추정 병기) |
+| 차량 노출 | OSM 도로 등급 비율 | OSM 기록 |
+| 노면 | OSM `surface` 태그 | OSM 기록, 없으면 확인 불가(팀 추정 병기) |
+| 주변 시설, 공원 | OSM | OSM 기록 |
+
+- **점수:** 항목 점수의 가중 평균입니다. 낮에는 차량 노출과 날씨, 해가 진 뒤에는 조명 비중이 커집니다. 데이터가 없는 항목은 40점으로 계산해 안전하다고 보지 않습니다.
+- **추천 제외(대체 코스 제안):** 강한 비·제외 체감온도·강풍인 시간대, 비 오는 시간의 비포장 코스, 쾌적 상한 +6°C 이상에서 30분을 넘는 산책 중 그늘을 확인할 수 없는 코스, 해가 진 뒤 조명이 부족한 코스(겁이 많거나 나이 든 경우), 초속 10m 이상 바람의 강변 코스.
+- 안전 점수는 환경 위험을 비교하는 참고값이며 의학적, 절대적 안전을 보장하지 않습니다. 화면에도 표시합니다. v2의 안전 단계 적용 순서는 [추천 알고리즘](RECOMMENDER.md#안전-평가)에 있습니다.
+
+### AI 추천 문장 (선택)
+
+1. 추천 엔진이 순위와 점수를 확정해 저장합니다.
+2. 화면은 계산 결과로 만든 문장을 먼저 보여 줍니다.
+3. `POST /recommendations/{id}/explain`이 근거 자료(점수 제외)를 로컬 LLM(Ollama)에 보냅니다.
+4. 돌아온 문장을 `explain_guard.py`가 검증합니다: 이름 포함, 길이, 단정 표현, 위치 표현, 확인 불가 항목, 근거 없는 시설과 숫자.
+5. 통과한 문장만 `reason.llm_summary`에 저장합니다. 나머지는 처음 문장을 그대로 씁니다.
+
+## GPS 추적 흐름
+
+### 길 안내
+
+코스 안내 계산은 브라우저에서 합니다(`frontend/src/lib/navigation.ts`). 서버와 지도에 의존하지 않는 순수 모듈이라 테스트로 검증합니다.
+
+| 단계 | 방식 |
+|---|---|
+| 위치 수집 | `watchPosition`. 오차 100m를 넘는 측정값은 진행도에 쓰지 않음 |
+| 진행도 계산 | 현재 위치를 경로에 투영. 직전 진행도 근처부터 찾고 되돌아가지 않게 함 |
+| 회전 안내 | 경로 좌표에서 꼭짓점 앞뒤 구간의 방향 차이로 좌회전, 우회전, 유턴을 판정. 40도 미만은 안내하지 않음 |
+| 이탈 판정 | 코스에서 35m 초과 (GPS 정확도에 따라 최대 60m까지 완화) |
+| 완주 판정 | 코스에 들어온 뒤 끝점 25m 이내 |
+| 출발점 안내 | `POST /courses/{id}/approach`. 서버가 OSRM을 호출하고, 실패하면 직선으로 대체 |
+
+왕복 코스는 같은 길을 두 번 지나므로 가장 가까운 점만 찾으면 진행도가 앞뒤로 튑니다. 그래서 탐색 범위를 직전 진행도 근처로 제한하고, 거리가 비슷하면 앞쪽을 택합니다. 반환점을 지나면 약 30~45m 뒤부터 복귀 구간으로 인식합니다.
+
+**위치 정보:** 길 안내 중의 위치는 저장하지 않습니다. 길찾기 요청은 좌표가 접근 로그에 남지 않도록 본문으로 받고, 오류 로그에도 좌표를 남기지 않습니다. 외부로 나가는 경우는 출발점 3km 이내에서 길찾기를 요청할 때뿐입니다.
+
+### 나만의 산책길과 GPX
+
+사용자가 직접 기록하거나 GPX로 가져온 경로입니다. 추천 코스에 묶인 `walk_histories`를 바꾸지 않고 테이블 두 개를 더했습니다. 산책길은 `saved_walk_service.py`, GPX 읽기와 쓰기는 DB를 모르는 `gpx_service.py`가 맡습니다.
+
+| 단계 | 방식 |
+|---|---|
+| 위치 수집 | 길 안내와 같은 `useGeolocation`(`watchPosition`). 시각은 좌표를 받은 시각을 씀. WebKit이 `position.timestamp`를 마이크로초로 주기 때문 |
+| 오차 거르기 (`lib/recording.ts`) | 정확도 50m 초과, 제자리 흔들림(3m 또는 정확도의 절반, 최대 10m 미만 이동), 초속 12m를 넘는 30m 이상 이동을 버림. 튄 위치가 40m 안에 3번 연달아 찍히면 실제 위치로 보고 새 구간 시작 |
+| 끊김 처리 | 60초 넘게 위치가 오지 않았다 돌아오면 새 구간. 구간 사이는 선을 잇지 않고 거리에 넣지 않음 |
+| 유실 방지 | 좌표마다 `localStorage`에 임시 저장. 다시 열면 마지막 위치를 받은 시각 기준으로 일시정지해 닫혀 있던 시간을 빼고 복구. `client_id`로 재전송해도 한 번만 저장 |
+| 서버 계산 | 거리와 평균 속도를 하버사인 거리로 다시 계산. 100m 넘게 움직이면서 시속 252km를 넘는 이동(시각이 없거나 같으면 5km 넘는 간격)은 구간을 나눔 |
+| GPX 읽기 | 표준 라이브러리 expat. DOCTYPE과 엔티티 선언을 만나면 즉시 거부해 XXE와 엔티티 폭탄을 막음. 10MB, 10만 지점 제한. 확장 태그는 무시하고 좌표, 고도, 시각만 읽음 |
+| GPX 쓰기 | GPX 1.1, UTF-8, 시각은 UTC. XML에 넣을 수 없는 제어 문자는 지움 |
+| 공유 | `secrets.token_urlsafe(24)` 토큰(32자). 비공개면 토큰이 남아 있어도 열지 않음. 응답은 공유 전용 스키마로 만들어 개인정보 필드가 들어갈 자리가 없음 |
+
+## 기능별 설계
+
+### 내 산책길을 추천 후보로
 
 저장한 산책길을 `walking_courses`에 주인이 있는 코스로 만들어(`user_course_service.py`), 공용 코스와 같은 엔진, 길 안내, 피드백 학습을 그대로 씁니다.
 
@@ -261,7 +430,7 @@ Google을 다녀오면 페이지를 새로 열므로, 화면에 입력하던 내
 
 시드 코스는 `unknown`이 비어 있어 기존 추천 결과가 바뀌지 않습니다. OSM 측정 함수는 시드 코스를 만든 `scripts/enrich_courses.py`와 같은 모듈을 쓰며, 옮긴 뒤 스크립트로 개포동 데이터를 다시 만들어 한 글자도 달라지지 않음을 확인했습니다.
 
-## 산책길 커뮤니티
+### 산책길 커뮤니티
 
 기존 산책 경험을 잇는 계층입니다. `community_service.py`가 맡고, 경로는 `saved_walk_points`를 그대로 씁니다.
 
@@ -293,110 +462,30 @@ flowchart LR
 
 SQLite는 외래 키를 검사하지 않으므로 `ondelete`만 믿지 않습니다. 공유 해제와 원본 삭제는 ORM cascade로, 계정 탈퇴는 `user_delete_statements`로 지우고 테스트로 확인합니다.
 
-## 안전 지수
-
-`recommender/safety.py`가 항목별 상태(양호, 주의, 위험, 확인 불가)와 출처를 평가합니다.
-
-| 항목 | 데이터 | 출처 |
-|---|---|---|
-| 기온, 강수, 바람, 자외선 | Open-Meteo | 예보 (시나리오면 모의) |
-| 시간대 | 예보의 낮밤 정보 | 예보 |
-| 조명 | OSM `lit` 태그. 경로의 50% 이상 기록이 있을 때만 사용 | OSM 기록, 없으면 확인 불가(팀 추정 병기) |
-| 그늘 | OSM 나무 기록 근접 비율. 기록이 없으면 사실로 쓰지 않음 | OSM 기록, 없으면 확인 불가(팀 추정 병기) |
-| 차량 노출 | OSM 도로 등급 비율 | OSM 기록 |
-| 노면 | OSM `surface` 태그 | OSM 기록, 없으면 확인 불가(팀 추정 병기) |
-| 주변 시설, 공원 | OSM | OSM 기록 |
-
-- **점수:** 항목 점수의 가중 평균입니다. 낮에는 차량 노출과 날씨, 해가 진 뒤에는 조명 비중이 커집니다. 데이터가 없는 항목은 40점으로 계산해 안전하다고 보지 않습니다.
-- **추천 제외(대체 코스 제안):** 강한 비·제외 체감온도·강풍인 시간대, 비 오는 시간의 비포장 코스, 쾌적 상한 +6°C 이상에서 30분을 넘는 산책 중 그늘을 확인할 수 없는 코스, 해가 진 뒤 조명이 부족한 코스(겁이 많거나 나이 든 경우), 초속 10m 이상 바람의 강변 코스.
-- 안전 점수는 환경 위험을 비교하는 참고값이며 의학적, 절대적 안전을 보장하지 않습니다. 화면에도 표시합니다. v2의 안전 단계 적용 순서는 [추천 알고리즘](RECOMMENDER.md#안전-단계)에 있습니다.
-
-## AI 추천 문장 (선택)
-
-1. 추천 엔진이 순위와 점수를 확정해 저장합니다.
-2. 화면은 계산 결과로 만든 문장을 먼저 보여 줍니다.
-3. `POST /recommendations/{id}/explain`이 근거 자료(점수 제외)를 로컬 LLM(Ollama)에 보냅니다.
-4. 돌아온 문장을 `explain_guard.py`가 검증합니다: 이름 포함, 길이, 단정 표현, 위치 표현, 확인 불가 항목, 근거 없는 시설과 숫자.
-5. 통과한 문장만 `reason.llm_summary`에 저장합니다. 나머지는 처음 문장을 그대로 씁니다.
-
-## 산책길 자동 생성
+### 산책길 자동 생성
 
 출발점과 산책 시간(20~90분)으로 순환 경로 후보를 만들어 비교하는 기능입니다(`POST /api/routes/generate`, 로그인 필요).
 
 - **만드는 방식:** OSRM 도보 경로에 경유점 두 개(출발-A-B-출발)를 넣어 한 번에 순환 경로를 받습니다. 방위를 바꿔 가며 시도하고, 시간 오차(−20%~+50%), 되돌아오는 구간(25% 이하), 도로 보정 거리(150m 이하), 후보 간 겹침(65% 이하)을 넘지 못한 후보는 버립니다. 남은 후보가 없으면 억지로 만들지 않고 "만들지 못함"을 돌려줍니다. 기준 수치는 업계 표준이 아니라 팀이 실측으로 정한 값입니다.
-- **반려동물 맞춤 평가:** 반려동물을 고르면 후보를 저장 코스와 같은 방식으로 `CourseData`로 바꿔 기존 추천 엔진에 넣습니다. 주변 도로·나무·공원은 요청마다 Overpass를 부르지 않고 미리 받아 둔 `backend/app/data/osm_<지역>.json`으로 측정합니다(공용 Overpass가 느리고 자주 실패해서). 자료가 덮지 않는 서비스 지역 밖은 "확인 불가"로 둡니다. 경사와 반려견 출입은 평가하지 않습니다.
+- **반려동물 맞춤 평가:** 반려동물을 고르면 후보를 저장 코스와 같은 방식으로 `CourseData`로 바꿔 기존 추천 엔진에 넣습니다. 주변 도로·나무·공원은 요청마다 Overpass를 부르지 않고, Geofabrik 추출본(.osm.pbf)에서 `scripts/extract_osm_tiles.py`로 뽑아 둔 서울 타일(`backend/app/data/osm/seoul/`, 689개, 약 2.2km 격자, 자료 날짜 2026-10-30)로 측정합니다(공용 Overpass가 느리고 자주 실패해서). 선분 검색은 40m 격자 색인으로 해 후보당 측정 시간을 826ms에서 25ms로 줄였습니다(팀 측정, 215개 후보 결과 동일). 타일 범위 밖은 "확인 불가"로 둡니다. 경기 타일은 저장소에 넣지 않고 서버에 따로 둡니다. 경사와 반려견 출입은 평가하지 않습니다.
 - **공용 서버 보호:** 공용 OSRM 정책(초당 1회)에 맞춰 요청 간격 1.1초, 생성 1건 최대 30초, 동시에 한 건만 처리(진행 중이면 429), 계정별 대기 10초를 둡니다. 모두 `ROUTING_*`, `GENERATION_*` 환경변수로 바꿀 수 있어 OSRM을 직접 띄우면 코드 수정 없이 늘릴 수 있습니다. 로컬 OSRM에서는 요청 한 번이 약 5ms였고, 병목은 요청이 아니라 후보 평가 시간이었습니다.
 - **개인정보:** 좌표는 계산에만 쓰고 로그와 DB에 남기지 않습니다. 사용자가 후보를 골라 저장할 때만 내 산책길(`source_type="generated"`)로 남습니다.
 
-## 데이터 모델
+## 외부 API 연동
 
-```mermaid
-erDiagram
-    users ||--o{ pets : owns
-    users ||--o{ profiles : has
-    profiles ||--o{ walk_histories : walked_by
-    profiles ||--o{ saved_walks : created_by
-    profiles ||--o{ recommendations : requested_by
-    pets ||--o{ recommendations : receives
-    pets ||--o{ walk_histories : walks
-    pets ||--o{ walk_feedbacks : rates
-    pets ||--o{ pet_course_preferences : learns
-    walking_courses ||--o{ walk_histories : used_in
-    walking_courses ||--o{ walk_feedbacks : rated_in
-    walking_courses ||--o{ pet_course_preferences : scored_in
-    walking_courses ||--o{ recommendations : top_course
-    weather_records ||--o{ recommendations : basis
-    recommendations ||--o{ walk_histories : leads_to
-    walk_histories ||--o| walk_feedbacks : has
-    users ||--o{ saved_walks : records
-    users ||--o{ auth_sessions : signs_in
-    saved_walks ||--o{ saved_walk_photos : has
-    pets |o--o{ saved_walks : walked_with
-    saved_walks ||--o{ saved_walk_points : has
-    saved_walks ||--o| community_trails : shared_as
-    community_trails ||--o| walking_courses : guided_by
-    community_trails ||--o{ trail_likes : has
-    community_trails ||--o{ trail_bookmarks : has
-    community_trails ||--o{ trail_reviews : has
-    trail_reviews ||--o{ trail_review_photos : has
-```
+| 서비스 | 쓰는 곳 | 보내는 데이터 | 실패하면 | 설정 |
+|---|---|---|---|---|
+| Open-Meteo Forecast | 시간별 예보 | 서비스 지역 좌표(사용자 위치 아님) | 모의 날씨로 계산하고 날씨 항목은 "확인 불가" | `WEATHER_PROVIDER`, `WEATHER_CACHE_MINUTES`, `WEATHER_TIMEOUT_SECONDS` |
+| OSRM 도보 경로 | 출발점 길찾기, 복귀 경로, 이탈 재탐색, 산책길 자동 생성 | 출발·도착 좌표(요청 본문으로 받아 저장·로그 안 함) | 직선 표시와 안내. 자동 생성은 "만들지 못함" | `ROUTING_PROVIDER`, `ROUTING_BASE_URL`, `ROUTING_TIMEOUT_SECONDS`, `ROUTING_MIN_INTERVAL_SECONDS` |
+| Overpass | 내 산책길을 추천 후보로 등록할 때 주변 환경 측정 | 경로가 지나는 범위(사각형 좌표) | 측정 항목을 "확인 불가"로 두고 안전으로 보지 않음 | `ENVIRONMENT_PROVIDER` |
+| OpenStreetMap 타일 | 지도 배경(브라우저가 직접 요청) | 지도 타일 좌표 | 배경 없이 경로와 시설 표시 | |
+| Google OAuth / OIDC | 로그인과 본인 재확인 | 승인 코드, PKCE 검증값, 클라이언트 비밀값(서버 → Google) | 이유별 안내. 시연 보호자로 계속 사용 가능 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` |
+| 로컬 Ollama | 추천 문장 다듬기(선택) | 점수를 뺀 근거 자료 | 계산 문장 유지 | `LLM_PROVIDER`, `LLM_BASE_URL`, `LLM_MODEL`, `LLM_TIMEOUT_SECONDS` |
+| 카카오맵 | 출발점이 3km보다 멀 때 외부 길찾기 링크 | 사용자가 눌렀을 때만 이동. API 미사용 | | `ROUTING_MAX_DISTANCE_KM` |
 
-| 테이블 | 내용 |
-|---|---|
-| `users` | 보호자, 산책 가능 시간, 희망 시간, 횟수, Google 고유 ID와 이메일(시연 보호자는 비어 있음). 예전 비밀번호 로그인 컬럼(`login_id`, `email`, `password_hash`)은 쓰지 않음 |
-| `auth_sessions` | 로그인 세션. 토큰의 SHA-256 값, 만료 시각, 마지막 사용 시각, 본인 재확인 시각 (추가 테이블) |
-| `oauth_states` | 진행 중인 Google 로그인. state의 SHA-256 값, nonce, PKCE 검증값, 돌아갈 경로, 만료 시각, 본인 재확인 대상. 한 번 쓰면 삭제 (추가 테이블) |
-| `pets` | 프로필과 학습 상태(특성 가중치, 시간대 선호, 피드백 수) |
-| `walking_courses` | 코스, 경로, 시설, 출처 정보 |
-| `weather_records` | 시간별 날씨. 실제 날씨 캐시이자 추천 근거 |
-| `recommendations` | 추천 결과 전문. 당시 점수와 근거를 보존 |
-| `walk_histories` | 산책 기록 |
-| `walk_feedbacks` | 피드백과 선호도 변화 전후 값. 산책 1회당 1건 |
-| `pet_course_preferences` | 반려동물별 코스 선호도와 방문 수 (추가 테이블) |
-| `saved_walks` | 나만의 산책길. 이름, 메모, 거리, 시간, 공개 범위, 공유 토큰과 기간, 중복 확인용 경로 해시, 썸네일 경로 (추가 테이블) |
-| `saved_walk_points` | 산책길의 GPS 지점. 순서, 구간, 위경도, 고도, 시각, 정확도 (추가 테이블) |
-| `saved_walk_photos` | 산책길 사진. 메타데이터를 지운 이미지와 형식, 크기 (추가 테이블) |
-| `community_trails` | 공유한 산책길. 제목, 설명, 대표 사진 번호, 공개 여부, 지역, 특징, 추천 대상, 가리는 반경, 가린 뒤 계산한 거리, 시간, 오르막, 난이도, 출발과 도착, 썸네일, 조회수 (추가 테이블) |
-| `trail_likes`, `trail_bookmarks` | 좋아요와 저장. 보호자와 산책길 조합이 고유 (추가 테이블) |
-| `trail_reviews` | 후기. 별점 1~5(CHECK), 글. 보호자와 산책길 조합이 고유 (추가 테이블) |
-| `trail_review_photos` | 후기 사진. 메타데이터를 지운 이미지 (추가 테이블) |
+미리 수집한 자료(실행 중 호출하지 않음): 시드 코스 경로(OSRM), 시설(`data/places*.json`, OpenStreetMap), 코스 환경값(Overpass), 산책길 자동 생성용 서울 환경 타일(`data/osm/seoul/`, Geofabrik 추출본), 공개 GPX 20개(Valhalla 경로). 출처와 라이선스는 [외부 자원 활용 내역](EXTERNAL_RESOURCES.md)에 있습니다.
 
-`walking_courses`에는 커뮤니티 산책길의 길 안내를 위해 `community_trail_id`(고유)를 더했습니다. `walking_courses`에는 내 산책길 코스를 위해 `owner_user_id`(주인, 공용 코스는 비어 있음), `saved_walk_id`(원본 산책길), `is_active`(추천 후보 여부)를 더했습니다. 산책 기록이 코스를 가리키므로 추천에서 빼거나 산책길을 지워도 코스는 지우지 않고 끕니다.
-
-## 데이터 출처와 신뢰도
-
-| 값 | 출처 | 표시 방식 |
-|---|---|---|
-| 경로, 거리 | OSRM 도보 경로 (OpenStreetMap 기반) | 실제 데이터 |
-| 화장실, 음수대, 동물병원, 공원 위치 | OpenStreetMap | "확인된 시설" |
-| 도로 유형(차량 노출), 조명, 노면, 나무 기록 | OpenStreetMap, 경로 10m 간격 측정 (`walking_courses.environment`) | "OSM 기록". 기록이 부족하면 "확인 불가" |
-| 혼잡도, 그늘, 노면, 난이도, 동반 가능 여부 | 팀 추정값 | "추정" 표시, 현장 확인 안내 |
-| 가로등, CCTV | 망원동 OSM 데이터 없음 (0건) | 사용하지 않음 |
-| 주변 시설 8종 | OpenStreetMap (`data/places.json`) | 출처, 수집일, 기록 한계 표시 |
-
-코스별 출처는 `walking_courses.data_sources`에 저장하고 API로 제공합니다.
-
-## 장애 대응
+### 장애 대응
 
 | 상황 | 동작 |
 |---|---|
@@ -418,6 +507,76 @@ erDiagram
 | 자동 백업 실패 | 서버는 계속 돌고 로그에 남김. 옛 백업을 지우지 않음 |
 | DB 파일 손상, 분실 | `python -m app.backup restore`로 복구. 복구 전 파일은 따로 보관 |
 | 사진 일부 업로드 실패 | 산책길은 저장된 채로 두고 실패한 장수를 상세 화면에 안내 |
+
+## 데이터 흐름
+
+어떤 데이터가 어디까지 가는지입니다.
+
+| 데이터 | 저장 | 외부로 나가는 경우 |
+|---|---|---|
+| 반려동물 프로필, 일정 | DB (계정별) | 없음. LLM을 켜면 근거 자료의 일부(이름, 성향 요약)가 로컬 Ollama로 감 |
+| 길 안내 중 현재 위치 | 저장하지 않음. 코스 위 진행 계산은 브라우저 안 | 출발점 3km 이내 길찾기, 복귀 경로, 이탈 재탐색 때만 좌표를 OSRM으로 |
+| 산책 기록(코스 산책) | `walk_histories`: 코스, 시작 시각, 시간, 거리, 기록 방식 | 없음 |
+| 나만의 산책길 GPS 지점 | `saved_walk_points` (사용자가 저장할 때만) | 추천 후보 등록 때 경로 범위(사각형)를 Overpass로 |
+| 사진 | DB에 바이트로. EXIF 등 메타데이터를 지운 뒤 | 없음. 공유 화면에 나오지 않음 |
+| 공유·커뮤니티 경로 | 원본을 참조하고, 응답을 만들 때 시각·정확도·반려동물·보호자 정보를 빼고 출발·도착점 반경 안 지점을 가림 | 링크를 받은 사람, 커뮤니티 방문자 |
+| 커뮤니티 "내 주변" 위치 | 저장하지 않음(요청 본문) | 없음 |
+| 로그인 정보 | Google 고유 ID(`sub`), 확인된 이메일, 이름. 세션 토큰은 SHA-256만 | Google과 OAuth 흐름 |
+
+### 데이터 출처와 신뢰도
+
+| 값 | 출처 | 표시 방식 |
+|---|---|---|
+| 경로, 거리 | OSRM 도보 경로 (OpenStreetMap 기반) | 실제 데이터 |
+| 화장실, 음수대, 동물병원, 공원 위치 | OpenStreetMap | "확인된 시설" |
+| 도로 유형(차량 노출), 조명, 노면, 나무 기록 | OpenStreetMap, 경로 10m 간격 측정 (`walking_courses.environment`) | "OSM 기록". 기록이 부족하면 "확인 불가" |
+| 혼잡도, 그늘, 노면, 난이도, 동반 가능 여부 | 팀 추정값 | "추정" 표시, 현장 확인 안내 |
+| 가로등, CCTV | 망원동 OSM 데이터 없음 (0건) | 사용하지 않음 |
+| 주변 시설 8종 | OpenStreetMap (`data/places.json`) | 출처, 수집일, 기록 한계 표시 |
+
+코스별 출처는 `walking_courses.data_sources`에 저장하고 API로 제공합니다.
+
+## 배포 구조
+
+```mermaid
+flowchart LR
+    V["방문자 브라우저"] -->|"HTTPS"| CF["Cloudflare"]
+    CF -->|"터널, 서버에서 나가는 연결"| T["cloudflared"]
+    subgraph SERVER["배포 서버 (compose.prod.yaml)"]
+        T --> W["web: nginx 1.30<br/>React 빌드"]
+        W -->|"/api, /docs"| BE["backend: FastAPI"]
+        BE --> PG[("db: PostgreSQL 18.6")]
+        BE -.->|"선택"| OR["osrm: 직접 띄운 OSRM"]
+        BE -.->|"선택"| RL["ollama-relay"]
+    end
+    RL -.-> OL["서버의 Ollama"]
+```
+
+| 서비스 | 하는 일 |
+|---|---|
+| `db` | PostgreSQL 18.6. 밖으로 포트를 열지 않음 |
+| `backend` | `backend/Dockerfile`(Python 3.12, uv). 켜질 때 Alembic으로 구조를 올리고 시드를 넣음 |
+| `web` | `frontend/Dockerfile`로 빌드 후 nginx가 화면을 주고 `/api`, `/docs`를 backend로 넘김. `127.0.0.1:5173`에만 염 |
+| `osrm` | 선택(`COMPOSE_PROFILES=osrm`). 도보 길찾기를 직접 띄움 |
+| `ollama-relay` | 선택. 서버의 127.0.0.1에만 열린 Ollama를 컨테이너에서 부를 수 있게 이어 줌 |
+| `cloudflared` | 선택(`tunnel`). 서버가 내부망이라 인바운드 없이 공개 주소(https://pawpath.ficklebobo.dev)로 연결 |
+
+모든 포트는 서버 안(127.0.0.1)에서만 엽니다. 배포 서버의 DB는 매일 04:30 cron이 `scripts/backup_postgres.sh`로 백업합니다. 절차는 [배포](DEPLOY.md)에 있습니다. 로컬 개발의 `docker-compose.yml`은 DB만 띄우고, 백엔드와 프론트엔드는 `./dev.sh`로 띄웁니다.
+
+## 보안 고려사항
+
+| 영역 | 구현 |
+|---|---|
+| 인증 | Google OpenID Connect 승인 코드 흐름(PKCE S256, state, nonce). 코드 교환은 서버가 하고 브라우저에는 토큰이 오가지 않음. 별도 OAuth 라이브러리 없이 HTTPX로 구현 |
+| 세션 | 32바이트 무작위 토큰을 HttpOnly, SameSite=Lax 쿠키로만 주고(HTTPS면 Secure) DB에는 SHA-256만. 30일 최대 수명, 7일 유휴 만료, 본인 재확인 후 토큰 교체 |
+| 권한 | 모든 사용자 데이터 API가 `current_user`로 주인을 정하고 소유를 확인. 다른 계정의 데이터는 있어도 `404`. 커뮤니티 쓰기는 실제 로그인만(`signed_in_user`) |
+| 입력 | Pydantic 스키마 검증, 요청 크기 제한, GPX 파서에서 DOCTYPE·엔티티 거부(XXE), 제어 문자 제거, 검색어는 바인딩 매개변수 |
+| 파일 | 사진은 내용으로 형식 판단, 메타데이터 제거, `X-Content-Type-Options: nosniff`, 주인만 조회 |
+| 개인정보 | 위치 비저장, 공유 시 출발·도착점 가림, 로그에서 승인 코드·state·좌표 제거, 탈퇴 즉시 삭제와 SQLite `secure_delete` |
+| 비밀값 | `.env`에만 두고 커밋하지 않음. 저장소에는 `.env.example`만 |
+| 운영 | 테스트 전용 로그인(`E2E_LOGIN`)은 기본 꺼짐이고 켜면 시작 때 경고. 배포 포트는 127.0.0.1에만 열고 터널로 공개 |
+
+알려진 한계는 아래 [현재 범위의 한계](#현재-범위의-한계)와 [검증 결과의 보안 테스트](VALIDATION.md#보안-테스트)에 있습니다.
 
 ## 현재 범위의 한계
 

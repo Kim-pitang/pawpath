@@ -134,7 +134,7 @@ uv run python -m app.gpx_import --activate gpx-강남구_양재천
 | 7. 후보 반영 | 시드 적재 후 망원동 GPX 4개가 `/api/courses`와 추천 후보에 포함 | 통과 |
 | 8. 점수와 순위 | 위 비교. 지역별 결과가 그 지역 코스만 쓰고 시연 순위가 유지됨 | 통과 |
 | 9. 지도 표시 | 지도 목록의 GPX 표시 4개, 선택 시 출발과 반환 표시, 편도 거리, 출처 문구 (`scenario.spec.ts`) | 통과 |
-| 10. 회귀 | 백엔드 831개, E2E 160개 전체 | 통과 |
+| 10. 회귀 | 적재 당시 작업 브랜치에서 백엔드 831개, E2E 160개 전체. main의 최신 결과는 [검증 결과](VALIDATION.md#백엔드-테스트) | 통과 |
 
 테스트 파일은 `backend/tests/test_gpx_courses.py`(16개), 바뀐 기대값은 `backend/tests/test_service_area.py`(지역 코스 목록에 GPX 포함, 시드 코스 번호와 순서는 그대로), `frontend/e2e/scenario.spec.ts`입니다.
 

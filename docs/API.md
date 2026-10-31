@@ -1,11 +1,49 @@
-# PawPath API 명세
+# API 명세
 
-기본 주소는 `http://localhost:8000/api`입니다. 서버 실행 중에는 `http://localhost:8000/docs`에서 Swagger UI로 직접 호출할 수 있습니다.
+mungo(PawPath) 백엔드의 REST API 계약입니다. 커밋 `5f74f2d`의 실제 라우터(경로 91개)와 이 문서의 엔드포인트가 일치함을 확인했습니다(2026-11-01). 서버 실행 중에는 `http://localhost:8000/docs`(Swagger UI)에서 요청과 응답 스키마를 보고 직접 호출할 수 있습니다.
 
-- 모든 요청과 응답은 JSON입니다.
-- 시각은 서비스 지역(Asia/Seoul) 기준이며 타임존 표기가 없습니다. 예: `2026-10-31T16:00:00`
-- 로그인은 선택입니다. 로그인 세션 쿠키(`pawpath_session`)가 있으면 그 보호자의 데이터만 다루고, 없으면 시연 보호자(id 1)로 동작합니다. `AUTH_REQUIRED=true`면 로그인하지 않은 요청은 `401`입니다.
+## 개요
+
+| 항목 | 내용 |
+|---|---|
+| 기본 주소 | 로컬 `http://localhost:8000/api`. 화면(5173)에서는 Vite 프록시, 배포에서는 nginx가 `/api`를 백엔드로 넘김 |
+| 묶음 | 계정, 프로필, 반려동물, 보호자 일정, 날씨, 산책 코스, 경로, 안전 지수, 추천, 산책 기록, 피드백, 나만의 산책길, 공유, 산책길 커뮤니티, 시스템 |
+| 상태 확인 | `GET /health` |
+
+## 인증
+
+- 로그인은 Google로만 합니다([계정](#계정)). 로그인하면 서버가 세션 쿠키(`pawpath_session`, HttpOnly, SameSite=Lax, HTTPS면 Secure)를 주고, 이후 요청은 이 쿠키로 보호자를 정합니다. 토큰을 헤더로 보내는 방식은 없습니다.
+- 로그인은 기본이 선택입니다. 쿠키가 없으면 시연 보호자(id 1)로 동작합니다. `AUTH_REQUIRED=true`면 로그인하지 않은 요청은 `401`입니다.
+- 끝났거나 잘못된 세션 쿠키로 요청하면 시연 보호자로 넘기지 않고 `401`과 함께 쿠키를 지웁니다.
+- 커뮤니티 쓰기(공유, 좋아요, 저장, 후기, 관리)는 실제 로그인이 필요해 `AUTH_REQUIRED=false`여도 시연 보호자는 `401`입니다.
 - 다른 보호자의 반려동물, 산책 기록, 산책길, 사진은 있어도 `404`로 응답합니다.
+- 테스트 전용 로그인 `POST /e2e/login`은 `E2E_LOGIN=true`인 서버에만 있습니다.
+
+## 요청과 응답 형식
+
+| 구분 | 형식 |
+|---|---|
+| 일반 요청과 응답 | JSON (`application/json`) |
+| GPX 미리보기 업로드 | `POST /my-walks/import/preview`: GPX 파일 원본을 요청 본문으로(`Content-Type: application/gpx+xml`). multipart가 아님 |
+| 사진 업로드 | `POST /my-walks/{id}/photos`, `POST /community/reviews/{id}/photos`: 이미지 원본을 요청 본문으로. 형식은 `Content-Type`이 아니라 파일 내용으로 판단하며 JPG와 PNG만 받음. multipart가 아님 |
+| GPX 다운로드 | `GET /my-walks/{id}/gpx`, `/shared/{token}/gpx`, `/community/trails/{id}/gpx`: `application/gpx+xml`(GPX 1.1, UTF-8), `Content-Disposition: attachment`에 한글 이름(`filename*`)과 영문 대체 이름(`filename`) |
+| 사진·대표 이미지 다운로드 | `image/jpeg` 또는 `image/png`, `Content-Disposition: inline`, `X-Content-Type-Options: nosniff`, `Cache-Control: private` |
+| 위치 좌표 | `[위도, 경도]` 배열이나 `latitude`, `longitude` 필드. 좌표를 받는 요청(길찾기, 내 주변)은 접근 로그에 남지 않도록 쿼리가 아니라 본문으로 받음 |
+
+## 시각 형식
+
+- 시각은 서비스 지역(Asia/Seoul) 기준의 현지 시각이며 타임존 표기가 없습니다. 예: `2026-10-31T16:00:00`
+- 요청에 타임존이 붙은 시각을 보내면 서비스 현지 시각으로 바꿉니다(예: `POST /walks`의 `started_at`).
+- GPX 파일 안의 시각만 GPX 표준대로 UTC입니다.
+
+## 페이지 나누기
+
+| 엔드포인트 | 방식 |
+|---|---|
+| `GET /community/trails`, `/community/trails/{id}/reviews`, `/community/my/*` | `page`(1부터), `size`(최대 50, 기본 12). 응답에 `items`, `total`, `page`, `size`, `has_next` |
+| `GET /recommendations`, `/community/trails/recommended` | `limit` |
+| `GET /walks/report` | `week_offset`(0이 이번 주, 최대 -52) |
+| 그 밖의 목록 | 전체를 돌려줌 |
 
 ## 공통 오류
 
@@ -136,44 +174,6 @@ Google이 돌려보내는 주소이며 콘솔의 리디렉션 URI와 같아야 �
 
 가족 전체 활동입니다. `totals`(가족 합계), `members`(프로필별 `activity`와 마지막 이용 시각, 기록이 남은 지운 프로필 포함), `pets`(반려동물별 가족 산책 수), `recent_walks`(최근 산책 10건, `profile` 포함)를 돌려줍니다. 시연용 산책은 통계에서 빼고 건수만 따로 셉니다.
 
-### `PATCH /auth/account`
-
-```json
-{ "name": "두부네 가족" }
-```
-
-대표 계정 이름을 바꿉니다. 로그인한 세션만 쓸 수 있습니다. 프로필 이름은 `PATCH /profiles/{id}`로 따로 바꿉니다.
-
-## 프로필
-
-대표 계정 하나에 프로필을 대표 프로필 포함 5개까지 둡니다. 프로필은 따로 로그인하지 않고, 세션이 지금 프로필을 기억합니다. 서버는 요청마다 세션의 프로필이 이 계정 소속이고 지우지 않았는지 다시 확인하며, 요청 본문이나 주소의 프로필 번호만으로는 권한을 주지 않습니다. 다른 계정의 프로필 번호는 모두 `404`입니다. 프로필 API는 로그인한 세션만 쓸 수 있습니다(시연 보호자는 `401`).
-
-| 데이터 | 단위 |
-|---|---|
-| 반려동물, 반려동물이 배운 취향, 커뮤니티 글과 좋아요 | 대표 계정(가족 공용) |
-| 산책 기록, 피드백, 추천, 일정, 나만의 산책길 | 만든 프로필. 목록은 지금 프로필 기준이고 `scope=family`면 가족 전체 |
-| 기록 고치기와 지우기 | 만든 프로필이나 대표 프로필만 (`403`) |
-
-### `GET /profiles` · `POST /profiles`
-
-```json
-{ "name": "아빠", "avatar_key": "moon" }
-```
-
-`avatar_key`는 `paw`, `bone`, `sun`, `moon`, `leaf`, `heart`, `star`, `flower` 중 하나입니다(기본 `paw`). 이름은 1~30자이고 같은 계정 안에서 겹치면 `409`, 5개를 넘으면 `409`입니다. 새 프로필은 대표 프로필의 일정으로 시작합니다. 만들어도 지금 프로필은 바뀌지 않습니다.
-
-### `GET /profiles/{id}` · `PATCH /profiles/{id}` · `DELETE /profiles/{id}`
-
-상세는 프로필 정보와 `activity`(산책 횟수, 거리, 시간, 저장한 산책길 수, 빼 둔 시연용 산책 수, 마지막 산책 시각)를 돌려줍니다. 수정은 보낸 항목(`name`, `avatar_key`)만 바꾸고 `null`이면 `422`입니다. 삭제는 프로필을 숨기기만 해 산책 기록과 산책길은 가족 기록에 남고(누가 했는지도 남음), 반려동물은 그대로입니다. 대표 프로필은 `409`로 지울 수 없습니다. 그 프로필을 쓰던 다른 기기의 세션은 다음 요청부터 프로필을 다시 고릅니다.
-
-### `POST /profiles/{id}/select`
-
-이 세션의 프로필을 바꾸고 `/auth/me`와 같은 형식을 돌려줍니다. 다시 로그인하지 않으며 세션 토큰도 바뀌지 않습니다. 고른 프로필의 `last_active_at`이 갱신됩니다.
-
-### `GET /family/overview`
-
-가족 전체 활동입니다. `totals`(가족 합계), `members`(프로필별 `activity`와 마지막 이용 시각, 기록이 남은 지운 프로필 포함), `pets`(반려동물별 가족 산책 수), `recent_walks`(최근 산책 10건, `profile` 포함)를 돌려줍니다. 시연용 산책은 통계에서 빼고 건수만 따로 셉니다.
-
 ## 반려동물
 
 ### `POST /pets` · `PUT /pets/{pet_id}`
@@ -230,6 +230,8 @@ Google이 돌려보내는 주소이며 콘솔의 리디렉션 URI와 같아야 �
 `end_hour`는 미포함입니다. 겹치거나 이어지는 시간대는 저장할 때 합칩니다.
 
 ## 날씨
+
+날씨는 Open-Meteo의 **시간별 예보**입니다. `current`도 관측값이 아니라 지금 시각에 해당하는 예보 값이며, 실시간 강수 감지는 하지 않습니다. 같은 좌표는 `WEATHER_CACHE_MINUTES`(기본 30분) 동안 저장된 값을 씁니다.
 
 공통 쿼리 `scenario`: `live`(기본), `rain_later`, `rain_now`, `heatwave`, `cold`, `heavy_rain`. `live` 외에는 시연용이며 응답의 `is_mock`이 `true`입니다.
 
@@ -366,7 +368,7 @@ Google이 돌려보내는 주소이며 콘솔의 리디렉션 URI와 같아야 �
 - 경사와 반려견 출입 여부는 평가하지 않습니다. 20분과 90분 조건은 실측하지 않았습니다.
 - 마음에 드는 후보는 `POST /my-walks`에 `source_type: "generated"`로 저장하고, 이어서 `POST /my-walks/{id}/course`로 추천 후보에 넣습니다.
 - `429`: 다른 경로를 만드는 중이거나 이 계정이 방금 만들었습니다. `Retry-After` 초 뒤에 다시 시도합니다. `502`: 길찾기 서버에서 경로를 받지 못했습니다. `503`: 길찾기를 사용하지 않도록 설정되어 있습니다.
-- 기본 설정에서는 8방향(45° 간격)을 항상 모두 시도한 뒤 좋은 후보를 고릅니다. 5개가 모이지 않으면 시간 오차가 큰 후보의 거리 보정(최대 3회)을 더해, 한 번에 8~11회 공용 서버를 호출합니다. 전체 제한 시간은 30초입니다. 방위 수, 경유점 거리·각도 조합, 요청 상한, 돌려주는 후보 수는 `GENERATION_*` 설정으로 바꿀 수 있습니다(자체 서버용, README 참고).
+- 기본 설정에서는 8방향(45° 간격)을 항상 모두 시도한 뒤 좋은 후보를 고릅니다. 5개가 모이지 않으면 시간 오차가 큰 후보의 거리 보정(최대 3회)을 더해, 한 번에 8~11회 공용 서버를 호출합니다. 전체 제한 시간은 30초입니다. 방위 수, 경유점 거리·각도 조합, 요청 상한, 돌려주는 후보 수는 `GENERATION_*` 설정으로 바꿀 수 있습니다(자체 서버용, [환경변수](SETUP.md#환경변수) 참고).
 - 한 프로세스에서 한 번에 한 건만 처리하고 계정마다 완료 뒤 10초를 쉽니다. 서버 워커가 여러 개면 이 제한은 워커마다 따로 적용됩니다.
 
 ### `POST /routes/alternative`
@@ -538,7 +540,7 @@ Google이 돌려보내는 주소이며 콘솔의 리디렉션 URI와 같아야 �
 
 ### `GET /pets/{pet_id}/recommendation-metrics`
 
-이 반려동물의 추천 지표입니다. `all`과 알고리즘 버전별(`by_version`) 값이 있고, 표본이 30건 미만이면 `reliable`이 `false`입니다. 계산할 수 없는 지표는 `null`이고 `not_measured`에 이유가 있습니다. 지표 정의는 [추천 알고리즘](RECOMMENDER.md#평가-지표)에 있습니다.
+이 반려동물의 추천 지표입니다. `all`과 알고리즘 버전별(`by_version`) 값이 있고, 표본이 30건 미만이면 `reliable`이 `false`입니다. 계산할 수 없는 지표는 `null`이고 `not_measured`에 이유가 있습니다. 지표 정의는 [추천 알고리즘](RECOMMENDER.md#평가-방법)에 있습니다.
 
 ### `POST /recommendations/{recommendation_id}/explain`
 
