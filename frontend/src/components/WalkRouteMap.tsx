@@ -16,6 +16,10 @@ interface WalkRouteMapProps {
   follow?: boolean;
   showEnd?: boolean;
   onUserPan?: () => void;
+  /** 지도를 눌러 점을 고를 때 쓴다. 출발점 지정 화면에서만 넘긴다. */
+  onMapClick?: (point: LatLng) => void;
+  /** 위치가 바뀔 때마다 지도를 그 위치로 옮긴다. 출발점 지정 화면에서만 켠다. */
+  centerOnPosition?: boolean;
 }
 
 function endMarker(label: string, point: LatLng, color: string, map: L.Map): L.Marker {
@@ -29,12 +33,14 @@ function endMarker(label: string, point: LatLng, color: string, map: L.Map): L.M
 }
 
 /** 산책 기록, GPX 미리보기, 상세, 공유 화면이 함께 쓰는 경로 지도. */
-export default function WalkRouteMap({ segments, position = null, accuracy = null, follow = false, showEnd = true, onUserPan }: WalkRouteMapProps) {
+export default function WalkRouteMap({ segments, position = null, accuracy = null, follow = false, showEnd = true, onUserPan, onMapClick, centerOnPosition = false }: WalkRouteMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layersRef = useRef<{ line: L.Polyline; me: L.Marker; accuracy: L.Circle; start: L.Marker | null; end: L.Marker | null } | null>(null);
   const onUserPanRef = useRef(onUserPan);
   onUserPanRef.current = onUserPan;
+  const onMapClickRef = useRef(onMapClick);
+  onMapClickRef.current = onMapClick;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -45,6 +51,7 @@ export default function WalkRouteMap({ segments, position = null, accuracy = nul
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(map);
     map.on('dragstart', () => onUserPanRef.current?.());
+    map.on('click', (event: L.LeafletMouseEvent) => onMapClickRef.current?.([event.latlng.lat, event.latlng.lng]));
     layersRef.current = {
       line: L.polyline([], { color: ROUTE_COLOR, weight: 6, lineCap: 'round', className: 'walk-line' }).addTo(map),
       accuracy: L.circle([0, 0], { radius: 0, stroke: false, fillColor: '#3f7cc4', fillOpacity: 0.15, interactive: false }),
@@ -97,7 +104,8 @@ export default function WalkRouteMap({ segments, position = null, accuracy = nul
     layers.me.setLatLng(position).addTo(map);
     layers.accuracy.setLatLng(position).setRadius(accuracy ?? 0).addTo(map);
     if (follow) map.setView(position, Math.max(map.getZoom(), FOLLOW_ZOOM), { animate: true });
-  }, [position, accuracy, follow]);
+    else if (centerOnPosition) map.setView(position, Math.max(map.getZoom(), 16));
+  }, [position, accuracy, follow, centerOnPosition]);
 
   return <div ref={containerRef} data-testid="walk-route-map" className="isolate h-full w-full" />;
 }

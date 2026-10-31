@@ -454,7 +454,7 @@ export interface WalkReport {
 
 // 나만의 산책길
 export type Visibility = 'private' | 'link' | 'public';
-export type WalkSourceType = 'recorded' | 'imported';
+export type WalkSourceType = 'recorded' | 'imported' | 'generated';
 export type SavedWalkSort = 'recent' | 'distance';
 
 export interface WalkPointInput {
@@ -464,6 +464,35 @@ export interface WalkPointInput {
   accuracy: number | null;
   recorded_at: string | null;
   segment: number;
+}
+
+export interface RouteFit {
+  score: number | null;
+  level: 'good' | 'caution' | 'danger' | 'blocked' | null;
+  summary: string;
+  details: string[];
+  cautions: string[];
+  highlights: string[];
+  start_label: string | null;
+  unknown: string[];
+  excluded: string[];
+}
+
+export interface GeneratedRoute {
+  route: [number, number][];
+  distance_m: number;
+  duration_min: number;
+  repeated_pct: number;
+  start_snap_m: number;
+  fit: RouteFit | null;
+}
+
+export interface GenerateRouteResult {
+  target_min: number;
+  candidates: GeneratedRoute[];
+  notice: string | null;
+  scored_for: string | null;
+  fit_notice: string | null;
 }
 
 export interface SavedWalkInput {

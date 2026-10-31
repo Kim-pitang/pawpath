@@ -82,5 +82,5 @@ export const VISIBILITY_HINTS: Record<Visibility, string> = {
   link: '링크를 받은 사람만 볼 수 있어요.',
   public: '공개된 산책길 목록에 올라가 누구나 볼 수 있어요.',
 };
-export const WALK_SOURCE_LABELS: Record<WalkSourceType, string> = { recorded: '직접 기록', imported: 'GPX 가져옴' };
+export const WALK_SOURCE_LABELS: Record<WalkSourceType, string> = { recorded: '직접 기록', imported: 'GPX 가져옴', generated: '자동 생성' };
 
