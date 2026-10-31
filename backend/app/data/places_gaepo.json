@@ -1,0 +1,1693 @@
+{
+ "collected_on": "2026-10-31",
+ "source": "OpenStreetMap",
+ "unavailable_types": [],
+ "places": [
+  {
+   "type": "park",
+   "name": "개포공원",
+   "lat": 37.4830425,
+   "lng": 127.0659453
+  },
+  {
+   "type": "park",
+   "name": "아시아공원",
+   "lat": 37.5102691,
+   "lng": 127.0762025
+  },
+  {
+   "type": "park",
+   "name": "달터근린공원",
+   "lat": 37.4788154,
+   "lng": 127.052959
+  },
+  {
+   "type": "park",
+   "name": "마루공원",
+   "lat": 37.4962295,
+   "lng": 127.0806405
+  },
+  {
+   "type": "park",
+   "name": "포이근린공원",
+   "lat": 37.4799176,
+   "lng": 127.0472881
+  },
+  {
+   "type": "park",
+   "name": "",
+   "lat": 37.48765,
+   "lng": 127.0643252
+  },
+  {
+   "type": "park",
+   "name": "달터공원",
+   "lat": 37.4846656,
+   "lng": 127.0628671
+  },
+  {
+   "type": "park",
+   "name": "도곡근린공원",
+   "lat": 37.4894577,
+   "lng": 127.0463569
+  },
+  {
+   "type": "park",
+   "name": "은행나무공원",
+   "lat": 37.4760285,
+   "lng": 127.0490809
+  },
+  {
+   "type": "park",
+   "name": "목련어린이공원",
+   "lat": 37.4742674,
+   "lng": 127.0524478
+  },
+  {
+   "type": "park",
+   "name": "개포까치공원",
+   "lat": 37.4838266,
+   "lng": 127.0612168
+  },
+  {
+   "type": "park",
+   "name": "늘벗공원",
+   "lat": 37.4896213,
+   "lng": 127.0571542
+  },
+  {
+   "type": "park",
+   "name": "",
+   "lat": 37.4887367,
+   "lng": 127.0641834
+  },
+  {
+   "type": "park",
+   "name": "",
+   "lat": 37.4822719,
+   "lng": 127.0477508
+  },
+  {
+   "type": "park",
+   "name": "독골공원",
+   "lat": 37.4850744,
+   "lng": 127.0470524
+  },
+  {
+   "type": "park",
+   "name": "",
+   "lat": 37.4734708,
+   "lng": 127.0452065
+  },
+  {
+   "type": "park",
+   "name": "대치은행나무공원",
+   "lat": 37.5018221,
+   "lng": 127.0516252
+  },
+  {
+   "type": "park",
+   "name": "",
+   "lat": 37.4865855,
+   "lng": 127.0539687
+  },
+  {
+   "type": "park",
+   "name": "",
+   "lat": 37.4891972,
+   "lng": 127.060829
+  },
+  {
+   "type": "park",
+   "name": "길섶근린공원",
+   "lat": 37.4975594,
+   "lng": 127.0489397
+  },
+  {
+   "type": "park",
+   "name": "보은근린공원",
+   "lat": 37.4979958,
+   "lng": 127.0482196
+  },
+  {
+   "type": "park",
+   "name": "역삼장미공원",
+   "lat": 37.495351,
+   "lng": 127.0447584
+  },
+  {
+   "type": "park",
+   "name": "대청공원",
+   "lat": 37.4925616,
+   "lng": 127.0826894
+  },
+  {
+   "type": "park",
+   "name": "",
+   "lat": 37.4809081,
+   "lng": 127.07828
+  },
+  {
+   "type": "park",
+   "name": "부렴공원",
+   "lat": 37.5056461,
+   "lng": 127.0792354
+  },
+  {
+   "type": "park",
+   "name": "까치공원",
+   "lat": 37.4969715,
+   "lng": 127.0592354
+  },
+  {
+   "type": "park",
+   "name": "대치근린공원",
+   "lat": 37.4952631,
+   "lng": 127.0698644
+  },
+  {
+   "type": "park",
+   "name": "도곡까치공원",
+   "lat": 37.4831574,
+   "lng": 127.0451997
+  },
+  {
+   "type": "park",
+   "name": "",
+   "lat": 37.4967971,
+   "lng": 127.0658742
+  },
+  {
+   "type": "park",
+   "name": "개포동 근린공원",
+   "lat": 37.4898081,
+   "lng": 127.0674504
+  },
+  {
+   "type": "park",
+   "name": "가족조각상",
+   "lat": 37.5066198,
+   "lng": 127.0731467
+  },
+  {
+   "type": "park",
+   "name": "한티근린공원",
+   "lat": 37.495503,
+   "lng": 127.0621076
+  },
+  {
+   "type": "park",
+   "name": "대진공원",
+   "lat": 37.4955794,
+   "lng": 127.078694
+  },
+  {
+   "type": "park",
+   "name": "도곡햇살공원",
+   "lat": 37.4957653,
+   "lng": 127.0525136
+  },
+  {
+   "type": "park",
+   "name": "",
+   "lat": 37.4957048,
+   "lng": 127.0477861
+  },
+  {
+   "type": "park",
+   "name": "",
+   "lat": 37.4996196,
+   "lng": 127.0450874
+  },
+  {
+   "type": "park",
+   "name": "",
+   "lat": 37.5016307,
+   "lng": 127.0455877
+  },
+  {
+   "type": "park",
+   "name": "",
+   "lat": 37.4940249,
+   "lng": 127.055269
+  },
+  {
+   "type": "park",
+   "name": "포이공원",
+   "lat": 37.4727428,
+   "lng": 127.0519036
+  },
+  {
+   "type": "park",
+   "name": "",
+   "lat": 37.4723686,
+   "lng": 127.0503346
+  },
+  {
+   "type": "park",
+   "name": "",
+   "lat": 37.4731697,
+   "lng": 127.0533047
+  },
+  {
+   "type": "park",
+   "name": "늘푸른공원",
+   "lat": 37.48993,
+   "lng": 127.0774597
+  },
+  {
+   "type": "park",
+   "name": "일원느티나무공원",
+   "lat": 37.4831802,
+   "lng": 127.0773924
+  },
+  {
+   "type": "park",
+   "name": "일원장미공원",
+   "lat": 37.4809995,
+   "lng": 127.0805442
+  },
+  {
+   "type": "park",
+   "name": "뽕밭 어린이공원",
+   "lat": 37.5078208,
+   "lng": 127.081086
+  },
+  {
+   "type": "park",
+   "name": "영동근린공원",
+   "lat": 37.4981181,
+   "lng": 127.0486308
+  },
+  {
+   "type": "park",
+   "name": "대치목련공원",
+   "lat": 37.4997933,
+   "lng": 127.0584484
+  },
+  {
+   "type": "park",
+   "name": "",
+   "lat": 37.5018448,
+   "lng": 127.0621201
+  },
+  {
+   "type": "park",
+   "name": "",
+   "lat": 37.4829225,
+   "lng": 127.0766367
+  },
+  {
+   "type": "park",
+   "name": "",
+   "lat": 37.4918208,
+   "lng": 127.0686041
+  },
+  {
+   "type": "park",
+   "name": "",
+   "lat": 37.4953223,
+   "lng": 127.073176
+  },
+  {
+   "type": "park",
+   "name": "",
+   "lat": 37.5011307,
+   "lng": 127.0701821
+  },
+  {
+   "type": "park",
+   "name": "",
+   "lat": 37.4998121,
+   "lng": 127.0731725
+  },
+  {
+   "type": "park",
+   "name": "",
+   "lat": 37.5025834,
+   "lng": 127.0812082
+  },
+  {
+   "type": "park",
+   "name": "근린공원",
+   "lat": 37.4865296,
+   "lng": 127.0709702
+  },
+  {
+   "type": "park",
+   "name": "대모산 도시자연공원",
+   "lat": 37.4802926,
+   "lng": 127.0812906
+  },
+  {
+   "type": "park",
+   "name": "",
+   "lat": 37.4965871,
+   "lng": 127.0510214
+  },
+  {
+   "type": "park",
+   "name": "",
+   "lat": 37.4906137,
+   "lng": 127.0767307
+  },
+  {
+   "type": "park",
+   "name": "일원은행나무공원",
+   "lat": 37.4919931,
+   "lng": 127.0769632
+  },
+  {
+   "type": "park",
+   "name": "출발마당",
+   "lat": 37.4825571,
+   "lng": 127.0495235
+  },
+  {
+   "type": "park",
+   "name": "삼릉공원 / 서울 선릉과 정릉",
+   "lat": 37.5089837,
+   "lng": 127.048942
+  },
+  {
+   "type": "veterinary",
+   "name": "24시잠실ON동물의료센터",
+   "lat": 37.5115999,
+   "lng": 127.0791398
+  },
+  {
+   "type": "veterinary",
+   "name": "희망종합동물병원",
+   "lat": 37.5115277,
+   "lng": 127.0805173
+  },
+  {
+   "type": "veterinary",
+   "name": "꿈이크는 동물병원",
+   "lat": 37.5068658,
+   "lng": 127.079994
+  },
+  {
+   "type": "drinking_water",
+   "name": "",
+   "lat": 37.5088549,
+   "lng": 127.0502698
+  },
+  {
+   "type": "drinking_water",
+   "name": "",
+   "lat": 37.5079802,
+   "lng": 127.0468261
+  },
+  {
+   "type": "drinking_water",
+   "name": "",
+   "lat": 37.4853644,
+   "lng": 127.0752824
+  },
+  {
+   "type": "toilets",
+   "name": "",
+   "lat": 37.4893376,
+   "lng": 127.056317
+  },
+  {
+   "type": "toilets",
+   "name": "",
+   "lat": 37.5075039,
+   "lng": 127.0514125
+  },
+  {
+   "type": "toilets",
+   "name": "",
+   "lat": 37.5072536,
+   "lng": 127.0480565
+  },
+  {
+   "type": "toilets",
+   "name": "",
+   "lat": 37.4752277,
+   "lng": 127.0502915
+  },
+  {
+   "type": "toilets",
+   "name": "",
+   "lat": 37.4752425,
+   "lng": 127.0503136
+  },
+  {
+   "type": "toilets",
+   "name": "개포근린공원 화장실",
+   "lat": 37.4896485,
+   "lng": 127.0666901
+  },
+  {
+   "type": "toilets",
+   "name": "",
+   "lat": 37.4794876,
+   "lng": 127.081345
+  },
+  {
+   "type": "toilets",
+   "name": "",
+   "lat": 37.4918198,
+   "lng": 127.0733585
+  },
+  {
+   "type": "toilets",
+   "name": "",
+   "lat": 37.5109567,
+   "lng": 127.0604545
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.5066109,
+   "lng": 127.0474005
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐",
+   "lat": 37.4823409,
+   "lng": 127.0617104
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐",
+   "lat": 37.4893719,
+   "lng": 127.0689278
+  },
+  {
+   "type": "convenience",
+   "name": "CU",
+   "lat": 37.4748704,
+   "lng": 127.0524486
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.4741358,
+   "lng": 127.0532965
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.4726078,
+   "lng": 127.051219
+  },
+  {
+   "type": "convenience",
+   "name": "Ministop",
+   "lat": 37.4738572,
+   "lng": 127.0497064
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.4830978,
+   "lng": 127.0529542
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐",
+   "lat": 37.4835518,
+   "lng": 127.0596915
+  },
+  {
+   "type": "convenience",
+   "name": "CU",
+   "lat": 37.5035664,
+   "lng": 127.0541394
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.5086828,
+   "lng": 127.0661153
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.500631,
+   "lng": 127.0632024
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.5072385,
+   "lng": 127.0657937
+  },
+  {
+   "type": "convenience",
+   "name": "",
+   "lat": 37.4913541,
+   "lng": 127.0554822
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐",
+   "lat": 37.5082923,
+   "lng": 127.065028
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.4906966,
+   "lng": 127.0814765
+  },
+  {
+   "type": "convenience",
+   "name": "",
+   "lat": 37.5069057,
+   "lng": 127.0596646
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.5102218,
+   "lng": 127.0578515
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.5094021,
+   "lng": 127.0583165
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐",
+   "lat": 37.5094686,
+   "lng": 127.0641167
+  },
+  {
+   "type": "convenience",
+   "name": "CU",
+   "lat": 37.5104503,
+   "lng": 127.0660906
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.5118538,
+   "lng": 127.0656584
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.4999969,
+   "lng": 127.0661677
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐",
+   "lat": 37.5064497,
+   "lng": 127.0813707
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 신천일등점",
+   "lat": 37.5113705,
+   "lng": 127.0811105
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 신천최고점",
+   "lat": 37.5113365,
+   "lng": 127.0787984
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 잠실행운점",
+   "lat": 37.5115854,
+   "lng": 127.0791833
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 잠실희망점",
+   "lat": 37.5083429,
+   "lng": 127.0815182
+  },
+  {
+   "type": "convenience",
+   "name": "CU 편의점 잠실모범점",
+   "lat": 37.507562,
+   "lng": 127.0815369
+  },
+  {
+   "type": "convenience",
+   "name": "CU 편의점 잠실렉스빌점",
+   "lat": 37.5107514,
+   "lng": 127.0793134
+  },
+  {
+   "type": "convenience",
+   "name": "CU 편의점 신천대로점",
+   "lat": 37.5114503,
+   "lng": 127.0803688
+  },
+  {
+   "type": "convenience",
+   "name": "이마트24 잠실서일점",
+   "lat": 37.5079216,
+   "lng": 127.0799571
+  },
+  {
+   "type": "convenience",
+   "name": "해주미니마트",
+   "lat": 37.5095663,
+   "lng": 127.0812138
+  },
+  {
+   "type": "convenience",
+   "name": "CU 편의점 잠실신천점",
+   "lat": 37.5105801,
+   "lng": 127.0803729
+  },
+  {
+   "type": "convenience",
+   "name": "CU 편의점 신천올림픽점",
+   "lat": 37.5092929,
+   "lng": 127.080629
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 잠실타워점",
+   "lat": 37.5104195,
+   "lng": 127.0790988
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐",
+   "lat": 37.473793,
+   "lng": 127.0477982
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐",
+   "lat": 37.4765511,
+   "lng": 127.0453491
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐",
+   "lat": 37.4980616,
+   "lng": 127.0535582
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐",
+   "lat": 37.4984398,
+   "lng": 127.0511856
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐",
+   "lat": 37.5038149,
+   "lng": 127.0453606
+  },
+  {
+   "type": "convenience",
+   "name": "CU",
+   "lat": 37.4916289,
+   "lng": 127.0769252
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐",
+   "lat": 37.4925547,
+   "lng": 127.0754942
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐",
+   "lat": 37.4939482,
+   "lng": 127.0797467
+  },
+  {
+   "type": "convenience",
+   "name": "CU",
+   "lat": 37.4942482,
+   "lng": 127.0776733
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.4939271,
+   "lng": 127.0604608
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.4955975,
+   "lng": 127.059515
+  },
+  {
+   "type": "convenience",
+   "name": "CU",
+   "lat": 37.49834,
+   "lng": 127.0609373
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.4973105,
+   "lng": 127.0582578
+  },
+  {
+   "type": "convenience",
+   "name": "CU",
+   "lat": 37.4984934,
+   "lng": 127.0588619
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.4975843,
+   "lng": 127.0560873
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐",
+   "lat": 37.4938874,
+   "lng": 127.0627034
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.4987858,
+   "lng": 127.0622574
+  },
+  {
+   "type": "convenience",
+   "name": "CU",
+   "lat": 37.4990491,
+   "lng": 127.0631761
+  },
+  {
+   "type": "convenience",
+   "name": "CU",
+   "lat": 37.4984112,
+   "lng": 127.0683855
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.4978684,
+   "lng": 127.0686213
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.4994736,
+   "lng": 127.0603095
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.4982659,
+   "lng": 127.0547516
+  },
+  {
+   "type": "convenience",
+   "name": "CU",
+   "lat": 37.4991282,
+   "lng": 127.0525747
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐",
+   "lat": 37.5045156,
+   "lng": 127.0481817
+  },
+  {
+   "type": "convenience",
+   "name": "CU",
+   "lat": 37.5064378,
+   "lng": 127.052423
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.501273,
+   "lng": 127.0555591
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐",
+   "lat": 37.4934517,
+   "lng": 127.0757141
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.5104647,
+   "lng": 127.0627879
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.5103838,
+   "lng": 127.0791423
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐",
+   "lat": 37.5112567,
+   "lng": 127.0788294
+  },
+  {
+   "type": "convenience",
+   "name": "CU",
+   "lat": 37.5038096,
+   "lng": 127.0525811
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.5042496,
+   "lng": 127.05061
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.5047368,
+   "lng": 127.0642208
+  },
+  {
+   "type": "convenience",
+   "name": "CU",
+   "lat": 37.5053928,
+   "lng": 127.080829
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.5056197,
+   "lng": 127.057644
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐",
+   "lat": 37.5034643,
+   "lng": 127.0466323
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐",
+   "lat": 37.478065,
+   "lng": 127.0499518
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.4788273,
+   "lng": 127.0492469
+  },
+  {
+   "type": "convenience",
+   "name": "CU",
+   "lat": 37.4935221,
+   "lng": 127.0617987
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.4969585,
+   "lng": 127.0566011
+  },
+  {
+   "type": "convenience",
+   "name": "CU",
+   "lat": 37.5116351,
+   "lng": 127.047925
+  },
+  {
+   "type": "convenience",
+   "name": "CU",
+   "lat": 37.4996651,
+   "lng": 127.0608159
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐",
+   "lat": 37.5113959,
+   "lng": 127.0810685
+  },
+  {
+   "type": "convenience",
+   "name": "CU",
+   "lat": 37.5073241,
+   "lng": 127.0628177
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐",
+   "lat": 37.4784911,
+   "lng": 127.048073
+  },
+  {
+   "type": "convenience",
+   "name": "이마트24",
+   "lat": 37.4851676,
+   "lng": 127.0560881
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐",
+   "lat": 37.4994677,
+   "lng": 127.0583248
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.5007422,
+   "lng": 127.0574649
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐",
+   "lat": 37.5019921,
+   "lng": 127.0578929
+  },
+  {
+   "type": "convenience",
+   "name": "CU",
+   "lat": 37.4999007,
+   "lng": 127.059633
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐",
+   "lat": 37.5012061,
+   "lng": 127.0593785
+  },
+  {
+   "type": "convenience",
+   "name": "CU",
+   "lat": 37.4999068,
+   "lng": 127.0555814
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐",
+   "lat": 37.4994458,
+   "lng": 127.0535132
+  },
+  {
+   "type": "convenience",
+   "name": "CU",
+   "lat": 37.4982391,
+   "lng": 127.054125
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.4913535,
+   "lng": 127.0736889
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐",
+   "lat": 37.4982578,
+   "lng": 127.0559891
+  },
+  {
+   "type": "convenience",
+   "name": "GS25",
+   "lat": 37.5114187,
+   "lng": 127.0714206
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 대치역삼로점",
+   "lat": 37.501284,
+   "lng": 127.053927
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 대치7호점",
+   "lat": 37.505757,
+   "lng": 127.058785
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 뉴개포럭키점",
+   "lat": 37.478391,
+   "lng": 127.047149
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 공항타워점",
+   "lat": 37.510234,
+   "lng": 127.058597
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 도곡시네마점",
+   "lat": 37.487155,
+   "lng": 127.046569
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 테헤란로점",
+   "lat": 37.505692,
+   "lng": 127.054183
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 대치선릉로점",
+   "lat": 37.503017,
+   "lng": 127.052507
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 역삼진선점",
+   "lat": 37.502866,
+   "lng": 127.04886
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 삼성역점",
+   "lat": 37.508206,
+   "lng": 127.062275
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 역삼개나리점",
+   "lat": 37.498977,
+   "lng": 127.04696
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 역삼래미안점",
+   "lat": 37.495892,
+   "lng": 127.046476
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 역삼18호점",
+   "lat": 37.494854,
+   "lng": 127.045117
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 대치멤버스점",
+   "lat": 37.504549,
+   "lng": 127.053801
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 뉴선릉오성점",
+   "lat": 37.505876,
+   "lng": 127.048785
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 대치6호점",
+   "lat": 37.504718,
+   "lng": 127.055726
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 대치16호점",
+   "lat": 37.502238,
+   "lng": 127.052268
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 포이4호점",
+   "lat": 37.476751,
+   "lng": 127.04698
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 도곡비전점",
+   "lat": 37.487339,
+   "lng": 127.051554
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 대치덕일점",
+   "lat": 37.504287,
+   "lng": 127.062873
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 뉴잠실희망점",
+   "lat": 37.508514,
+   "lng": 127.08149
+  },
+  {
+   "type": "convenience",
+   "name": "CU 잠실렉스빌점",
+   "lat": 37.510864,
+   "lng": 127.079322
+  },
+  {
+   "type": "convenience",
+   "name": "CU 잠실모범점",
+   "lat": 37.507585,
+   "lng": 127.08158
+  },
+  {
+   "type": "convenience",
+   "name": "CU 도곡우성",
+   "lat": 37.486899,
+   "lng": 127.051844
+  },
+  {
+   "type": "convenience",
+   "name": "CU 개포루체하임점",
+   "lat": 37.489541,
+   "lng": 127.079624
+  },
+  {
+   "type": "convenience",
+   "name": "CU 역삼푸르지오",
+   "lat": 37.496954,
+   "lng": 127.046376
+  },
+  {
+   "type": "convenience",
+   "name": "CU 선릉역점",
+   "lat": 37.505086,
+   "lng": 127.049511
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 삼성베스트점",
+   "lat": 37.510858,
+   "lng": 127.055736
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 삼성승리점",
+   "lat": 37.506396,
+   "lng": 127.050038
+  },
+  {
+   "type": "convenience",
+   "name": "CU 대치동부점",
+   "lat": 37.505624,
+   "lng": 127.05523
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 도곡역점",
+   "lat": 37.490706,
+   "lng": 127.056143
+  },
+  {
+   "type": "convenience",
+   "name": "이마트24 편의점",
+   "lat": 37.504044,
+   "lng": 127.061024
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 역삼사랑점",
+   "lat": 37.505953,
+   "lng": 127.046545
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 삼성중앙점",
+   "lat": 37.5113561,
+   "lng": 127.0531492
+  },
+  {
+   "type": "convenience",
+   "name": "CU 삼성메가점",
+   "lat": 37.510223,
+   "lng": 127.053974
+  },
+  {
+   "type": "convenience",
+   "name": "CU 삼성위브점",
+   "lat": 37.508471,
+   "lng": 127.057824
+  },
+  {
+   "type": "convenience",
+   "name": "CU 대치세정점",
+   "lat": 37.502672,
+   "lng": 127.059161
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 강남대청점",
+   "lat": 37.492322,
+   "lng": 127.074601
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 대치4호점",
+   "lat": 37.493494,
+   "lng": 127.059773
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 파르나스몰점",
+   "lat": 37.509192,
+   "lng": 127.060807
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 한티역",
+   "lat": 37.49617,
+   "lng": 127.051518
+  },
+  {
+   "type": "convenience",
+   "name": "이마트24 강남에이타워점",
+   "lat": 37.507583,
+   "lng": 127.055042
+  },
+  {
+   "type": "convenience",
+   "name": "이마트24 개포래미안점",
+   "lat": 37.480058,
+   "lng": 127.064153
+  },
+  {
+   "type": "convenience",
+   "name": "CU 뉴대치플러스점",
+   "lat": 37.506348,
+   "lng": 127.058819
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 대치코스모점",
+   "lat": 37.507802,
+   "lng": 127.064904
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 골드로즈점",
+   "lat": 37.504166,
+   "lng": 127.052044
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 포이점",
+   "lat": 37.476539,
+   "lng": 127.049334
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 대치미래점",
+   "lat": 37.502785,
+   "lng": 127.052005
+  },
+  {
+   "type": "convenience",
+   "name": "CU 대치한국점",
+   "lat": 37.503296,
+   "lng": 127.050313
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 강남동원점",
+   "lat": 37.506926,
+   "lng": 127.054495
+  },
+  {
+   "type": "convenience",
+   "name": "패밀리마트 삼성아트점",
+   "lat": 37.51043,
+   "lng": 127.065059
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 코스모타워점",
+   "lat": 37.506584,
+   "lng": 127.065327
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 개나리SK점",
+   "lat": 37.500555,
+   "lng": 127.050315
+  },
+  {
+   "type": "convenience",
+   "name": "이마트24 강남선릉역점",
+   "lat": 37.506655,
+   "lng": 127.048386
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 뉴역삼월드점",
+   "lat": 37.498554,
+   "lng": 127.04799
+  },
+  {
+   "type": "convenience",
+   "name": "CU 비지에프사옥점",
+   "lat": 37.505788,
+   "lng": 127.050111
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 대치한티",
+   "lat": 37.497379,
+   "lng": 127.053208
+  },
+  {
+   "type": "convenience",
+   "name": "CU 포이점",
+   "lat": 37.479027,
+   "lng": 127.048118
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 대치타워점",
+   "lat": 37.504649,
+   "lng": 127.052157
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 대치학원점",
+   "lat": 37.499633,
+   "lng": 127.062238
+  },
+  {
+   "type": "convenience",
+   "name": "패밀리마트 도곡점",
+   "lat": 37.500964,
+   "lng": 127.052606
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 삼성예술점",
+   "lat": 37.509489,
+   "lng": 127.056065
+  },
+  {
+   "type": "convenience",
+   "name": "CU 선릉제일점",
+   "lat": 37.505554,
+   "lng": 127.047714
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 대치선릉",
+   "lat": 37.503262,
+   "lng": 127.051021
+  },
+  {
+   "type": "convenience",
+   "name": "CU 대치기량점",
+   "lat": 37.501155,
+   "lng": 127.050832
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 개포현대점",
+   "lat": 37.480908,
+   "lng": 127.052998
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 DH아너힐즈점",
+   "lat": 37.48444,
+   "lng": 127.06796
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 개포경남점",
+   "lat": 37.485406,
+   "lng": 127.05471
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 개포빌리지",
+   "lat": 37.476055,
+   "lng": 127.047103
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 프레시 강남일원점",
+   "lat": 37.482848,
+   "lng": 127.079371
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 대치삼성",
+   "lat": 37.507683,
+   "lng": 127.062011
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 대치타운점",
+   "lat": 37.5019931,
+   "lng": 127.0525799
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 개포주공점",
+   "lat": 37.488688,
+   "lng": 127.066845
+  },
+  {
+   "type": "convenience",
+   "name": "CU 삼성리저브점",
+   "lat": 37.507985,
+   "lng": 127.055224
+  },
+  {
+   "type": "convenience",
+   "name": "CU 개포사랑점",
+   "lat": 37.483115,
+   "lng": 127.060668
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 선릉LG에클라트점",
+   "lat": 37.506115,
+   "lng": 127.050948
+  },
+  {
+   "type": "convenience",
+   "name": "CU 매봉산점",
+   "lat": 37.486961,
+   "lng": 127.045234
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 대치SK타운점",
+   "lat": 37.495908,
+   "lng": 127.061
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 역삼성보점",
+   "lat": 37.502501,
+   "lng": 127.046384
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 개포포레스트점",
+   "lat": 37.47975,
+   "lng": 127.052228
+  },
+  {
+   "type": "convenience",
+   "name": "CU 대치메가점",
+   "lat": 37.502827,
+   "lng": 127.055077
+  },
+  {
+   "type": "convenience",
+   "name": "이마트24 대치은마점",
+   "lat": 37.499461,
+   "lng": 127.064405
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 포이3호점",
+   "lat": 37.475327,
+   "lng": 127.048664
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 대치제일점",
+   "lat": 37.500346,
+   "lng": 127.052846
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 강남중동고",
+   "lat": 37.493025,
+   "lng": 127.08185
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 삼성터미널점",
+   "lat": 37.508697,
+   "lng": 127.056804
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 강남개포점",
+   "lat": 37.479191,
+   "lng": 127.045323
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 대치대명",
+   "lat": 37.506878,
+   "lng": 127.062268
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 삼성그린점",
+   "lat": 37.510778,
+   "lng": 127.05156
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 대치은마사거리점",
+   "lat": 37.498632,
+   "lng": 127.061398
+  },
+  {
+   "type": "convenience",
+   "name": "CU 삼성본점",
+   "lat": 37.507946,
+   "lng": 127.057287
+  },
+  {
+   "type": "convenience",
+   "name": "CU 개포우성점",
+   "lat": 37.486466,
+   "lng": 127.050396
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 대치골드",
+   "lat": 37.504113,
+   "lng": 127.05363
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 도곡아카데미점",
+   "lat": 37.488866,
+   "lng": 127.052015
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 대치3호",
+   "lat": 37.493155,
+   "lng": 127.063
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 개포소망",
+   "lat": 37.489233,
+   "lng": 127.067956
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 도곡래미안점",
+   "lat": 37.489611,
+   "lng": 127.051499
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 오크우드점 휴게실",
+   "lat": 37.510357,
+   "lng": 127.061024
+  },
+  {
+   "type": "convenience",
+   "name": "CU 대치쌍용점",
+   "lat": 37.498558,
+   "lng": 127.070035
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 개포늘푸른점",
+   "lat": 37.491094,
+   "lng": 127.074164
+  },
+  {
+   "type": "convenience",
+   "name": "CU 삼성마젤란점",
+   "lat": 37.508744,
+   "lng": 127.058342
+  },
+  {
+   "type": "convenience",
+   "name": "CU 대치팰리스점",
+   "lat": 37.492429,
+   "lng": 127.057956
+  },
+  {
+   "type": "convenience",
+   "name": "GS25 LG25역삼3점",
+   "lat": 37.504989,
+   "lng": 127.046743
+  },
+  {
+   "type": "convenience",
+   "name": "CU 컬쳐랜드타워점",
+   "lat": 37.503805,
+   "lng": 127.066592
+  },
+  {
+   "type": "convenience",
+   "name": "세븐일레븐 대치아이파크점",
+   "lat": 37.495385,
+   "lng": 127.053532
+  },
+  {
+   "type": "convenience",
+   "name": "CU 이비스 스타일 앰배서더 강남점",
+   "lat": 37.50511,
+   "lng": 127.057067
+  },
+  {
+   "type": "convenience",
+   "name": "CU 대치역점",
+   "lat": 37.496886,
+   "lng": 127.061628
+  },
+  {
+   "type": "convenience",
+   "name": "CU 양재소나무점",
+   "lat": 37.472949,
+   "lng": 127.048235
+  },
+  {
+   "type": "convenience",
+   "name": "CU 양재강남점",
+   "lat": 37.472748,
+   "lng": 127.046669
+  },
+  {
+   "type": "convenience",
+   "name": "CU 양재언남점",
+   "lat": 37.475299,
+   "lng": 127.045527
+  },
+  {
+   "type": "convenience",
+   "name": "",
+   "lat": 37.5096736,
+   "lng": 127.0618159
+  },
+  {
+   "type": "convenience",
+   "name": "",
+   "lat": 37.5105392,
+   "lng": 127.0629013
+  },
+  {
+   "type": "pet_shop",
+   "name": "피쉬마트수족관",
+   "lat": 37.4957851,
+   "lng": 127.0528463
+  }
+ ]
+}

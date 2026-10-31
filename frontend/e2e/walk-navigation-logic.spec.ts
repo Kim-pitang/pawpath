@@ -217,9 +217,10 @@ test('구간을 잘라도 시작과 끝 진행도가 맞다', () => {
   expect(sliceRoute(route, 100, 99999).at(-1)).toEqual(pointAt(route, route.total));
 });
 
-test('실제 코스 10개를 걸어도 진행도가 역행하지 않고 끝까지 간다', () => {
-  const courses: { code: string; route: LatLng[] }[] = JSON.parse(readFileSync('../backend/app/data/courses.json', 'utf8'));
-  expect(courses.length).toBeGreaterThanOrEqual(10);
+test('모든 지역의 실제 코스를 걸어도 진행도가 역행하지 않고 끝까지 간다', () => {
+  const read = (file: string): { code: string; route: LatLng[] }[] => JSON.parse(readFileSync(`../backend/app/data/${file}`, 'utf8'));
+  const courses = [...read('courses.json'), ...read('courses_gaepo.json')];
+  expect(courses.length).toBeGreaterThanOrEqual(16);
   for (const course of courses) {
     const route = buildRoute(course.route);
     let progress = 0;

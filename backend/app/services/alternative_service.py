@@ -41,7 +41,7 @@ def _approach_payload(approach: Approach) -> dict:
 def _alternatives(db, course, reference, now, forecast, features, state, weather_source) -> list[dict]:
     """지금 걷기 시작해도 비를 피할 수 있고 위험 조건이 없는 가까운 코스."""
     candidates = []
-    for other in db.scalars(select(WalkingCourse).where(WalkingCourse.id != course.id)):
+    for other in db.scalars(select(WalkingCourse).where(WalkingCourse.id != course.id, WalkingCourse.area == course.area)):
         data = to_course_data(other)
         if not data.pet_allowed:
             continue

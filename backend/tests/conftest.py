@@ -13,6 +13,7 @@ os.environ["ROUTING_PROVIDER"] = "none"
 # 개발자의 .env 설정과 무관하게 같은 결과가 나오도록 고정한다. 환경변수가 .env보다 우선한다.
 os.environ["LLM_PROVIDER"] = "none"
 os.environ["RECOMMENDER_WEIGHTS"] = "{}"
+os.environ["SERVICE_AREA"] = "mangwon"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

@@ -15,7 +15,7 @@ from app.seed import DEFAULT_USER_ID
 from app.services.alternative_service import ALL_DAY, evaluate_alternative
 from app.services.llm_service import enhance_recommendation
 from app.services.places_service import PLACE_LABELS, nearby_places
-from app.services.recommendation_service import create_recommendation, load_state, to_course_data, to_profile, windows_of
+from app.services.recommendation_service import active_courses, create_recommendation, load_state, to_course_data, to_profile, windows_of
 from app.services.report_service import build_report, is_simulated, walked_km
 from app.services.routing_service import Approach, plan_approach
 from app.services.walk_service import build_insights, record_walk, submit_feedback
@@ -180,7 +180,7 @@ def weather_forecast(
 # 산책 코스
 @router.get("/courses", response_model=list[schemas.CourseDetail], tags=["산책 코스"])
 def list_courses(db: Session = Depends(get_db)) -> list[WalkingCourse]:
-    return list(db.scalars(select(WalkingCourse).order_by(WalkingCourse.id)))
+    return active_courses(db)
 
 
 @router.get("/courses/{course_id}", response_model=schemas.CourseDetail, tags=["산책 코스"])

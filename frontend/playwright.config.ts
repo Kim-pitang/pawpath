@@ -33,6 +33,7 @@ export default defineConfig({
         // 개발자의 .env 설정과 무관하게 같은 결과가 나오도록 고정한다. 환경변수가 .env보다 우선한다.
         LLM_PROVIDER: 'none',
         RECOMMENDER_WEIGHTS: '{}',
+        SERVICE_AREA: 'mangwon',
       },
     },
     {

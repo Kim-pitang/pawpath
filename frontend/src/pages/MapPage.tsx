@@ -40,7 +40,7 @@ export default function MapPage() {
 
   return (
     <div>
-      <PageTitle sub="서울 마포구 망원동 일대의 실제 경로예요. 코스를 고르면 시설이 표시돼요.">산책 코스 지도</PageTitle>
+      <PageTitle sub={`${courses[0].area}의 실제 경로예요. 코스를 고르면 시설이 표시돼요.`}>산책 코스 지도</PageTitle>
       <div className="grid gap-4 md:grid-cols-[1.4fr_1fr] md:items-start">
         <div className="flex flex-col gap-3">
           <CourseMap courses={courses} selectedId={selectedId} rankById={rankById} onSelect={select} />

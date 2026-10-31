@@ -8,20 +8,23 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.models import Pet, User, WalkingCourse
 
-COURSES_PATH = Path(__file__).parent / "data" / "courses.json"
+DATA_DIR = Path(__file__).parent / "data"
+# 모든 지역의 코스를 넣어 두고 SERVICE_AREA로 고른다. 지역을 바꿔도 코스 번호와 기록이 유지된다.
+COURSE_FILES = (DATA_DIR / "courses.json", DATA_DIR / "courses_gaepo.json")
 DEFAULT_USER_ID = 1
 
 
 def seed_courses(db: Session) -> None:
     """코드 기준으로 코스를 추가하거나 갱신한다. 다시 실행해도 안전하다."""
     existing = {course.code: course for course in db.scalars(select(WalkingCourse))}
-    for raw in json.loads(COURSES_PATH.read_text(encoding="utf-8")):
-        course = existing.get(raw["code"])
-        if course is None:
-            db.add(WalkingCourse(**raw))
-        else:
-            for key, value in raw.items():
-                setattr(course, key, value)
+    for path in COURSE_FILES:
+        for raw in json.loads(path.read_text(encoding="utf-8")):
+            course = existing.get(raw["code"])
+            if course is None:
+                db.add(WalkingCourse(**raw))
+            else:
+                for key, value in raw.items():
+                    setattr(course, key, value)
 
 
 def seed_default_user(db: Session) -> User:

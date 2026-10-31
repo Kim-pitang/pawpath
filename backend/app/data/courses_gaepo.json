@@ -1,0 +1,1059 @@
+[
+ {
+  "code": "gaepo-park",
+  "name": "개포동 근린공원 양재천변 코스",
+  "description": "개포디지털혁신파크 옆 개포동 근린공원을 지나 양재천 강변길을 짧게 다녀오는 코스예요.",
+  "has_park": true,
+  "park_names": [
+   "개포동 근린공원"
+  ],
+  "lighting": "partial",
+  "is_paved": true,
+  "surface_note": "공원 흙길 일부와 포장 강변길",
+  "crowd_level": "low",
+  "is_familiar": true,
+  "shade_level": 0.5,
+  "difficulty": "easy",
+  "traffic_exposure": "low",
+  "scenery_tags": [
+   "park",
+   "stream"
+  ],
+  "area": "서울 강남구 개포동 일대",
+  "start_lat": 37.489562,
+  "start_lng": 127.066421,
+  "distance_km": 1.35,
+  "duration_min": 20,
+  "route": [
+   [
+    37.489562,
+    127.066421
+   ],
+   [
+    37.489521,
+    127.066533
+   ],
+   [
+    37.489628,
+    127.067109
+   ],
+   [
+    37.489874,
+    127.067567
+   ],
+   [
+    37.48991,
+    127.06783
+   ],
+   [
+    37.489874,
+    127.067567
+   ],
+   [
+    37.489628,
+    127.067109
+   ],
+   [
+    37.489521,
+    127.066533
+   ],
+   [
+    37.489674,
+    127.066323
+   ],
+   [
+    37.489854,
+    127.067232
+   ],
+   [
+    37.4902,
+    127.06825
+   ],
+   [
+    37.490385,
+    127.068658
+   ],
+   [
+    37.491267,
+    127.070129
+   ],
+   [
+    37.490385,
+    127.068658
+   ],
+   [
+    37.4902,
+    127.06825
+   ],
+   [
+    37.489854,
+    127.067232
+   ],
+   [
+    37.489674,
+    127.066323
+   ],
+   [
+    37.489521,
+    127.066533
+   ],
+   [
+    37.489628,
+    127.067109
+   ],
+   [
+    37.489874,
+    127.067567
+   ],
+   [
+    37.48991,
+    127.06783
+   ],
+   [
+    37.489874,
+    127.067567
+   ],
+   [
+    37.489628,
+    127.067109
+   ],
+   [
+    37.489521,
+    127.066533
+   ],
+   [
+    37.489562,
+    127.066421
+   ]
+  ],
+  "pet_allowed": true,
+  "pet_rule_note": "리드줄과 배변봉투를 챙기고, 출입 제한 구역은 현장 안내를 따라 주세요.",
+  "facilities": [
+   {
+    "type": "toilets",
+    "lat": 37.4896485,
+    "lng": 127.0666901,
+    "name": "개포근린공원 화장실"
+   },
+   {
+    "type": "park",
+    "lat": 37.4898081,
+    "lng": 127.0674504,
+    "name": "개포동 근린공원"
+   }
+  ],
+  "data_sources": {
+   "route": "OSRM 도보 경로 / OpenStreetMap (2026-10-31)",
+   "facilities": "OpenStreetMap Overpass (2026-10-31)",
+   "facilities_unavailable": [],
+   "team_estimates": [
+    "crowd_level",
+    "shade_level",
+    "lighting",
+    "surface_note",
+    "difficulty",
+    "pet_allowed"
+   ],
+   "environment": "OpenStreetMap Overpass (2026-10-31), 경로 10m 간격 측정",
+   "environment_unavailable": []
+  },
+  "environment": {
+   "collected_on": "2026-10-31",
+   "sampled_points": 132,
+   "road": {
+    "pedestrian": 1.0,
+    "local": 0.0,
+    "major": 0.0,
+    "unknown": 0.0
+   },
+   "lit": {
+    "yes": 0.0,
+    "no": 0.0,
+    "unknown": 1.0
+   },
+   "surface": {
+    "paved": 0.0,
+    "unpaved": 0.386,
+    "unknown": 0.614
+   },
+   "trees": 0.0,
+   "park": 0.447
+  }
+ },
+ {
+  "code": "gaepo-alley",
+  "name": "개포로88길 골목 코스",
+  "description": "개포로82길과 개포로88길을 따라 근린공원 앞까지 다녀오는 동네 코스예요.",
+  "has_park": false,
+  "park_names": [],
+  "lighting": "partial",
+  "is_paved": true,
+  "surface_note": "포장 골목길",
+  "crowd_level": "low",
+  "is_familiar": true,
+  "shade_level": 0.3,
+  "difficulty": "easy",
+  "traffic_exposure": "medium",
+  "scenery_tags": [
+   "residential"
+  ],
+  "area": "서울 강남구 개포동 일대",
+  "start_lat": 37.488876,
+  "start_lng": 127.068212,
+  "distance_km": 0.96,
+  "duration_min": 15,
+  "route": [
+   [
+    37.488876,
+    127.068212
+   ],
+   [
+    37.489178,
+    127.069235
+   ],
+   [
+    37.488041,
+    127.069782
+   ],
+   [
+    37.487777,
+    127.069998
+   ],
+   [
+    37.48703,
+    127.071269
+   ],
+   [
+    37.486897,
+    127.071602
+   ],
+   [
+    37.486894,
+    127.072027
+   ],
+   [
+    37.486897,
+    127.071602
+   ],
+   [
+    37.48703,
+    127.071269
+   ],
+   [
+    37.487777,
+    127.069998
+   ],
+   [
+    37.488041,
+    127.069782
+   ],
+   [
+    37.489178,
+    127.069235
+   ],
+   [
+    37.488876,
+    127.068212
+   ]
+  ],
+  "pet_allowed": true,
+  "pet_rule_note": "리드줄과 배변봉투를 챙기고, 출입 제한 구역은 현장 안내를 따라 주세요.",
+  "facilities": [],
+  "data_sources": {
+   "route": "OSRM 도보 경로 / OpenStreetMap (2026-10-31)",
+   "facilities": "OpenStreetMap Overpass (2026-10-31)",
+   "facilities_unavailable": [],
+   "team_estimates": [
+    "crowd_level",
+    "shade_level",
+    "lighting",
+    "surface_note",
+    "difficulty",
+    "pet_allowed"
+   ],
+   "environment": "OpenStreetMap Overpass (2026-10-31), 경로 10m 간격 측정",
+   "environment_unavailable": []
+  },
+  "environment": {
+   "collected_on": "2026-10-31",
+   "sampled_points": 94,
+   "road": {
+    "pedestrian": 0.181,
+    "local": 0.574,
+    "major": 0.245,
+    "unknown": 0.0
+   },
+   "lit": {
+    "yes": 0.0,
+    "no": 0.0,
+    "unknown": 1.0
+   },
+   "surface": {
+    "paved": 0.0,
+    "unpaved": 0.0,
+    "unknown": 1.0
+   },
+   "trees": 0.0,
+   "park": 0.0
+  }
+ },
+ {
+  "code": "yangjae-bridge",
+  "name": "양재천 영동6교 왕복",
+  "description": "개포동 근린공원 옆에서 양재천 강변길을 따라 영동6교 쪽까지 왕복하는 코스예요.",
+  "has_park": true,
+  "park_names": [],
+  "lighting": "partial",
+  "is_paved": true,
+  "surface_note": "포장 강변길, 자전거길과 나란함",
+  "crowd_level": "medium",
+  "is_familiar": true,
+  "shade_level": 0.2,
+  "difficulty": "easy",
+  "traffic_exposure": "low",
+  "scenery_tags": [
+   "stream",
+   "open",
+   "park"
+  ],
+  "area": "서울 강남구 개포동 일대",
+  "start_lat": 37.489924,
+  "start_lng": 127.066787,
+  "distance_km": 1.65,
+  "duration_min": 30,
+  "route": [
+   [
+    37.489924,
+    127.066787
+   ],
+   [
+    37.490267,
+    127.067598
+   ],
+   [
+    37.491296,
+    127.069363
+   ],
+   [
+    37.491303,
+    127.06955
+   ],
+   [
+    37.491502,
+    127.069878
+   ],
+   [
+    37.493057,
+    127.071669
+   ],
+   [
+    37.493794,
+    127.072385
+   ],
+   [
+    37.494181,
+    127.072884
+   ],
+   [
+    37.493509,
+    127.072371
+   ],
+   [
+    37.493556,
+    127.072441
+   ],
+   [
+    37.493509,
+    127.072371
+   ],
+   [
+    37.494181,
+    127.072884
+   ],
+   [
+    37.493794,
+    127.072385
+   ],
+   [
+    37.493057,
+    127.071669
+   ],
+   [
+    37.491502,
+    127.069878
+   ],
+   [
+    37.491303,
+    127.06955
+   ],
+   [
+    37.491296,
+    127.069363
+   ],
+   [
+    37.490267,
+    127.067598
+   ],
+   [
+    37.489924,
+    127.066787
+   ]
+  ],
+  "pet_allowed": true,
+  "pet_rule_note": "리드줄과 배변봉투를 챙기고, 출입 제한 구역은 현장 안내를 따라 주세요.",
+  "facilities": [
+   {
+    "type": "toilets",
+    "lat": 37.4896485,
+    "lng": 127.0666901,
+    "name": "개포근린공원 화장실"
+   }
+  ],
+  "data_sources": {
+   "route": "OSRM 도보 경로 / OpenStreetMap (2026-10-31)",
+   "facilities": "OpenStreetMap Overpass (2026-10-31)",
+   "facilities_unavailable": [],
+   "team_estimates": [
+    "crowd_level",
+    "shade_level",
+    "lighting",
+    "surface_note",
+    "difficulty",
+    "pet_allowed"
+   ],
+   "environment": "OpenStreetMap Overpass (2026-10-31), 경로 10m 간격 측정",
+   "environment_unavailable": []
+  },
+  "environment": {
+   "collected_on": "2026-10-31",
+   "sampled_points": 164,
+   "road": {
+    "pedestrian": 1.0,
+    "local": 0.0,
+    "major": 0.0,
+    "unknown": 0.0
+   },
+   "lit": {
+    "yes": 0.0,
+    "no": 0.0,
+    "unknown": 1.0
+   },
+   "surface": {
+    "paved": 0.0,
+    "unpaved": 0.0,
+    "unknown": 1.0
+   },
+   "trees": 0.0,
+   "park": 0.915
+  }
+ },
+ {
+  "code": "yangjae-west",
+  "name": "양재천 서쪽 강변 왕복",
+  "description": "개포로에서 양재천 강변길을 따라 서쪽으로 다녀오는 코스예요.",
+  "has_park": false,
+  "park_names": [],
+  "lighting": "partial",
+  "is_paved": true,
+  "surface_note": "포장 강변길, 자전거길과 나란함",
+  "crowd_level": "medium",
+  "is_familiar": false,
+  "shade_level": 0.2,
+  "difficulty": "easy",
+  "traffic_exposure": "low",
+  "scenery_tags": [
+   "stream",
+   "open"
+  ],
+  "area": "서울 강남구 개포동 일대",
+  "start_lat": 37.48939,
+  "start_lng": 127.0637,
+  "distance_km": 2.36,
+  "duration_min": 40,
+  "route": [
+   [
+    37.48939,
+    127.0637
+   ],
+   [
+    37.488469,
+    127.058759
+   ],
+   [
+    37.486772,
+    127.055614
+   ],
+   [
+    37.484671,
+    127.052039
+   ],
+   [
+    37.486772,
+    127.055614
+   ],
+   [
+    37.488469,
+    127.058759
+   ],
+   [
+    37.48939,
+    127.0637
+   ]
+  ],
+  "pet_allowed": true,
+  "pet_rule_note": "리드줄과 배변봉투를 챙기고, 출입 제한 구역은 현장 안내를 따라 주세요.",
+  "facilities": [],
+  "data_sources": {
+   "route": "OSRM 도보 경로 / OpenStreetMap (2026-10-31)",
+   "facilities": "OpenStreetMap Overpass (2026-10-31)",
+   "facilities_unavailable": [],
+   "team_estimates": [
+    "crowd_level",
+    "shade_level",
+    "lighting",
+    "surface_note",
+    "difficulty",
+    "pet_allowed"
+   ],
+   "environment": "OpenStreetMap Overpass (2026-10-31), 경로 10m 간격 측정",
+   "environment_unavailable": []
+  },
+  "environment": {
+   "collected_on": "2026-10-31",
+   "sampled_points": 236,
+   "road": {
+    "pedestrian": 1.0,
+    "local": 0.0,
+    "major": 0.0,
+    "unknown": 0.0
+   },
+   "lit": {
+    "yes": 0.0,
+    "no": 0.0,
+    "unknown": 1.0
+   },
+   "surface": {
+    "paved": 0.0,
+    "unpaved": 0.0,
+    "unknown": 1.0
+   },
+   "trees": 0.059,
+   "park": 0.0
+  }
+ },
+ {
+  "code": "yangjae-tancheon",
+  "name": "양재천 탄천 종주 코스",
+  "description": "양재천 강변길에서 탄천 자전거길까지 길게 왕복하는, 활동량 많은 아이를 위한 코스예요. 자전거를 조심해 주세요.",
+  "has_park": true,
+  "park_names": [],
+  "lighting": "partial",
+  "is_paved": true,
+  "surface_note": "포장 강변길과 자전거길",
+  "crowd_level": "medium",
+  "is_familiar": false,
+  "shade_level": 0.1,
+  "difficulty": "easy",
+  "traffic_exposure": "low",
+  "scenery_tags": [
+   "stream",
+   "open",
+   "park"
+  ],
+  "area": "서울 강남구 개포동 일대",
+  "start_lat": 37.489924,
+  "start_lng": 127.066787,
+  "distance_km": 4.24,
+  "duration_min": 70,
+  "route": [
+   [
+    37.489924,
+    127.066787
+   ],
+   [
+    37.490203,
+    127.067431
+   ],
+   [
+    37.490646,
+    127.067258
+   ],
+   [
+    37.491026,
+    127.068122
+   ],
+   [
+    37.491578,
+    127.069163
+   ],
+   [
+    37.492485,
+    127.070289
+   ],
+   [
+    37.494399,
+    127.072323
+   ],
+   [
+    37.49563,
+    127.073152
+   ],
+   [
+    37.496642,
+    127.073438
+   ],
+   [
+    37.497298,
+    127.073526
+   ],
+   [
+    37.498262,
+    127.073369
+   ],
+   [
+    37.500136,
+    127.072329
+   ],
+   [
+    37.500718,
+    127.072166
+   ],
+   [
+    37.50387,
+    127.069463
+   ],
+   [
+    37.504425,
+    127.069155
+   ],
+   [
+    37.505492,
+    127.068766
+   ],
+   [
+    37.505706,
+    127.068747
+   ],
+   [
+    37.505492,
+    127.068766
+   ],
+   [
+    37.504425,
+    127.069155
+   ],
+   [
+    37.50387,
+    127.069463
+   ],
+   [
+    37.500718,
+    127.072166
+   ],
+   [
+    37.500136,
+    127.072329
+   ],
+   [
+    37.498262,
+    127.073369
+   ],
+   [
+    37.497298,
+    127.073526
+   ],
+   [
+    37.496642,
+    127.073438
+   ],
+   [
+    37.49563,
+    127.073152
+   ],
+   [
+    37.494399,
+    127.072323
+   ],
+   [
+    37.492485,
+    127.070289
+   ],
+   [
+    37.491578,
+    127.069163
+   ],
+   [
+    37.491026,
+    127.068122
+   ],
+   [
+    37.490646,
+    127.067258
+   ],
+   [
+    37.490203,
+    127.067431
+   ],
+   [
+    37.489924,
+    127.066787
+   ]
+  ],
+  "pet_allowed": true,
+  "pet_rule_note": "리드줄과 배변봉투를 챙기고, 출입 제한 구역은 현장 안내를 따라 주세요.",
+  "facilities": [
+   {
+    "type": "toilets",
+    "lat": 37.4896485,
+    "lng": 127.0666901,
+    "name": "개포근린공원 화장실"
+   }
+  ],
+  "data_sources": {
+   "route": "OSRM 도보 경로 / OpenStreetMap (2026-10-31)",
+   "facilities": "OpenStreetMap Overpass (2026-10-31)",
+   "facilities_unavailable": [],
+   "team_estimates": [
+    "crowd_level",
+    "shade_level",
+    "lighting",
+    "surface_note",
+    "difficulty",
+    "pet_allowed"
+   ],
+   "environment": "OpenStreetMap Overpass (2026-10-31), 경로 10m 간격 측정",
+   "environment_unavailable": []
+  },
+  "environment": {
+   "collected_on": "2026-10-31",
+   "sampled_points": 420,
+   "road": {
+    "pedestrian": 0.981,
+    "local": 0.0,
+    "major": 0.019,
+    "unknown": 0.0
+   },
+   "lit": {
+    "yes": 0.302,
+    "no": 0.0,
+    "unknown": 0.698
+   },
+   "surface": {
+    "paved": 0.921,
+    "unpaved": 0.0,
+    "unknown": 0.079
+   },
+   "trees": 0.0,
+   "park": 0.717
+  }
+ },
+ {
+  "code": "dalteo-forest",
+  "name": "달터근린공원 숲길",
+  "description": "골목을 지나 달터근린공원 숲길을 왕복하는 코스예요. 흙길이 있어요.",
+  "has_park": true,
+  "park_names": [
+   "달터근린공원"
+  ],
+  "lighting": "poor",
+  "is_paved": false,
+  "surface_note": "골목길과 흙길",
+  "crowd_level": "low",
+  "is_familiar": false,
+  "shade_level": 0.8,
+  "difficulty": "moderate",
+  "traffic_exposure": "low",
+  "scenery_tags": [
+   "forest",
+   "hill"
+  ],
+  "area": "서울 강남구 개포동 일대",
+  "start_lat": 37.482037,
+  "start_lng": 127.049474,
+  "distance_km": 2.34,
+  "duration_min": 40,
+  "route": [
+   [
+    37.482037,
+    127.049474
+   ],
+   [
+    37.481722,
+    127.048928
+   ],
+   [
+    37.481828,
+    127.0488
+   ],
+   [
+    37.481501,
+    127.049083
+   ],
+   [
+    37.48117,
+    127.048803
+   ],
+   [
+    37.480905,
+    127.048743
+   ],
+   [
+    37.480342,
+    127.048989
+   ],
+   [
+    37.480386,
+    127.049197
+   ],
+   [
+    37.479962,
+    127.049926
+   ],
+   [
+    37.479677,
+    127.050205
+   ],
+   [
+    37.479757,
+    127.050489
+   ],
+   [
+    37.479735,
+    127.050734
+   ],
+   [
+    37.479355,
+    127.051671
+   ],
+   [
+    37.478832,
+    127.052232
+   ],
+   [
+    37.47873,
+    127.052198
+   ],
+   [
+    37.47858,
+    127.052267
+   ],
+   [
+    37.478485,
+    127.052194
+   ],
+   [
+    37.47858,
+    127.052267
+   ],
+   [
+    37.478684,
+    127.05273
+   ],
+   [
+    37.478433,
+    127.052833
+   ],
+   [
+    37.47766,
+    127.05246
+   ],
+   [
+    37.477385,
+    127.052715
+   ],
+   [
+    37.477241,
+    127.052733
+   ],
+   [
+    37.477352,
+    127.053297
+   ],
+   [
+    37.477247,
+    127.05346
+   ],
+   [
+    37.476378,
+    127.053697
+   ],
+   [
+    37.476238,
+    127.053775
+   ],
+   [
+    37.476127,
+    127.053967
+   ],
+   [
+    37.476481,
+    127.054519
+   ],
+   [
+    37.476127,
+    127.053967
+   ],
+   [
+    37.476238,
+    127.053775
+   ],
+   [
+    37.476378,
+    127.053697
+   ],
+   [
+    37.477247,
+    127.05346
+   ],
+   [
+    37.477352,
+    127.053297
+   ],
+   [
+    37.477241,
+    127.052733
+   ],
+   [
+    37.477385,
+    127.052715
+   ],
+   [
+    37.47766,
+    127.05246
+   ],
+   [
+    37.478433,
+    127.052833
+   ],
+   [
+    37.478684,
+    127.05273
+   ],
+   [
+    37.47858,
+    127.052267
+   ],
+   [
+    37.478485,
+    127.052194
+   ],
+   [
+    37.47858,
+    127.052267
+   ],
+   [
+    37.47873,
+    127.052198
+   ],
+   [
+    37.478832,
+    127.052232
+   ],
+   [
+    37.479355,
+    127.051671
+   ],
+   [
+    37.479735,
+    127.050734
+   ],
+   [
+    37.479757,
+    127.050489
+   ],
+   [
+    37.479677,
+    127.050205
+   ],
+   [
+    37.479962,
+    127.049926
+   ],
+   [
+    37.480386,
+    127.049197
+   ],
+   [
+    37.480342,
+    127.048989
+   ],
+   [
+    37.480905,
+    127.048743
+   ],
+   [
+    37.48117,
+    127.048803
+   ],
+   [
+    37.481501,
+    127.049083
+   ],
+   [
+    37.481828,
+    127.0488
+   ],
+   [
+    37.481722,
+    127.048928
+   ],
+   [
+    37.482037,
+    127.049474
+   ]
+  ],
+  "pet_allowed": true,
+  "pet_rule_note": "리드줄과 배변봉투를 챙기고, 출입 제한 구역은 현장 안내를 따라 주세요.",
+  "facilities": [
+   {
+    "type": "police",
+    "lat": 37.4797493,
+    "lng": 127.051161,
+    "name": "수서경찰서 개포파출소"
+   },
+   {
+    "type": "park",
+    "lat": 37.4788154,
+    "lng": 127.052959,
+    "name": "달터근린공원"
+   }
+  ],
+  "data_sources": {
+   "route": "OSRM 도보 경로 / OpenStreetMap (2026-10-31)",
+   "facilities": "OpenStreetMap Overpass (2026-10-31)",
+   "facilities_unavailable": [],
+   "team_estimates": [
+    "crowd_level",
+    "shade_level",
+    "lighting",
+    "surface_note",
+    "difficulty",
+    "pet_allowed"
+   ],
+   "environment": "OpenStreetMap Overpass (2026-10-31), 경로 10m 간격 측정",
+   "environment_unavailable": []
+  },
+  "environment": {
+   "collected_on": "2026-10-31",
+   "sampled_points": 232,
+   "road": {
+    "pedestrian": 0.655,
+    "local": 0.31,
+    "major": 0.0,
+    "unknown": 0.034
+   },
+   "lit": {
+    "yes": 0.0,
+    "no": 0.0,
+    "unknown": 1.0
+   },
+   "surface": {
+    "paved": 0.0,
+    "unpaved": 0.0,
+    "unknown": 1.0
+   },
+   "trees": 0.858,
+   "park": 0.552
+  }
+ }
+]

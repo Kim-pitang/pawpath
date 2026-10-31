@@ -11,17 +11,20 @@
   parks_<코스코드>.json  공원 기록
   place_<종류>.json      주변 시설
 
-사용법: python3 scripts/enrich_courses.py <입력 폴더>
+사용법: python3 scripts/enrich_courses.py <입력 폴더> [--area gaepo]
 """
+import argparse
 import json
 import math
-import sys
 from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-COURSES_PATH = ROOT / "backend" / "app" / "data" / "courses.json"
-PLACES_PATH = ROOT / "backend" / "app" / "data" / "places.json"
+DATA_DIR = ROOT / "backend" / "app" / "data"
+AREA_FILES = {
+    "mangwon": (DATA_DIR / "courses.json", DATA_DIR / "places.json"),
+    "gaepo": (DATA_DIR / "courses_gaepo.json", DATA_DIR / "places_gaepo.json"),
+}
 
 SAMPLE_M = 10.0
 WAY_MATCH_M = 15.0
@@ -220,9 +223,14 @@ def build_places(folder: Path, today: str) -> dict:
 
 
 def main() -> None:
-    folder = Path(sys.argv[1])
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("folder", type=Path)
+    parser.add_argument("--area", choices=AREA_FILES, default="mangwon")
+    args = parser.parse_args()
+    folder = args.folder
+    courses_path, places_path = AREA_FILES[args.area]
     today = date.today().isoformat()
-    courses = json.loads(COURSES_PATH.read_text(encoding="utf-8"))
+    courses = json.loads(courses_path.read_text(encoding="utf-8"))
     for course in courses:
         # 경로가 공원을 지나지 않으므로 '공원 포함'이 아니다. 공원 이름은 주변 표시에 쓴다.
         if course["code"] == "mangwon-forest":
@@ -244,10 +252,10 @@ def main() -> None:
             f"{course['code']:<22} 보행 {road.get('pedestrian', 0):.0%} 생활 {road.get('local', 0):.0%} 큰길 {road.get('major', 0):.0%} 미상 {road.get('unknown', 0):.0%}"
             f" | 조명 기록 {lit.get('yes', 0) + lit.get('no', 0):.0%} | 나무 {environment.get('trees')} | 공원 {environment.get('park')} | 누락 {missing or '없음'}"
         )
-    COURSES_PATH.write_text(json.dumps(courses, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    courses_path.write_text(json.dumps(courses, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
 
     places = build_places(folder, today)
-    PLACES_PATH.write_text(json.dumps(places, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    places_path.write_text(json.dumps(places, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     counts: dict[str, int] = {}
     for place in places["places"]:
         counts[place["type"]] = counts.get(place["type"], 0) + 1

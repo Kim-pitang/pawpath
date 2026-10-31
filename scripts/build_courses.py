@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""망원동 일대 산책 코스 시드 데이터를 만든다.
+"""지역별 산책 코스 시드 데이터를 만든다. 지역: mangwon(기본), gaepo.
 
 경유지는 팀이 정하고, 실제 경로와 거리는 OSRM 도보 경로로, 경로 주변 시설은
-OpenStreetMap(Overpass)에서 가져온다. 결과는 backend/app/data/courses.json에 저장하므로
+OpenStreetMap(Overpass)에서 가져온다. 결과는 backend/app/data/의 JSON에 저장하므로
 앱은 실행 중 이 외부 서비스에 의존하지 않는다.
 
 OSM에 없는 혼잡도, 그늘, 조명, 차량 노출은 팀 추정값이며 data_sources에 그렇게 기록한다.
 
-사용법: python3 scripts/build_courses.py [--cache-dir DIR]
+사용법: python3 scripts/build_courses.py [--area gaepo] [--cache-dir DIR]
 """
 import argparse
 import json
@@ -19,6 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT = ROOT / "backend" / "app" / "data" / "courses.json"
+GAEPO_OUTPUT = ROOT / "backend" / "app" / "data" / "courses_gaepo.json"
 
 OVERPASS_MIRRORS = [
     "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
@@ -26,16 +27,22 @@ OVERPASS_MIRRORS = [
 ]
 OSRM_FOOT = "https://routing.openstreetmap.de/routed-foot/route/v1/foot"
 BBOX = "37.545,126.893,37.572,126.930"
-FACILITY_QUERIES = {
-    "toilets": f'nwr["amenity"="toilets"]({BBOX});out tags center;',
-    "veterinary": f'nwr["amenity"="veterinary"]({BBOX});out tags center;',
-    "drinking_water": f'nwr["amenity"="drinking_water"]({BBOX});out tags center;',
-    "bench": f'nwr["amenity"="bench"]({BBOX});out tags center;',
-    "waste_basket": f'nwr["amenity"="waste_basket"]({BBOX});out tags center;',
-    "police": f'nwr["amenity"="police"]({BBOX});out tags center;',
-    "surveillance": f'node["man_made"="surveillance"]({BBOX});out;',
-    "park": f'nwr["leisure"="park"]({BBOX});out tags center;',
-}
+GAEPO_BBOX = "37.472,127.045,37.512,127.082"
+
+
+def facility_queries(bbox: str) -> dict[str, str]:
+    return {
+        "toilets": f'nwr["amenity"="toilets"]({bbox});out tags center;',
+        "veterinary": f'nwr["amenity"="veterinary"]({bbox});out tags center;',
+        "drinking_water": f'nwr["amenity"="drinking_water"]({bbox});out tags center;',
+        "bench": f'nwr["amenity"="bench"]({bbox});out tags center;',
+        "waste_basket": f'nwr["amenity"="waste_basket"]({bbox});out tags center;',
+        "police": f'nwr["amenity"="police"]({bbox});out tags center;',
+        "surveillance": f'node["man_made"="surveillance"]({bbox});out;',
+        "park": f'nwr["leisure"="park"]({bbox});out tags center;',
+    }
+
+
 # 파일 이름 하위 호환: 조사 단계에서 받아 둔 캐시도 그대로 쓴다.
 CACHE_ALIASES = {"veterinary": "vets", "drinking_water": "water", "bench": "benches", "waste_basket": "waste", "surveillance": "cctv", "park": "parks"}
 FACILITY_RADIUS_M = {"veterinary": 200}
@@ -146,17 +153,86 @@ COURSES = [
     },
 ]
 
+# 발표 장소(개포디지털혁신파크 새롬관) 근처. 실제 GPS로 걸어 볼 수 있게 만든 코스다.
+GAEPO_COURSES = [
+    {
+        "code": "gaepo-park",
+        "name": "개포동 근린공원 양재천변 코스",
+        "description": "개포디지털혁신파크 옆 개포동 근린공원을 지나 양재천 강변길을 짧게 다녀오는 코스예요.",
+        "waypoints": [(37.48956, 127.06642), (37.48991, 127.06783), (37.49135, 127.07005), (37.48991, 127.06783), (37.48956, 127.06642)],
+        "has_park": True, "park_names": ["개포동 근린공원"],
+        "lighting": "partial", "is_paved": True, "surface_note": "공원 흙길 일부와 포장 강변길", "crowd_level": "low",
+        "is_familiar": True, "shade_level": 0.5, "difficulty": "easy", "traffic_exposure": "low",
+        "scenery_tags": ["park", "stream"],
+    },
+    {
+        "code": "gaepo-alley",
+        "name": "개포로88길 골목 코스",
+        "description": "개포로82길과 개포로88길을 따라 근린공원 앞까지 다녀오는 동네 코스예요.",
+        "waypoints": [(37.48888, 127.06821), (37.48722, 127.07087), (37.48700, 127.07200), (37.48722, 127.07087), (37.48888, 127.06821)],
+        "has_park": False, "park_names": [],
+        "lighting": "partial", "is_paved": True, "surface_note": "포장 골목길", "crowd_level": "low",
+        "is_familiar": True, "shade_level": 0.3, "difficulty": "easy", "traffic_exposure": "medium",
+        "scenery_tags": ["residential"],
+    },
+    {
+        "code": "yangjae-bridge",
+        "name": "양재천 영동6교 왕복",
+        "description": "개포동 근린공원 옆에서 양재천 강변길을 따라 영동6교 쪽까지 왕복하는 코스예요.",
+        "waypoints": [(37.48992, 127.06679), (37.4935, 127.0725), (37.48992, 127.06679)],
+        "has_park": True, "park_names": [],
+        "lighting": "partial", "is_paved": True, "surface_note": "포장 강변길, 자전거길과 나란함", "crowd_level": "medium",
+        "is_familiar": True, "shade_level": 0.2, "difficulty": "easy", "traffic_exposure": "low",
+        "scenery_tags": ["stream", "open", "park"],
+    },
+    {
+        "code": "yangjae-west",
+        "name": "양재천 서쪽 강변 왕복",
+        "description": "개포로에서 양재천 강변길을 따라 서쪽으로 다녀오는 코스예요.",
+        "waypoints": [(37.48939, 127.0637), (37.48467, 127.05204), (37.48939, 127.0637)],
+        "has_park": False, "park_names": [],
+        "lighting": "partial", "is_paved": True, "surface_note": "포장 강변길, 자전거길과 나란함", "crowd_level": "medium",
+        "is_familiar": False, "shade_level": 0.2, "difficulty": "easy", "traffic_exposure": "low",
+        "scenery_tags": ["stream", "open"],
+    },
+    {
+        "code": "yangjae-tancheon",
+        "name": "양재천 탄천 종주 코스",
+        "description": "양재천 강변길에서 탄천 자전거길까지 길게 왕복하는, 활동량 많은 아이를 위한 코스예요. 자전거를 조심해 주세요.",
+        "waypoints": [(37.48992, 127.06679), (37.5058, 127.0696), (37.48992, 127.06679)],
+        "has_park": True, "park_names": [],
+        "lighting": "partial", "is_paved": True, "surface_note": "포장 강변길과 자전거길", "crowd_level": "medium",
+        "is_familiar": False, "shade_level": 0.1, "difficulty": "easy", "traffic_exposure": "low",
+        "scenery_tags": ["stream", "open", "park"],
+    },
+    {
+        "code": "dalteo-forest",
+        "name": "달터근린공원 숲길",
+        "description": "골목을 지나 달터근린공원 숲길을 왕복하는 코스예요. 흙길이 있어요.",
+        "waypoints": [(37.48214, 127.04968), (37.4783, 127.0524), (37.4765, 127.0545), (37.4783, 127.0524), (37.48214, 127.04968)],
+        "has_park": True, "park_names": ["달터근린공원"],
+        "lighting": "poor", "is_paved": False, "surface_note": "골목길과 흙길", "crowd_level": "low",
+        "is_familiar": False, "shade_level": 0.8, "difficulty": "moderate", "traffic_exposure": "low",
+        "scenery_tags": ["forest", "hill"],
+    },
+]
+
+AREAS = {
+    "mangwon": {"label": "서울 마포구 망원동 일대", "bbox": BBOX, "courses": COURSES, "output": OUTPUT},
+    "gaepo": {"label": "서울 강남구 개포동 일대", "bbox": GAEPO_BBOX, "courses": GAEPO_COURSES, "output": GAEPO_OUTPUT},
+}
+
 
 def curl_json(args: list[str], timeout: int) -> dict:
     command = ["curl", "-s", "-f", "-m", str(timeout), "-A", "PawPath-hackathon/0.1", *args]
     return json.loads(subprocess.run(command, capture_output=True, check=True).stdout)
 
 
-def fetch_facilities(cache_dir: Path) -> tuple[dict[str, list[dict]], list[str]]:
+def fetch_facilities(cache_dir: Path, bbox: str) -> tuple[dict[str, list[dict]], list[str]]:
     """시설 종류별 좌표를 가져온다. 끝내 못 받은 종류는 목록으로 돌려줘 출처에 기록한다."""
     results: dict[str, list[dict]] = {}
     missing: list[str] = []
-    for kind, body in FACILITY_QUERIES.items():
+    for kind, body in facility_queries(bbox).items():
         cached = cache_dir / f"osm_{CACHE_ALIASES.get(kind, kind)}.json"
         data = json.loads(cached.read_text()) if cached.exists() else None
         for attempt in range(2 if data is None else 0):
@@ -241,11 +317,11 @@ def simplify(points: list[list[float]], tolerance_m: float = 4.0) -> list[list[f
     return [points[i] for i in sorted(keep)]
 
 
-def build(cache_dir: Path) -> list[dict]:
-    facilities, missing = fetch_facilities(cache_dir)
+def build(cache_dir: Path, area: dict) -> list[dict]:
+    facilities, missing = fetch_facilities(cache_dir, area["bbox"])
     today = date.today().isoformat()
     built = []
-    for definition in COURSES:
+    for definition in area["courses"]:
         waypoints = definition["waypoints"]
         route_data = route_for(waypoints)
         full_route = [[round(lat, 6), round(lng, 6)] for lng, lat in route_data["geometry"]["coordinates"]]
@@ -262,7 +338,7 @@ def build(cache_dir: Path) -> list[dict]:
                     nearby.append({"type": kind, **point})
         record = {key: value for key, value in definition.items() if key != "waypoints"}
         record.update(
-            area="서울 마포구 망원동 일대",
+            area=area["label"],
             start_lat=full_route[0][0],
             start_lng=full_route[0][1],
             distance_km=distance_km,
@@ -287,13 +363,17 @@ def build(cache_dir: Path) -> list[dict]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--area", choices=AREAS, default="mangwon")
     parser.add_argument("--cache-dir", type=Path, default=ROOT / ".osm_cache")
     args = parser.parse_args()
-    args.cache_dir.mkdir(parents=True, exist_ok=True)
-    courses = build(args.cache_dir)
-    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT.write_text(json.dumps(courses, ensure_ascii=False, indent=1) + "\n")
-    print(f"{len(courses)}개 코스 저장: {OUTPUT}")
+    area = AREAS[args.area]
+    # 시설 캐시 파일 이름이 지역과 무관하므로 망원동 외 지역은 하위 폴더를 쓴다.
+    cache_dir = args.cache_dir if args.area == "mangwon" else args.cache_dir / args.area
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    courses = build(cache_dir, area)
+    area["output"].parent.mkdir(parents=True, exist_ok=True)
+    area["output"].write_text(json.dumps(courses, ensure_ascii=False, indent=1) + "\n")
+    print(f"{len(courses)}개 코스 저장: {area['output']}")
 
 
 if __name__ == "__main__":

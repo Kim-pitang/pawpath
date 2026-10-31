@@ -109,7 +109,7 @@
 
 ### `GET /courses` · `GET /courses/{course_id}`
 
-코스 정보, 경로(`route`: `[위도, 경도]` 배열), 시설(`facilities`), 출처(`data_sources`)를 돌려줍니다.
+코스 정보, 경로(`route`: `[위도, 경도]` 배열), 시설(`facilities`), 출처(`data_sources`)를 돌려줍니다. 목록은 서버 설정 `SERVICE_AREA` 지역의 코스만 돌려주고, 번호로 조회하면 지역과 관계없이 돌려줍니다.
 
 ### `POST /courses/{course_id}/approach`
 

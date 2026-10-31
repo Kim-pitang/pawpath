@@ -6,7 +6,8 @@ from pathlib import Path
 
 from app.models import WalkingCourse
 
-PLACES_PATH = Path(__file__).parent.parent / "data" / "places.json"
+DATA_DIR = Path(__file__).parent.parent / "data"
+PLACES_PATHS = (DATA_DIR / "places.json", DATA_DIR / "places_gaepo.json")
 
 PLACE_LABELS = {
     "park": "공원",
@@ -24,9 +25,16 @@ MAX_RESULTS = 40
 
 @lru_cache
 def load_places() -> dict:
-    if not PLACES_PATH.exists():
+    """지역별 자료를 합친다. 결과는 코스 경로와의 거리로 거르므로 다른 지역 장소는 나오지 않는다."""
+    loaded = [json.loads(path.read_text(encoding="utf-8")) for path in PLACES_PATHS if path.exists()]
+    if not loaded:
         return {"collected_on": None, "places": [], "unavailable_types": list(PLACE_LABELS)}
-    return json.loads(PLACES_PATH.read_text(encoding="utf-8"))
+    return {
+        "collected_on": max(data["collected_on"] for data in loaded),
+        "source": "OpenStreetMap",
+        "places": [place for data in loaded for place in data["places"]],
+        "unavailable_types": sorted({kind for data in loaded for kind in data["unavailable_types"]}),
+    }
 
 
 def _distance_to_route_m(lat: float, lng: float, route: list[list[float]]) -> float:

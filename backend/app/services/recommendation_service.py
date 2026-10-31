@@ -61,6 +61,12 @@ def to_profile(pet: Pet) -> PetProfile:
     )
 
 
+def active_courses(db: Session) -> list[WalkingCourse]:
+    """지금 서비스 지역의 코스. 멀리 떨어진 지역의 코스가 추천에 섞이지 않게 한다."""
+    area = get_settings().service_area_label
+    return list(db.scalars(select(WalkingCourse).where(WalkingCourse.area == area).order_by(WalkingCourse.id)))
+
+
 def to_course_data(course: WalkingCourse) -> CourseData:
     return CourseData(
         id=course.id,
@@ -267,7 +273,7 @@ def create_recommendation(db: Session, pet: Pet, user: User, scenario: str, now:
     schedule = to_schedule(user)
     weather = get_weather(db, now, schedule.windows, scenario)
     state = load_state(db, pet)
-    courses = list(db.scalars(select(WalkingCourse).order_by(WalkingCourse.id)))
+    courses = active_courses(db)
 
     result = recommend(
         pet=to_profile(pet),
