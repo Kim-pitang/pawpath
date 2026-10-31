@@ -13,6 +13,7 @@ import type { AccountSummary } from '../lib/types';
 const CONFIRM_WORD = '탈퇴';
 const INPUT_CLASS = 'mt-1.5 min-h-12 w-full rounded-2xl border border-line bg-white px-4 text-base outline-none focus:border-leaf-500';
 const DATA_LABELS: { key: keyof AccountSummary['data']; label: string; unit: string }[] = [
+  { key: 'profiles', label: '대표 말고 더 만든 프로필', unit: '개' },
   { key: 'pets', label: '반려동물', unit: '마리' },
   { key: 'walks', label: '산책 기록', unit: '건' },
   { key: 'feedback', label: '피드백', unit: '건' },
@@ -26,7 +27,7 @@ const DATA_LABELS: { key: keyof AccountSummary['data']; label: string; unit: str
 ];
 
 export default function AccountPage() {
-  const { account, leaveAccount } = useApp();
+  const { account, leaveAccount, refreshAccount } = useApp();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [summary, setSummary] = useState<AccountSummary | null>(null);
@@ -36,6 +37,8 @@ export default function AccountPage() {
   const [error, setError] = useState<string | null>(GOOGLE_ERRORS[params.get('error') ?? ''] ?? null);
   const [busy, setBusy] = useState(false);
   const signedIn = account?.authenticated ?? false;
+  const [accountName, setAccountName] = useState<string | null>(null);
+  const [nameNotice, setNameNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!signedIn) return;
@@ -79,10 +82,48 @@ export default function AccountPage() {
     }
   };
 
-  const rows = DATA_LABELS.filter(({ key }) => summary.data[key] > 0);
+  const rows = DATA_LABELS.filter(({ key }) => (summary.data[key] ?? 0) > 0);
+  const name = accountName ?? account?.user?.name ?? '';
+
+  const rename = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setNameNotice(null);
+    try {
+      await api.updateAccount(name.trim());
+      await refreshAccount();
+      setAccountName(null);
+      setNameNotice('계정 이름을 바꿨어요.');
+    } catch (failure) {
+      setNameNotice((failure as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4">
-      <PageTitle>계정 관리</PageTitle>
+      <PageTitle sub="로그인과 탈퇴는 대표 계정 단위예요. 프로필 이름과 아바타는 프로필 관리에서 바꿔요.">계정 관리</PageTitle>
+
+      <Card>
+        <SectionTitle>대표 계정</SectionTitle>
+        <p className="mb-3 text-sm text-ink-soft" data-testid="account-login">
+          {summary.provider === 'google' ? `Google 계정 (${account?.user?.email ?? 'Google'})` : `로그인: ${account?.user?.login_id ?? account?.user?.email ?? ''}`}
+        </p>
+        <form onSubmit={rename} className="flex flex-col gap-3" noValidate>
+          <label className="text-sm font-semibold">
+            계정 이름
+            <input className={INPUT_CLASS} value={name} maxLength={30} onChange={(event) => setAccountName(event.target.value)} />
+          </label>
+          {nameNotice && <p className="text-sm text-ink-soft" role="status">{nameNotice}</p>}
+          <Button type="submit" variant="ghost" disabled={busy || !name.trim() || name.trim() === account?.user?.name}>
+            계정 이름 저장
+          </Button>
+        </form>
+        <LinkButton to="/profiles?manage=1" variant="ghost" className="mt-2 w-full">
+          프로필 관리 ({account?.profiles?.length ?? 1}/{account?.max_profiles ?? 5})
+        </LinkButton>
+      </Card>
 
       <Card>
         <SectionTitle>로그인 유지</SectionTitle>

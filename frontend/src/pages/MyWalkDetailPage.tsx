@@ -36,6 +36,7 @@ export default function MyWalkDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const id = Number(walkId);
+  const { profiles } = useApp();
 
   useEffect(() => {
     api.getSavedWalk(id).then(setWalk).catch((loadError: Error) => setError(loadError.message));
@@ -44,6 +45,8 @@ export default function MyWalkDetailPage() {
   const route = useMemo(() => (walk?.route ?? []) as LatLng[][], [walk?.route]);
 
   if (!walk) return error ? <ErrorNotice message={error} /> : <Loading />;
+  // 가족의 산책길은 함께 보지만 고치고 공유하는 것은 만든 프로필이나 대표 프로필만 한다. 서버도 같은 규칙으로 막는다.
+  const manageable = walk.can_manage !== false;
 
   const saveEdit = async () => {
     if (!editing) return;
@@ -100,14 +103,21 @@ export default function MyWalkDetailPage() {
           <Chip tone={walk.visibility === 'private' ? 'neutral' : 'leaf'}>{VISIBILITY_LABELS[walk.visibility]}</Chip>
           <Chip>{WALK_SOURCE_LABELS[walk.source_type]}</Chip>
           {walk.pet_name && <Chip>{walk.pet_name}</Chip>}
+          {walk.profile && profiles.length > 1 && <Chip>{walk.profile.name}{walk.profile.deleted ? ' (지운 프로필)' : ''}</Chip>}
           <Chip>지점 {walk.point_count.toLocaleString()}개</Chip>
         </div>
         {walk.memo && <p className="mt-3 whitespace-pre-wrap rounded-2xl bg-cream p-3 text-sm text-ink-soft">{walk.memo}</p>}
       </Card>
 
-      <WalkPhotos walk={walk} onChange={setWalk} />
+      {!manageable && (
+        <InfoNotice>
+          {walk.profile?.name ?? '다른 가족'}님이 만든 산책길이에요. 보고 GPX로 내려받을 수 있지만, 고치고 공유하는 것은 만든 프로필이나 대표 프로필만 할 수 있어요.
+        </InfoNotice>
+      )}
 
-      <CourseCandidatePanel walk={walk} onChange={setWalk} />
+      <WalkPhotos walk={walk} onChange={setWalk} readOnly={!manageable} />
+
+      {manageable && <CourseCandidatePanel walk={walk} onChange={setWalk} />}
 
       <a
         href={api.savedWalkGpxUrl(id)}
@@ -118,11 +128,11 @@ export default function MyWalkDetailPage() {
         GPX 다운로드
       </a>
 
-      <CommunityPanel walk={walk} />
+      {manageable && <CommunityPanel walk={walk} />}
 
-      <SharePanel walk={walk} onChange={setWalk} onError={setError} />
+      {manageable && <SharePanel walk={walk} onChange={setWalk} onError={setError} />}
 
-      {editing ? (
+      {!manageable ? null : editing ? (
         <Card>
           <SectionTitle>산책길 수정</SectionTitle>
           <WalkDetailsForm value={editing} onChange={setEditing} />

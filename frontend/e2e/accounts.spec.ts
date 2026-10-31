@@ -28,6 +28,10 @@ async function signUpInBrowser(page: Page, loginId: string, name = '새 보호�
   await page.getByLabel('비밀번호').fill(PASSWORD);
   await page.getByLabel('이름', { exact: true }).fill(name);
   await page.getByRole('button', { name: '가입하고 시작하기' }).click();
+  // 가입하면 대표 프로필의 이름과 아바타를 정한다. 계정 이름이 미리 채워져 있다.
+  await expect(page.getByRole('heading', { name: '내 프로필을 정해 주세요' })).toBeVisible();
+  await expect(page.getByLabel('프로필 이름')).toHaveValue(name);
+  await page.getByRole('button', { name: '시작하기', exact: true }).click();
 }
 
 /** 브라우저 캔버스로 만든 진짜 JPEG. */

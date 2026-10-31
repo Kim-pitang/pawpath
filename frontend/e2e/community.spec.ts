@@ -246,6 +246,8 @@ test.describe('로그인하지 않은 사용자', () => {
     await page.getByLabel('비밀번호').fill(PASSWORD);
     await page.getByLabel('이름').fill('새 보호자');
     await page.getByRole('button', { name: '가입하고 시작하기' }).click();
+    // 가입하면 대표 프로필을 정한 뒤 원래 보던 산책길로 돌아온다.
+    await page.getByRole('button', { name: '시작하기', exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/community/trails/${trail.id}$`));
     await expect(page.getByTestId('review-form')).toBeVisible();
   });

@@ -2,6 +2,7 @@ import { CalendarCheck, Home, Map as MapIcon, PawPrint, Sparkles, UsersRound } f
 import { Link, Navigate, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { PawPathMark, Wordmark } from './Logo';
+import ProfileMenu from './ProfileMenu';
 
 const NAV_ITEMS = [
   { to: '/', label: '홈', icon: Home, end: true },
@@ -13,12 +14,14 @@ const NAV_ITEMS = [
 ];
 
 export default function Layout() {
-  const { selectedPet, account } = useApp();
+  const { selectedPet, account, profileEpoch } = useApp();
   const location = useLocation();
   const here = location.pathname + location.search;
 
   // 로그인 필수 서버에서 로그인하지 않았으면 로그인 화면으로 보낸다.
   if (account?.auth_required && !account.authenticated) return <Navigate to="/login" replace state={{ from: here }} />;
+  // 프로필이 여럿인데 아직 고르지 않았으면 누구의 산책인지 먼저 고른다.
+  if (account?.authenticated && account.profile_required) return <Navigate to="/profiles" replace state={{ from: here }} />;
 
   return (
     <div className="min-h-dvh pb-24 md:pb-10">
@@ -44,7 +47,8 @@ export default function Layout() {
               </NavLink>
             ))}
           </nav>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <ProfileMenu />
             {account && !account.authenticated && (
               <Link to="/login" state={{ from: here }} className="flex min-h-9 items-center px-1 text-sm font-semibold text-leaf-800 underline">
                 로그인
@@ -64,7 +68,8 @@ export default function Layout() {
       </header>
 
       <main className="mx-auto max-w-md px-4 pt-4 md:max-w-5xl">
-        <Outlet />
+        {/* 프로필을 바꾸면 화면을 새로 그려 이전 프로필의 기록과 입력이 남지 않게 한다. */}
+        <Outlet key={profileEpoch} />
       </main>
 
       <nav

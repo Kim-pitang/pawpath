@@ -5,8 +5,8 @@ import { MAX_PHOTOS, PHOTO_PRIVACY_NOTE, prepareImage } from '../lib/photos';
 import type { SavedWalkDetail } from '../lib/types';
 import { Card, ErrorNotice, SectionTitle } from './ui';
 
-/** 저장한 산책길의 사진. 주인만 볼 수 있다. */
-export default function WalkPhotos({ walk, onChange }: { walk: SavedWalkDetail; onChange: (walk: SavedWalkDetail) => void }) {
+/** 저장한 산책길의 사진. 가족만 볼 수 있고, readOnly면 올리거나 지우지 못한다. */
+export default function WalkPhotos({ walk, onChange, readOnly = false }: { walk: SavedWalkDetail; onChange: (walk: SavedWalkDetail) => void; readOnly?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,17 +62,17 @@ export default function WalkPhotos({ walk, onChange }: { walk: SavedWalkDetail; 
                 data-testid="walk-photo"
               />
             </a>
-            <button
+            {!readOnly && <button
               type="button"
               onClick={() => void remove(photo.id, index)}
               aria-label={`사진 ${index + 1} 삭제`}
               className="absolute top-1 right-1 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-ink shadow"
             >
               <Trash2 size={14} aria-hidden />
-            </button>
+            </button>}
           </div>
         ))}
-        {walk.photos.length < MAX_PHOTOS && (
+        {!readOnly && walk.photos.length < MAX_PHOTOS && (
           <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed border-line text-xs font-semibold text-ink-soft hover:bg-leaf-50">
             <ImagePlus size={20} className="text-leaf-500" aria-hidden />
             {busy ? '올리는 중' : '사진 추가'}
@@ -80,6 +80,7 @@ export default function WalkPhotos({ walk, onChange }: { walk: SavedWalkDetail; 
           </label>
         )}
       </div>
+      {readOnly && walk.photos.length === 0 && <p className="text-sm text-ink-muted">사진이 없어요.</p>}
       <p className="mt-2 text-xs text-ink-muted">{PHOTO_PRIVACY_NOTE}</p>
       {error && (
         <div className="mt-2">

@@ -3,17 +3,21 @@ import DivergingBars from '../components/charts/DivergingBars';
 import HBarChart from '../components/charts/HBarChart';
 import ScoreTrendChart from '../components/charts/ScoreTrendChart';
 import AccountCard from '../components/AccountCard';
-import { Card, EmptyState, ErrorNotice, InfoNotice, LinkButton, Loading, PageTitle, SectionTitle } from '../components/ui';
+import FamilyMenu from '../components/FamilyMenu';
+import { Card, ChoiceGroup, EmptyState, ErrorNotice, InfoNotice, LinkButton, Loading, PageTitle, SectionTitle } from '../components/ui';
 import { useApp } from '../context/AppContext';
 import { api } from '../lib/api';
 import { dateTimeLabel } from '../lib/format';
-import type { Insights } from '../lib/types';
+import type { Insights, WalkScope } from '../lib/types';
 
 export default function MyPage() {
-  const { selectedPet, petsLoaded } = useApp();
+  const { selectedPet, petsLoaded, currentProfile, profiles } = useApp();
   const [insights, setInsights] = useState<Insights | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 활동 통계는 지금 프로필 기준이고, 가족 전체로 바꿔 볼 수 있다. 취향 분석은 늘 가족이 함께 쌓은 값이다.
+  const [scope, setScope] = useState<WalkScope>('profile');
   const petId = selectedPet?.id;
+  const shared = profiles.length > 1;
 
   useEffect(() => {
     if (!petId) return;
@@ -22,13 +26,13 @@ export default function MyPage() {
     // 계정이 바뀌어 반려동물이 달라지면 이전 오류를 남기지 않는다.
     setError(null);
     api
-      .insights(petId)
+      .insights(petId, scope)
       .then((result) => active && setInsights(result))
       .catch((loadError: Error) => active && setError(loadError.message));
     return () => {
       active = false;
     };
-  }, [petId]);
+  }, [petId, scope]);
 
   // 날씨가 다르면 점수 변화의 원인을 알 수 없으므로, 최신 추천과 같은 날씨 조건끼리만 비교한다.
   const trend = useMemo(() => {
@@ -41,6 +45,7 @@ export default function MyPage() {
     return (
       <div className="flex flex-col gap-4">
         <AccountCard />
+        <FamilyMenu />
         <LinkButton to="/community/my" variant="ghost">
           내 산책길 관리 (커뮤니티)
         </LinkButton>
@@ -62,8 +67,22 @@ export default function MyPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <PageTitle sub="산책이 쌓일수록 추천이 똑똑해져요.">{insights.pet_name}의 산책 리포트</PageTitle>
+      <PageTitle sub={shared && currentProfile ? `${scope === 'family' ? '가족 전체' : `${currentProfile.name}님`} 기준 통계예요. 취향 분석은 가족이 남긴 피드백으로 배워요.` : '산책이 쌓일수록 추천이 똑똑해져요.'}>
+        {insights.pet_name}의 산책 리포트
+      </PageTitle>
       <AccountCard />
+      <FamilyMenu />
+      {shared && (
+        <ChoiceGroup
+          label="누구의 산책을 볼까요?"
+          value={scope}
+          options={[
+            { value: 'profile', label: `${currentProfile?.name ?? '내'} 기록` },
+            { value: 'family', label: '가족 전체' },
+          ]}
+          onChange={setScope}
+        />
+      )}
 
       <div className="grid grid-cols-2 gap-2">
         <LinkButton to="/report" variant="ghost" className="!px-2">

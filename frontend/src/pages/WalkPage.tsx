@@ -23,7 +23,7 @@ const WHEN_OPTIONS: { value: When; label: string }[] = [
 const toInputValue = (ms: number) => toLocalIso(new Date(ms)).slice(0, 16);
 
 export default function WalkPage() {
-  const { selectedPet, petsLoaded, invalidateRecommendations, refreshPets } = useApp();
+  const { selectedPet, petsLoaded, invalidateRecommendations, refreshPets, currentProfile, profiles } = useApp();
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -149,7 +149,7 @@ export default function WalkPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <PageTitle sub="피드백이 다음 추천을 바꿔요.">산책 기록</PageTitle>
+      <PageTitle sub={profiles.length > 1 && currentProfile ? `${currentProfile.name}님의 산책 기록이에요. 피드백이 다음 추천을 바꿔요.` : '피드백이 다음 추천을 바꿔요.'}>산책 기록</PageTitle>
       {error && <ErrorNotice message={error} />}
 
       <div>

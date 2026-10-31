@@ -32,7 +32,12 @@ export default function SessionExpiredDialog() {
     setBusy(true);
     setError(null);
     try {
-      await api.login({ login_id: expired.login_id ?? '', password });
+      const account = await api.login({ login_id: expired.login_id ?? '', password });
+      // 새 세션은 프로필을 고르지 않은 상태라, 쓰던 프로필이 아직 이 계정에 있으면 다시 고른다. 서버가 소속을 확인한다.
+      const previous = expired.profile_id;
+      if (account.profile_required && previous && account.profiles?.some((profile) => profile.id === previous)) {
+        await api.selectProfile(previous).catch(() => undefined);
+      }
       await refreshAccount();
       setPassword('');
     } catch (submitError) {
@@ -74,7 +79,7 @@ export default function SessionExpiredDialog() {
         ) : (
           <form onSubmit={submit} className="flex flex-col gap-3" noValidate>
             <p className="text-sm">
-              <span className="text-ink-muted">아이디</span> <span className="font-bold" data-testid="expired-login-id">{expired.login_id}</span>
+              <span className="text-ink-muted">{expired.login_id?.includes('@') ? '이메일' : '아이디'}</span> <span className="font-bold" data-testid="expired-login-id">{expired.login_id}</span>
             </p>
             {/* 비밀번호 관리자가 어느 계정인지 알 수 있게 아이디를 함께 둔다. */}
             <input type="text" name="username" autoComplete="username" value={expired.login_id ?? ''} readOnly hidden />

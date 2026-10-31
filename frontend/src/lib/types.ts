@@ -325,6 +325,8 @@ export interface Walk {
   is_simulated: boolean;
   /** 커뮤니티 산책길로 걸었으면 그 번호. 산책을 마친 뒤 후기로 잇는다. */
   community_trail_id?: number | null;
+  /** 산책을 한 프로필. */
+  profile?: ProfileBrief | null;
 }
 
 export interface Insights {
@@ -515,6 +517,8 @@ export interface SavedWalkSummary {
   id: number;
   pet_id: number | null;
   pet_name: string | null;
+  /** 산책길을 만든 프로필. */
+  profile?: ProfileBrief | null;
   title: string;
   source_type: WalkSourceType;
   started_at: string;
@@ -554,6 +558,8 @@ export interface SavedWalkDetail extends SavedWalkSummary {
   share_memo: boolean;
   route: number[][][];
   photos: WalkPhoto[];
+  /** 지금 프로필이 고치고 지울 수 있으면 참이다. 만든 프로필이나 대표 프로필만 할 수 있다. */
+  can_manage?: boolean;
 }
 
 export interface SharedWalk {
@@ -609,6 +615,8 @@ export interface AccountSummary {
   session_expires_at: string;
   session_idle_days: number;
   data: {
+    /** 대표 프로필 말고 더 만든 프로필 수. */
+    profiles?: number;
     pets: number;
     walks: number;
     feedback: number;
@@ -629,6 +637,54 @@ export interface Account {
   auth_required: boolean;
   google_enabled: boolean;
   user: AccountUser | null;
+  /** 아래는 예전 서버나 로그인하지 않은 상태에서는 비어 있을 수 있다. */
+  profiles?: Profile[];
+  max_profiles?: number;
+  /** 이 세션에서 쓰는 프로필. 서버가 계정 소속을 확인한 값이다. */
+  current_profile?: Profile | null;
+  /** 프로필이 여러 개인데 아직 고르지 않았으면 참이다. */
+  profile_required?: boolean;
+}
+
+export type AvatarKey = 'paw' | 'bone' | 'sun' | 'moon' | 'leaf' | 'heart' | 'star' | 'flower';
+export type WalkScope = 'profile' | 'family';
+
+/** 대표 계정 안의 보호자 프로필. 따로 로그인하지 않는다. */
+export interface Profile {
+  id: number;
+  name: string;
+  avatar_key: AvatarKey;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+  last_active_at: string | null;
+}
+/** 기록에 붙는 프로필. 지운 프로필도 이름이 남는다. */
+export interface ProfileBrief {
+  id: number;
+  name: string;
+  avatar_key: AvatarKey;
+  is_default: boolean;
+  deleted: boolean;
+}
+export interface ProfileActivity {
+  walk_count: number;
+  total_distance_km: number;
+  total_minutes: number;
+  saved_walk_count: number;
+  simulated_walk_count: number;
+  last_walk_at: string | null;
+}
+export interface ProfileDetail extends Profile {
+  activity: ProfileActivity;
+}
+export interface FamilyOverview {
+  profile_count: number;
+  max_profiles: number;
+  totals: ProfileActivity;
+  members: { profile: ProfileBrief; last_active_at: string | null; activity: ProfileActivity }[];
+  pets: { id: number; name: string; breed: string; walk_count: number }[];
+  recent_walks: Walk[];
 }
 
 // 산책길 커뮤니티

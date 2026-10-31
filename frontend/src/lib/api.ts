@@ -5,6 +5,7 @@ import type {
   Approach,
   Course,
   CurrentWeather,
+  FamilyOverview,
   Feedback,
   FeedbackInput,
   ForecastWeather,
@@ -17,6 +18,8 @@ import type {
   Paged,
   Pet,
   PetInput,
+  Profile,
+  ProfileDetail,
   PublicWalk,
   Recommendation,
   RouteResult,
@@ -40,6 +43,7 @@ import type {
   Walk,
   WalkPhoto,
   WalkReport,
+  WalkScope,
   WeatherScenario,
 } from './types';
 
@@ -60,6 +64,13 @@ let recoverSession: () => Promise<boolean> = async () => false;
 /** 401을 받으면 부른다. 앱이 다시 로그인을 받아 같은 보호자로 돌아오면 참을 돌려주고, 요청을 다시 보낸다. */
 export function setSessionRecovery(handler: () => Promise<boolean>) {
   recoverSession = handler;
+}
+
+let onProfileRequired: () => void = () => undefined;
+
+/** 428을 받으면 부른다. 다른 기기에서 쓰던 프로필을 지웠을 때처럼 프로필을 다시 골라야 하는 경우다. */
+export function setProfileRequired(handler: () => void) {
+  onProfileRequired = handler;
 }
 
 function describeDetail(detail: unknown): string {
@@ -84,6 +95,7 @@ async function request<T>(path: string, init?: RequestInit, retried = false): Pr
     const body = await response.json().catch(() => ({}));
     // 401이면 서버가 요청을 처리하지 않았으므로 다시 보내도 안전하다. 틀린 비밀번호의 401은 세션과 상관없다.
     if (response.status === 401 && !retried && path !== '/auth/login' && (await recoverSession())) return request<T>(path, init, true);
+    if (response.status === 428) onProfileRequired();
     throw new ApiError(describeDetail(body.detail), response.status);
   }
   if (response.status === 204) return undefined as T;
@@ -111,6 +123,7 @@ function uploadGpx(file: File, onProgress: (percent: number) => void): Promise<G
       if (xhr.status >= 200 && xhr.status < 300) resolve(body as GpxPreview);
       else {
         if (xhr.status === 401) void recoverSession();
+        if (xhr.status === 428) onProfileRequired();
         reject(new ApiError(describeDetail(body.detail), xhr.status));
       }
     };
@@ -126,10 +139,15 @@ function toQuery(params: object): string {
 
 const post = <T>(path: string, body: unknown) => request<T>(path, { method: 'POST', body: JSON.stringify(body) });
 const put = <T>(path: string, body: unknown) => request<T>(path, { method: 'PUT', body: JSON.stringify(body) });
+const patch = <T>(path: string, body: unknown) => request<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
+/** 지금 프로필 기준이면 주소에 넣지 않는다. */
+const scopeQuery = (scope: WalkScope) => (scope === 'family' ? '&scope=family' : '');
 
 export const api = {
   authMe: () => request<Account>('/auth/me'),
-  signup: (body: { login_id: string; password: string; name: string }) => post<Account>('/auth/signup', body),
+  /** 아이디나 이메일 중 하나로 가입한다. 대표 프로필이 함께 만들어진다. */
+  signup: (body: { login_id?: string; email?: string; password: string; name: string }) => post<Account>('/auth/signup', body),
+  updateAccount: (name: string) => patch<Account>('/auth/account', { name }),
   login: (body: { login_id: string; password: string }) => post<Account>('/auth/login', body),
   logout: () => post<Account>('/auth/logout', {}),
   accountSummary: () => request<AccountSummary>('/auth/account'),
@@ -140,11 +158,20 @@ export const api = {
   /** 페이지 이동으로 여는 주소. 서버가 Google 로그인 화면으로 보낸다. */
   googleStartUrl: (next: string) => `${BASE}/auth/google/start?next=${encodeURIComponent(next)}`,
 
+  listProfiles: () => request<Profile[]>('/profiles'),
+  getProfile: (id: number) => request<ProfileDetail>(`/profiles/${id}`),
+  createProfile: (body: Pick<Profile, 'name' | 'avatar_key'>) => post<Profile>('/profiles', body),
+  updateProfile: (id: number, body: Partial<Pick<Profile, 'name' | 'avatar_key'>>) => patch<Profile>(`/profiles/${id}`, body),
+  deleteProfile: (id: number) => request<void>(`/profiles/${id}`, { method: 'DELETE' }),
+  /** 세션에서 쓸 프로필을 바꾼다. 다시 로그인하지 않는다. */
+  selectProfile: (id: number) => post<Account>(`/profiles/${id}/select`, {}),
+  familyOverview: () => request<FamilyOverview>('/family/overview'),
+
   listPets: () => request<Pet[]>('/pets'),
   getPet: (id: number) => request<Pet>(`/pets/${id}`),
   createPet: (body: PetInput) => post<Pet>('/pets', body),
   updatePet: (id: number, body: PetInput) => put<Pet>(`/pets/${id}`, body),
-  insights: (id: number) => request<Insights>(`/pets/${id}/insights`),
+  insights: (id: number, scope: WalkScope = 'profile') => request<Insights>(`/pets/${id}/insights${scope === 'family' ? '?scope=family' : ''}`),
 
   getSchedule: () => request<Schedule>('/schedule'),
   updateSchedule: (body: Schedule) => put<Schedule>('/schedule', body),
@@ -189,16 +216,17 @@ export const api = {
     distance_km?: number;
   }) =>
     post<Walk>('/walks', body),
-  listWalks: (petId: number) => request<Walk[]>(`/walks?pet_id=${petId}`),
+  listWalks: (petId: number, scope: WalkScope = 'profile') => request<Walk[]>(`/walks?pet_id=${petId}${scopeQuery(scope)}`),
   /** 피드백 전 산책만 지울 수 있다. */
   deleteWalk: (id: number) => request<void>(`/walks/${id}`, { method: 'DELETE' }),
-  walkReport: (petId: number, weekOffset = 0) => request<WalkReport>(`/walks/report?pet_id=${petId}&week_offset=${weekOffset}`),
+  walkReport: (petId: number, weekOffset = 0, scope: WalkScope = 'profile') =>
+    request<WalkReport>(`/walks/report?pet_id=${petId}&week_offset=${weekOffset}${scopeQuery(scope)}`),
 
   submitFeedback: (body: FeedbackInput) => post<Feedback>('/feedback', body),
 
   createSavedWalk: (body: SavedWalkInput) => post<SavedWalkDetail>('/my-walks', body),
-  listSavedWalks: ({ sort, petId, visibility }: { sort: SavedWalkSort; petId: number | null; visibility: Visibility | null }) =>
-    request<SavedWalkSummary[]>(`/my-walks?sort=${sort}${petId ? `&pet_id=${petId}` : ''}${visibility ? `&visibility=${visibility}` : ''}`),
+  listSavedWalks: ({ sort, petId, visibility, scope = 'profile' }: { sort: SavedWalkSort; petId: number | null; visibility: Visibility | null; scope?: WalkScope }) =>
+    request<SavedWalkSummary[]>(`/my-walks?sort=${sort}${petId ? `&pet_id=${petId}` : ''}${visibility ? `&visibility=${visibility}` : ''}${scopeQuery(scope)}`),
   getSavedWalk: (id: number) => request<SavedWalkDetail>(`/my-walks/${id}`),
   updateSavedWalk: (id: number, body: Partial<Pick<SavedWalkInput, 'title' | 'pet_id' | 'memo' | 'visibility' | 'share_memo'>>) =>
     request<SavedWalkDetail>(`/my-walks/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),

@@ -27,7 +27,7 @@ export default function AccountCard() {
           <div className="min-w-0">
             <p className="text-xs text-ink-muted">{google ? 'Google 계정으로 로그인' : '로그인 계정'}</p>
             <p className="truncate font-bold" data-testid="account-name">
-              {user.name} <span className="font-normal text-ink-soft">({google ? (user.email ?? 'Google') : user.login_id})</span>
+              {user.name} <span className="font-normal text-ink-soft">({google ? (user.email ?? 'Google') : (user.login_id ?? user.email)})</span>
             </p>
           </div>
         </div>

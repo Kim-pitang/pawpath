@@ -7,6 +7,7 @@ import { Button, Card, ChoiceGroup, ErrorNotice, InfoNotice } from '../component
 import { useApp } from '../context/AppContext';
 import { api } from '../lib/api';
 import { GOOGLE_ERRORS } from '../lib/labels';
+import { safeNext } from '../lib/navigation-paths';
 
 type Mode = 'login' | 'signup';
 const MODE_OPTIONS: { value: Mode; label: string }[] = [
@@ -15,8 +16,15 @@ const MODE_OPTIONS: { value: Mode; label: string }[] = [
 ];
 const INPUT_CLASS = 'mt-1.5 min-h-12 w-full rounded-2xl border border-line bg-white px-4 text-base outline-none focus:border-leaf-500';
 const LOGIN_ID_PATTERN = /^[a-z0-9][a-z0-9_.-]{2,29}$/;
+const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+const isEmail = (value: string) => value.includes('@');
+
 function signupProblem(loginId: string, password: string, name: string): string | null {
-  if (!LOGIN_ID_PATTERN.test(loginId)) return '아이디는 3~30자의 영문 소문자, 숫자, 점(.), 밑줄(_), 하이픈(-)으로 만들고 영문이나 숫자로 시작해 주세요.';
+  if (isEmail(loginId)) {
+    if (!EMAIL_PATTERN.test(loginId) || loginId.length > 254) return '이메일 주소를 다시 확인해 주세요.';
+  } else if (!LOGIN_ID_PATTERN.test(loginId)) {
+    return '아이디는 3~30자의 영문 소문자, 숫자, 점(.), 밑줄(_), 하이픈(-)으로 만들고 영문이나 숫자로 시작해 주세요.';
+  }
   if (password.length < 8) return '비밀번호는 8자 이상으로 정해 주세요.';
   if (!name.trim()) return '이름을 입력해 주세요.';
   return null;
@@ -26,7 +34,7 @@ export default function LoginPage() {
   const { account, refreshAccount } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: string } | null)?.from ?? '/';
+  const from = safeNext((location.state as { from?: string } | null)?.from);
   const [params] = useSearchParams();
   const googleError = GOOGLE_ERRORS[params.get('error') ?? ''] ?? null;
   const [mode, setMode] = useState<Mode>('login');
@@ -36,7 +44,8 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (account?.authenticated) return <Navigate to={from} replace />;
+  // 보내는 중에는 아래에서 직접 화면을 옮긴다. 가입하면 프로필 설정으로, 프로필이 여럿이면 선택 화면으로 간다.
+  if (account?.authenticated && !busy) return <Navigate to={from} replace />;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -50,9 +59,11 @@ export default function LoginPage() {
     setError(null);
     try {
       if (mode === 'login') await api.login({ login_id: id, password });
-      else await api.signup({ login_id: id, password, name: name.trim() });
-      await refreshAccount();
-      navigate(from, { replace: true });
+      else await api.signup({ ...(isEmail(id) ? { email: id } : { login_id: id }), password, name: name.trim() });
+      const next = await refreshAccount();
+      if (mode === 'signup') navigate(`/profiles/setup?next=${encodeURIComponent(from)}`, { replace: true });
+      else if (next.profile_required) navigate('/profiles', { replace: true, state: { from } });
+      else navigate(from, { replace: true });
     } catch (submitError) {
       setError((submitError as Error).message);
       setBusy(false);
@@ -81,7 +92,7 @@ export default function LoginPage() {
             </a>
             <div className="flex items-center gap-3 text-xs text-ink-muted">
               <span className="h-px flex-1 bg-line" />
-              또는 아이디로
+              또는 이메일이나 아이디로
               <span className="h-px flex-1 bg-line" />
             </div>
           </div>
@@ -97,8 +108,8 @@ export default function LoginPage() {
             }}
           />
           <label className="text-sm font-semibold">
-            아이디
-            <input className={INPUT_CLASS} value={loginId} maxLength={30} autoComplete="username" autoCapitalize="none" onChange={(event) => setLoginId(event.target.value)} />
+            아이디 또는 이메일
+            <input className={INPUT_CLASS} value={loginId} maxLength={254} autoComplete="username" autoCapitalize="none" inputMode="email" onChange={(event) => setLoginId(event.target.value)} />
           </label>
           <label className="text-sm font-semibold">
             비밀번호
@@ -117,7 +128,7 @@ export default function LoginPage() {
                 이름
                 <input className={INPUT_CLASS} value={name} maxLength={30} autoComplete="nickname" onChange={(event) => setName(event.target.value)} />
               </label>
-              <p className="text-xs text-ink-muted">아이디는 영문 소문자와 숫자로 3자 이상, 비밀번호는 8자 이상이에요.</p>
+              <p className="text-xs text-ink-muted">이메일이나 아이디(영문 소문자와 숫자로 3자 이상)로 가입해요. 비밀번호는 8자 이상이에요. 가족은 한 계정에서 프로필을 나눠 써요.</p>
             </>
           )}
           {error && <ErrorNotice message={error} />}
