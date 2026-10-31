@@ -199,6 +199,24 @@ test.describe('산책길 공유', () => {
     await guest.context().close();
   });
 
+  test('자동 생성 경로는 공유 대상에 없고, 주소로 들어와도 공유할 수 없다', async ({ page }) => {
+    await signIn(page);
+    const generated = await makeWalk(page, { title: `자동 생성 길 ${unique()}`, source_type: 'generated' });
+    await page.goto(`/my-walks/${generated.id}`);
+    const panel = page.getByTestId('community-panel');
+    await expect(panel).toContainText('아직 아무도 걷지 않은 길');
+    await expect(panel.getByRole('link', { name: '커뮤니티에 공유하기' })).toHaveCount(0);
+
+    await page.goto('/community/share');
+    await expect(page.getByRole('button', { name: '직접 기록' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'GPX 가져옴' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '자동 생성' })).toHaveCount(0);
+
+    await page.goto(`/community/share?walk=${generated.id}`);
+    await expect(page.getByText('직접 걸은 길만 공유할 수 있어요')).toBeVisible();
+    await expect(page.getByRole('button', { name: '공유하기' })).toBeDisabled();
+  });
+
   test('가리고 나면 너무 짧은 길은 이유를 알리고 공유를 막는다', async ({ page }) => {
     await signIn(page);
     const walk = await makeWalk(page, { points: line(14) });

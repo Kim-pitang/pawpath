@@ -24,6 +24,8 @@ from app.services.recommendation_service import to_profile
 from app.services.saved_walk_service import haversine_m, measure_track, route_segments, thumbnail_route, to_gpx_points
 from app.services.user_course_service import AREA_RADIUS_M, PET_RULE, CourseError, course_attributes, join_points, nearby_facilities, route_km, simplify
 
+# 커뮤니티는 실제로 걸은 길을 나누는 곳이다. 자동 생성 경로는 아직 아무도 걷지 않았다.
+SHAREABLE_SOURCES = {"recorded", "imported"}
 # 가린 뒤에 이보다 짧게 남으면 공개할 길이 없는 것으로 본다.
 MIN_PUBLIC_M = 100.0
 # 평균 속도를 믿을 수 없을 때 쓰는 걸음 속도(시속 3.6km). 내 산책길 코스의 예상 시간과 같은 값이다.
@@ -193,8 +195,14 @@ def can_navigate(points: list[GpxPoint]) -> bool:
         return False
 
 
+def _check_shareable(walk: SavedWalk) -> None:
+    if walk.source_type not in SHAREABLE_SOURCES:
+        raise CommunityError(422, "직접 걸은 길만 공유할 수 있어요. 자동 생성한 경로는 걸으면서 기록한 뒤 공유해 주세요.")
+
+
 def preview_public(walk: SavedWalk, radius_m: int) -> dict:
     """공유하기 전에 실제로 공개될 경로를 보여 준다. 저장하지 않는다."""
+    _check_shareable(walk)
     points = public_route(walk, radius_m)
     values = _public_values(walk, points, radius_m)
     return {
@@ -221,6 +229,7 @@ def course_open_to(db: Session, course: WalkingCourse, viewer: User | None) -> b
 
 # ---------- 공유, 수정, 해제
 def create_trail(db: Session, user: User, walk: SavedWalk, body: schemas.TrailCreate, now: datetime) -> CommunityTrail:
+    _check_shareable(walk)
     if walk.community_trail is not None:
         raise CommunityError(409, "이미 공유한 산책길이에요. 내 산책길 관리에서 고칠 수 있어요.")
     same_route = db.scalar(

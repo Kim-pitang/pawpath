@@ -144,6 +144,20 @@ def test_only_my_own_walk_can_be_shared(client):
     assert bob.post("/api/community/trails/preview", json={"saved_walk_id": walk["id"]}).status_code == 404
 
 
+def test_only_walks_someone_actually_walked_can_be_shared(client):
+    """자동 생성 경로는 아직 아무도 걷지 않았다. 직접 기록과 GPX만 공유한다."""
+    alice = member()
+    generated = make_walk(alice, source_type="generated")
+    assert alice.post("/api/community/trails/preview", json={"saved_walk_id": generated["id"]}).status_code == 422
+    response = alice.post("/api/community/trails", json={"saved_walk_id": generated["id"], "title": "걷지 않은 길"})
+    assert response.status_code == 422
+    assert "직접 걸은 길" in response.json()["detail"]
+    assert client.get("/api/community/trails").json()["total"] == 0
+    for index, source in enumerate(("recorded", "imported")):
+        assert share(alice, make_walk(alice, source_type=source, points=line(lng=126.92 + index * 0.01)))["id"]
+    assert client.get("/api/community/trails").json()["total"] == 2
+
+
 def test_same_walk_or_same_route_cannot_be_shared_twice(client):
     alice = member()
     walk = make_walk(alice)

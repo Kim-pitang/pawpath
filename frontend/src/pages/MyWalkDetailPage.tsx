@@ -179,6 +179,8 @@ function CommunityPanel({ walk }: { walk: SavedWalkDetail }) {
               공유한 산책길 보기
             </LinkButton>
           </>
+        ) : walk.source_type === 'generated' ? (
+          <p className="text-sm text-ink-soft">앱이 만들어 준 경로는 아직 아무도 걷지 않은 길이라 공유할 수 없어요. 이 길을 걸으며 기록하면 그 기록을 공유할 수 있어요.</p>
         ) : account?.authenticated ? (
           <>
             <p className="mb-3 text-sm text-ink-soft">이 길을 다른 보호자와 나눠 보세요. 출발점과 도착점 주변은 가리고, 걸은 시각과 메모는 공개되지 않아요.</p>

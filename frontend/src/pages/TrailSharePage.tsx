@@ -12,11 +12,14 @@ import { dateTimeLabel, distanceLabel } from '../lib/format';
 import { HIDE_RADIUS_OPTIONS, TRAIL_DIFFICULTY_LABELS, TRAIL_FEATURE_LABELS, TRAIL_SUITABLE_LABELS, TRAIL_VISIBILITY_LABELS, VISIBILITY_LABELS, WALK_SOURCE_LABELS } from '../lib/labels';
 import type { LatLng } from '../lib/navigation';
 import { prepareImage } from '../lib/photos';
-import type { SavedWalkDetail, SavedWalkSummary, TrailDetail, TrailFeature, TrailInput, TrailPreview, TrailSuitable, TrailVisibility, WalkSourceType } from '../lib/types';
+import type { SavedWalkDetail, SavedWalkSummary, TrailDetail, TrailFeature, TrailInput, TrailPreview, TrailSuitable, TrailVisibility } from '../lib/types';
 
 const INPUT_CLASS = 'mt-1.5 min-h-12 w-full rounded-2xl border border-line bg-white px-4 text-base font-normal outline-none focus:border-leaf-500';
 const VISIBILITY_OPTIONS = (Object.keys(TRAIL_VISIBILITY_LABELS) as TrailVisibility[]).map((value) => ({ value, label: TRAIL_VISIBILITY_LABELS[value] }));
-const SOURCE_OPTIONS = (Object.keys(WALK_SOURCE_LABELS) as WalkSourceType[]).map((value) => ({ value, label: WALK_SOURCE_LABELS[value] }));
+// 자동 생성 경로는 아직 아무도 걷지 않아 공유 대상에서 뺀다.
+const SHAREABLE_SOURCES = ['recorded', 'imported'] as const;
+type ShareableSource = (typeof SHAREABLE_SOURCES)[number];
+const SOURCE_OPTIONS = SHAREABLE_SOURCES.map((value) => ({ value, label: WALK_SOURCE_LABELS[value] }));
 
 /** 산책길 공유와 수정. 경로는 기존 기록을 그대로 쓰므로 고를 것과 쓸 것만 받는다. */
 export default function TrailSharePage() {
@@ -44,7 +47,7 @@ export default function TrailSharePage() {
 
 function WalkChooser({ onChoose }: { onChoose: (id: number) => void }) {
   const [walks, setWalks] = useState<SavedWalkSummary[] | null>(null);
-  const [source, setSource] = useState<WalkSourceType>('recorded');
+  const [source, setSource] = useState<ShareableSource>('recorded');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {

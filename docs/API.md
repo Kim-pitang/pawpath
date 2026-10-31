@@ -589,6 +589,7 @@ GPX 파일 원본을 요청 본문으로 보냅니다(`Content-Type: application
 - `region`을 비우면 출발점 5km 안의 서비스 지역 이름, 없으면 `기타 지역`을 씁니다. 주소 검색 API는 위치를 외부로 보내게 되어 쓰지 않습니다.
 - `cover_photo_id`는 이 산책길의 사진만 고를 수 있고(`422`), 고른 한 장만 공개됩니다.
 - 이미 공유한 산책길이나 같은 경로면 `409`입니다.
+- 직접 기록(`recorded`)과 GPX(`imported`)만 공유합니다. 자동 생성 경로(`generated`)는 미리보기와 공유 모두 `422`입니다.
 
 ### `GET /community/trails`
 
