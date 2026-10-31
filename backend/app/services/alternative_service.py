@@ -10,13 +10,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.models import Pet, User, WalkingCourse
+from app.models import Pet, Profile, User, WalkingCourse
 from app.recommender.features import build_features
-from app.recommender.safety import DEMO, FORECAST, assess_course, assessment_payload
+from app.recommender.safety import assess_course, assessment_payload
 from app.recommender.text import hour_label
 from app.recommender.timeslots import evaluate_slot, is_rainy
 from app.recommender.types import TimeWindow
-from app.services.recommendation_service import load_state, to_course_data, to_profile, windows_of
+from app.services.recommendation_service import load_state, to_course_data, to_profile, visible_to, weather_source_of, windows_of
 from app.services.routing_service import Approach, Router, haversine_m, plan_approach
 from app.services.weather_service import get_weather
 
@@ -38,10 +38,13 @@ def _approach_payload(approach: Approach) -> dict:
     }
 
 
-def _alternatives(db, course, reference, now, forecast, features, state, weather_source) -> list[dict]:
+def _alternatives(db, course, reference, now, forecast, features, state, weather_source, owner) -> list[dict]:
     """지금 걷기 시작해도 비를 피할 수 있고 위험 조건이 없는 가까운 코스."""
     candidates = []
-    for other in db.scalars(select(WalkingCourse).where(WalkingCourse.id != course.id, WalkingCourse.area == course.area)):
+    query = select(WalkingCourse).where(
+        WalkingCourse.id != course.id, WalkingCourse.area == course.area, WalkingCourse.is_active.is_not(False), visible_to(owner)
+    )
+    for other in db.scalars(query):
         data = to_course_data(other)
         if not data.pet_allowed:
             continue
@@ -81,13 +84,14 @@ def evaluate_alternative(
     scenario: str,
     now: datetime,
     router: Router | None = None,
+    profile: Profile | None = None,
 ) -> dict:
-    weather = get_weather(db, now, windows_of(user), scenario)
+    weather = get_weather(db, now, windows_of(profile or user), scenario)
     forecast = {hour.time: hour for hour in weather.hours}
     features = build_features(to_profile(pet))
     state = load_state(db, pet)
     data = to_course_data(course)
-    weather_source = DEMO if weather.is_mock else FORECAST
+    weather_source = weather_source_of(weather)
 
     total_m = course.distance_km * 1000
     remaining_m = max(0.0, total_m - max(0.0, progress_m))
@@ -157,7 +161,7 @@ def evaluate_alternative(
         action = "finish_course"
 
     reference = position or (course.start_lat, course.start_lng)
-    alternatives = [] if status == "continue" else _alternatives(db, course, reference, now, forecast, features, state, weather_source)
+    alternatives = [] if status == "continue" else _alternatives(db, course, reference, now, forecast, features, state, weather_source, user)
 
     return {
         **base,

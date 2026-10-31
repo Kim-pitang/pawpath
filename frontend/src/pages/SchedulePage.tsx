@@ -13,7 +13,7 @@ const hasWindow = (windows: TimeWindow[], target: TimeWindow) =>
   windows.some((window) => window.start_hour === target.start_hour && window.end_hour === target.end_hour);
 
 export default function SchedulePage() {
-  const { schedule, setSchedule, invalidateRecommendations } = useApp();
+  const { schedule, setSchedule, invalidateRecommendations, currentProfile, profiles } = useApp();
   const navigate = useNavigate();
   const [windows, setWindows] = useState<TimeWindow[]>([]);
   const [duration, setDuration] = useState(40);
@@ -70,7 +70,7 @@ export default function SchedulePage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <PageTitle sub="이 시간 안에서만 산책을 추천해요.">산책 가능 시간</PageTitle>
+      <PageTitle sub={profiles.length > 1 && currentProfile ? `${currentProfile.name}님의 시간이에요. 이 시간 안에서만 산책을 추천해요.` : '이 시간 안에서만 산책을 추천해요.'}>산책 가능 시간</PageTitle>
 
       <Card className="flex flex-col gap-4">
         <div>

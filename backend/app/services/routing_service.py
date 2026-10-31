@@ -21,6 +21,8 @@ ROUTING_FAILED_NOTICE = "길찾기 서버에 연결하지 못해 직선으로 �
 ROUTING_DISABLED_NOTICE = "길찾기를 사용하지 않아 직선으로 표시했어요. 실제 길을 확인하며 이동해 주세요."
 
 LatLng = tuple[float, float]
+# 공용 도보 라우팅 서버가 이용자를 식별할 수 있게 보낸다.
+USER_AGENT = {"User-Agent": "PawPath/1.0 (https://github.com/FickleBoBo/pawpath)"}
 
 
 class RoutingUnavailable(Exception):
@@ -31,6 +33,8 @@ class RoutingUnavailable(Exception):
 class RoutedPath:
     points: list[list[float]]
     distance_m: float
+    # 경유점마다 도로에 맞추느라 움직인 거리(m). route_via만 채운다.
+    snap_distances_m: tuple[float, ...] = ()
 
 
 class Router(Protocol):
@@ -57,6 +61,27 @@ class OsrmFootRouter:
             return RoutedPath(points=points, distance_m=float(route["distance"]))
         except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as exc:
             # 예외 메시지에는 좌표가 든 주소가 포함될 수 있어 종류만 전달한다.
+            raise RoutingUnavailable(type(exc).__name__) from None
+
+
+    def route_via(self, points: list[LatLng]) -> RoutedPath:
+        """경유점을 차례로 지나는 도보 경로를 한 번의 요청으로 받는다. 실패하면 RoutingUnavailable을 던진다."""
+        coordinates = ";".join(f"{lng:.6f},{lat:.6f}" for lat, lng in points)
+        url = f"{self.base_url}/route/v1/foot/{coordinates}"
+        try:
+            params = {"overview": "full", "geometries": "geojson", "continue_straight": "false"}
+            if self.client is not None:
+                response = self.client.get(url, params=params, headers=USER_AGENT)
+            else:
+                with httpx.Client(timeout=self.timeout_seconds) as client:
+                    response = client.get(url, params=params, headers=USER_AGENT)
+            response.raise_for_status()
+            body = response.json()
+            route = body["routes"][0]
+            path = [[lat, lng] for lng, lat in route["geometry"]["coordinates"]]
+            snaps = tuple(float(w["distance"]) for w in body["waypoints"])
+            return RoutedPath(points=path, distance_m=float(route["distance"]), snap_distances_m=snaps)
+        except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as exc:
             raise RoutingUnavailable(type(exc).__name__) from None
 
 

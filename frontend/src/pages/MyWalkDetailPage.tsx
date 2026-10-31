@@ -1,13 +1,15 @@
-import { Copy, Download, Link2, Pencil, Share2, Trash2, Unlink } from 'lucide-react';
+import { Copy, Download, Link2, Pencil, Share2, Trash2, Unlink, UsersRound } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Button, Card, Chip, ChoiceGroup, ErrorNotice, InfoNotice, Loading, PageTitle, SectionTitle } from '../components/ui';
+import { Button, Card, Chip, ChoiceGroup, ErrorNotice, InfoNotice, LinkButton, Loading, PageTitle, SectionTitle } from '../components/ui';
 import WalkDetailsForm, { PRIVACY_WARNING, type WalkDetailsValue } from '../components/WalkDetailsForm';
+import CourseCandidatePanel from '../components/CourseCandidatePanel';
 import WalkPhotos from '../components/WalkPhotos';
 import WalkRouteMap from '../components/WalkRouteMap';
+import { useApp } from '../context/AppContext';
 import { api } from '../lib/api';
 import { dateTimeLabel, distanceLabel, durationLabel, speedLabel } from '../lib/format';
-import { VISIBILITY_LABELS, WALK_SOURCE_LABELS } from '../lib/labels';
+import { TRAIL_VISIBILITY_LABELS, VISIBILITY_LABELS, WALK_SOURCE_LABELS } from '../lib/labels';
 import type { LatLng } from '../lib/navigation';
 import type { SavedWalkDetail } from '../lib/types';
 
@@ -34,6 +36,7 @@ export default function MyWalkDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const id = Number(walkId);
+  const { profiles } = useApp();
 
   useEffect(() => {
     api.getSavedWalk(id).then(setWalk).catch((loadError: Error) => setError(loadError.message));
@@ -42,6 +45,8 @@ export default function MyWalkDetailPage() {
   const route = useMemo(() => (walk?.route ?? []) as LatLng[][], [walk?.route]);
 
   if (!walk) return error ? <ErrorNotice message={error} /> : <Loading />;
+  // 가족의 산책길은 함께 보지만 고치고 공유하는 것은 만든 프로필이나 대표 프로필만 한다. 서버도 같은 규칙으로 막는다.
+  const manageable = walk.can_manage !== false;
 
   const saveEdit = async () => {
     if (!editing) return;
@@ -66,7 +71,8 @@ export default function MyWalkDetailPage() {
   };
 
   const remove = async () => {
-    if (!window.confirm(`"${walk.title}"을 삭제할까요? 되돌릴 수 없고, 공유 링크도 함께 사라져요.`)) return;
+    const shared = walk.community_trail ? ' 커뮤니티에 공유한 글과 좋아요, 저장, 후기도 함께 지워져요.' : '';
+    if (!window.confirm(`"${walk.title}"을 삭제할까요? 되돌릴 수 없고, 공유 링크도 함께 사라져요.${shared}`)) return;
     try {
       await api.deleteSavedWalk(id);
       navigate('/my-walks', { replace: true });
@@ -97,12 +103,21 @@ export default function MyWalkDetailPage() {
           <Chip tone={walk.visibility === 'private' ? 'neutral' : 'leaf'}>{VISIBILITY_LABELS[walk.visibility]}</Chip>
           <Chip>{WALK_SOURCE_LABELS[walk.source_type]}</Chip>
           {walk.pet_name && <Chip>{walk.pet_name}</Chip>}
+          {walk.profile && profiles.length > 1 && <Chip>{walk.profile.name}{walk.profile.deleted ? ' (지운 프로필)' : ''}</Chip>}
           <Chip>지점 {walk.point_count.toLocaleString()}개</Chip>
         </div>
         {walk.memo && <p className="mt-3 whitespace-pre-wrap rounded-lg bg-cream p-3 text-sm text-ink-soft">{walk.memo}</p>}
       </Card>
 
-      <WalkPhotos walk={walk} onChange={setWalk} />
+      {!manageable && (
+        <InfoNotice>
+          {walk.profile?.name ?? '다른 가족'}님이 만든 산책길이에요. 보고 GPX로 내려받을 수 있지만, 고치고 공유하는 것은 만든 프로필이나 대표 프로필만 할 수 있어요.
+        </InfoNotice>
+      )}
+
+      <WalkPhotos walk={walk} onChange={setWalk} readOnly={!manageable} />
+
+      {manageable && <CourseCandidatePanel walk={walk} onChange={setWalk} />}
 
       <a
         href={api.savedWalkGpxUrl(id)}
@@ -113,9 +128,11 @@ export default function MyWalkDetailPage() {
         GPX 다운로드
       </a>
 
-      <SharePanel walk={walk} onChange={setWalk} onError={setError} />
+      {manageable && <CommunityPanel walk={walk} />}
 
-      {editing ? (
+      {manageable && <SharePanel walk={walk} onChange={setWalk} onError={setError} />}
+
+      {!manageable ? null : editing ? (
         <Card>
           <SectionTitle>산책길 수정</SectionTitle>
           <WalkDetailsForm value={editing} onChange={setEditing} />
@@ -154,6 +171,45 @@ function Info({ label, value }: { label: string; value: string }) {
       <dt className="text-xs text-ink-muted">{label}</dt>
       <dd className="mt-0.5 text-base font-bold text-ink">{value}</dd>
     </div>
+  );
+}
+
+function CommunityPanel({ walk }: { walk: SavedWalkDetail }) {
+  const { account } = useApp();
+  const trail = walk.community_trail;
+  return (
+    <Card>
+      <SectionTitle action={trail ? <Chip tone={trail.visibility === 'public' ? 'leaf' : 'neutral'}>{TRAIL_VISIBILITY_LABELS[trail.visibility]}</Chip> : undefined}>산책길 커뮤니티</SectionTitle>
+      <div data-testid="community-panel">
+        {trail ? (
+          <>
+            <p className="mb-3 text-sm text-ink-soft">커뮤니티에 공유한 산책길이에요. 출발점과 도착점 주변을 가린 경로만 공개돼요.</p>
+            <LinkButton to={`/community/trails/${trail.id}`} variant="ghost" className="w-full">
+              <UsersRound size={16} aria-hidden />
+              공유한 산책길 보기
+            </LinkButton>
+          </>
+        ) : walk.source_type === 'generated' ? (
+          <p className="text-sm text-ink-soft">앱이 만들어 준 경로는 아직 아무도 걷지 않은 길이라 공유할 수 없어요. 이 길을 걸으며 기록하면 그 기록을 공유할 수 있어요.</p>
+        ) : account?.authenticated ? (
+          <>
+            <p className="mb-3 text-sm text-ink-soft">이 길을 다른 보호자와 나눠 보세요. 출발점과 도착점 주변은 가리고, 걸은 시각과 메모는 공개되지 않아요.</p>
+            <LinkButton to={`/community/share?walk=${walk.id}`} variant="accent" className="w-full">
+              <UsersRound size={16} aria-hidden />
+              커뮤니티에 공유하기
+            </LinkButton>
+          </>
+        ) : (
+          <p className="text-sm text-ink-soft">
+            커뮤니티 공유는{' '}
+            <Link to="/login" className="font-bold underline">
+              로그인
+            </Link>
+            한 뒤 쓸 수 있어요.
+          </p>
+        )}
+      </div>
+    </Card>
   );
 }
 

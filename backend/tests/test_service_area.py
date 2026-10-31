@@ -80,8 +80,10 @@ def test_gaepo_excludes_courses_in_a_heatwave_only_from_its_own(gaepo, client):
 def test_five_stars_on_the_second_course_moves_it_to_first_in_gaepo(gaepo, client):
     pet_id = dubu_id(client)
     target = recommend(client, pet_id)["courses"][1]
-    walk = client.post("/api/walks", json={"pet_id": pet_id, "course_id": target["course_id"], "duration_min": target["duration_min"]}).json()
-    client.post("/api/feedback", json={"walk_id": walk["id"], **FIVE_STARS})
+    # v2는 피드백 1건을 보수적으로 반영해, 5점을 두 번 남겨야 1위로 오른다.
+    for _ in range(2):
+        walk = client.post("/api/walks", json={"pet_id": pet_id, "course_id": target["course_id"], "duration_min": target["duration_min"]}).json()
+        client.post("/api/feedback", json={"walk_id": walk["id"], **FIVE_STARS})
     second = recommend(client, pet_id)
     assert second["courses"][0]["course_id"] == target["course_id"]
     assert second["courses"][0]["rank_change"] == 1

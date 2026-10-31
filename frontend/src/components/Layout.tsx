@@ -1,7 +1,8 @@
-import { CalendarCheck, Home, Map as MapIcon, PawPrint, Sparkles } from 'lucide-react';
+import { CalendarCheck, Home, Map as MapIcon, PawPrint, Sparkles, UsersRound } from 'lucide-react';
 import { Link, Navigate, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import AccountArea from './AccountArea';
+import ProfileMenu from './ProfileMenu';
 import { MungoMark, Wordmark } from './Logo';
 import WalkActionNav from './WalkActionNav';
 
@@ -10,16 +11,19 @@ const NAV_ITEMS = [
   { to: '/recommend', label: '추천', icon: Sparkles, end: false },
   { to: '/map', label: '지도', icon: MapIcon, end: false },
   { to: '/walk', label: '산책 기록', icon: CalendarCheck, end: false },
+  { to: '/community', label: '커뮤니티', icon: UsersRound, end: false },
   { to: '/my', label: '마이', icon: PawPrint, end: false },
 ];
 
 export default function Layout() {
-  const { account, authNotice } = useApp();
+  const { account, profileEpoch } = useApp();
   const location = useLocation();
   const here = location.pathname + location.search;
 
   // 로그인 필수 서버에서 로그인하지 않았으면 로그인 화면으로 보낸다.
   if (account?.auth_required && !account.authenticated) return <Navigate to="/login" replace state={{ from: here }} />;
+  // 프로필이 여럿인데 아직 고르지 않았으면 누구의 산책인지 먼저 고른다.
+  if (account?.authenticated && account.profile_required) return <Navigate to="/profiles" replace state={{ from: here }} />;
 
   return (
     <div className="min-h-dvh pb-24 md:pb-10">
@@ -45,23 +49,14 @@ export default function Layout() {
               </NavLink>
             ))}
           </nav>
-          <AccountArea />
+          <div className="flex items-center gap-1.5"><ProfileMenu /><AccountArea /></div>
         </div>
       </header>
 
-      {authNotice && (
-        <div className="mx-auto max-w-md px-4 pt-3 md:max-w-5xl">
-          <div className="flex items-center justify-between gap-2 rounded-md bg-[#fffbeb] p-3 text-sm text-[#92400e]" role="alert" data-testid="auth-notice">
-            <span>{authNotice}</span>
-            <Link to="/login" state={{ from: here }} className="shrink-0 font-bold underline">
-              로그인
-            </Link>
-          </div>
-        </div>
-      )}
 
       <main className="mx-auto max-w-md px-4 pt-4 md:max-w-5xl">
-        <Outlet />
+        {/* 프로필을 바꾸면 화면을 새로 그려 이전 프로필의 기록과 입력이 남지 않게 한다. */}
+        <Outlet key={profileEpoch} />
       </main>
 
       <WalkActionNav />

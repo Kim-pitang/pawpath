@@ -21,6 +21,8 @@ from tests.test_api_e2e import PET_BODY
 
 CLIENT_ID = "test-client.apps.googleusercontent.com"
 REDIRECT_URI = "http://testserver/api/auth/google/callback"
+# 처음 로그인한 계정은 대표 프로필을 정한 뒤 원래 가려던 곳으로 간다.
+FIRST_LOGIN = "/profiles/setup?next=%2Fmy-walks"
 
 
 def b64(data: bytes) -> str:
@@ -92,7 +94,7 @@ def callback(client, params: dict, google: FakeGoogle, code="good-code", **overr
 
 def login(client, google) -> httpx.Response:
     response = callback(client, start(client), google)
-    assert response.headers["location"] == "/my-walks"
+    assert response.headers["location"] in {FIRST_LOGIN, "/my-walks"}
     return response
 
 
@@ -144,7 +146,7 @@ def test_callback_exchanges_the_code_on_the_server_and_logs_in(client, google):
     params = start(client)
     response = callback(client, params, google)
     assert response.status_code == 302
-    assert response.headers["location"] == "/my-walks"
+    assert response.headers["location"] == FIRST_LOGIN
     cookies = response.headers.get_list("set-cookie")
     assert any(c.startswith("pawpath_session=") and "HttpOnly" in c for c in cookies)
     assert any(c.startswith("pawpath_google_state=") and "Max-Age=0" in c for c in cookies)
@@ -169,7 +171,8 @@ def test_same_google_account_returns_to_the_same_guardian(client, google):
     client.post("/api/pets", json=PET_BODY)
     client.post("/api/auth/logout")
     google.user["email"] = "new-address@example.com"
-    login(client, google)
+    # 두 번째부터는 프로필 설정 없이 원래 가려던 곳으로 간다.
+    assert login(client, google).headers["location"] == "/my-walks"
     me = client.get("/api/auth/me").json()["user"]
     assert me["id"] == first
     assert me["email"] == "new-address@example.com"
@@ -222,7 +225,7 @@ def test_tampered_state_is_refused(client, google):
 
 def test_state_can_be_used_only_once(client, google):
     params = start(client)
-    assert callback(client, params, google).headers["location"] == "/my-walks"
+    assert callback(client, params, google).headers["location"] == FIRST_LOGIN
     client.cookies.set("pawpath_google_state", params["state"], path="/api/auth/google")
     assert callback(client, params, google).headers["location"] == "/login?error=google_state"
     assert len(google.requests) == 1

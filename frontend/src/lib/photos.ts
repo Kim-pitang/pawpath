@@ -49,4 +49,4 @@ export async function uploadPhotos(walkId: number, photos: Blob[]): Promise<numb
   return failedCount;
 }
 
-export const PHOTO_PRIVACY_NOTE = '사진은 나만 볼 수 있고 공유 화면에는 나오지 않아요. 촬영 위치 정보는 지우고 저장해요.';
+export const PHOTO_PRIVACY_NOTE = '사진은 나만 볼 수 있고 공유 화면에는 나오지 않아요. 커뮤니티 대표 이미지로 직접 고른 한 장만 공개돼요. 촬영 위치 정보는 지우고 저장해요.';

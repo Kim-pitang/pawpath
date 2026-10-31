@@ -28,7 +28,7 @@
 | 외부 API | 브라우저 Geolocation API | 현재 위치 수집, 산책 기록 (브라우저 내장) | 웹 표준 |
 | 외부 API | Google OAuth 2.0 / OpenID Connect | Google 계정 로그인 (선택 기능, 설정했을 때만 실행 중 호출) | Google API 서비스 이용약관 |
 | 외부 API | 브라우저 Web Share API, Clipboard API | 산책길 공유 링크 전달과 복사 (브라우저 내장) | 웹 표준 |
-| 외부 API | Overpass API | 경로 주변 시설, 도로, 조명, 나무 기록 수집 (데이터 구축 시) | 데이터 ODbL |
+| 외부 API | Overpass API | 경로 주변 시설, 도로, 조명, 나무 기록 수집 (데이터 구축 시), 내 산책길을 저장해 추천 후보가 될 때 주변 환경 측정 (실행 중 호출) | 데이터 ODbL |
 | 외부 API | OpenStreetMap Nominatim | 개포동 코스 제작 중 주소 확인 (개발 중 1회, 앱에서는 호출하지 않음) | 데이터 ODbL |
 | 사전 보유 코드 | 없음 | 해당 없음 | 해당 없음 |
 | 기타 | 카카오맵 길찾기 링크 | 출발점이 먼 경우 외부 지도로 연결 (사용자가 눌렀을 때만 이동, API 미사용) | 카카오맵 이용약관 |
@@ -50,6 +50,7 @@
 - GPX 읽기와 쓰기 (`backend/app/services/gpx_service.py`): 표준 라이브러리 expat 기반 파서, XXE 차단, GPX 1.1 생성. 별도 GPX 라이브러리를 쓰지 않음
 - 계정 (`backend/app/services/auth_service.py`): 표준 라이브러리 scrypt 비밀번호 해시, 세션, 로그인 시도 제한. 별도 인증 라이브러리를 쓰지 않음
 - Google 로그인 (`backend/app/services/google_auth_service.py`): OpenID Connect 승인 코드 흐름, PKCE, state, nonce, ID 토큰 확인. 별도 OAuth 라이브러리를 쓰지 않고 기존 HTTPX로 호출
+- 계정 탈퇴와 삭제 (`backend/app/services/account_service.py`), 백업과 복구 (`backend/app/services/backup_service.py`): 표준 라이브러리 `sqlite3`의 온라인 백업만 쓰고, 외부 서비스나 백업 도구를 쓰지 않음
 - 사진 메타데이터 제거 (`backend/app/services/photo_service.py`): JPEG와 PNG 파일 구조를 직접 읽어 위치 정보를 지움. 이미지 라이브러리를 쓰지 않음
 - 코스 데이터 구축 스크립트, 백엔드 API, 프론트엔드 화면과 차트
 

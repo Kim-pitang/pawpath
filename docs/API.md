@@ -13,7 +13,10 @@
 |---|---|---|
 | 404 | 대상 없음 | `{"detail": "반려동물을 찾을 수 없습니다"}` |
 | 401 | 로그인이 필요하거나 세션이 만료됨 | `{"detail": "로그인이 만료되었어요. 다시 로그인해 주세요."}` (만료 시 쿠키 삭제) |
-| 409 | 이미 피드백을 남긴 산책, 이미 쓰는 아이디, 사진 5장 초과 | `{"detail": "이미 피드백을 남긴 산책입니다"}` |
+| 403 | 본인 재확인이 필요하거나 비밀번호가 틀림, 다른 프로필이 만든 기록을 고침 | `{"detail": "만든 프로필이나 대표 프로필만 고칠 수 있어요."}` |
+| 428 | 프로필이 여럿인데 이 세션에서 아직 고르지 않음 | `{"detail": "누구의 산책인지 프로필을 먼저 골라 주세요."}` |
+| 503 | 탈퇴 기록을 남기지 못해 탈퇴를 취소함 | `{"detail": "탈퇴를 처리하지 못했어요. 지운 데이터는 없으니 잠시 뒤 다시 시도해 주세요."}` |
+| 409 | 이미 피드백을 남긴 산책, 이미 쓰는 아이디나 이메일, 사진 5장 초과, 프로필 5개 초과, 대표 프로필 삭제 | `{"detail": "이미 피드백을 남긴 산책입니다"}` |
 | 429 | 로그인을 연달아 틀림 | `{"detail": "로그인 시도가 너무 많아요. 10분 뒤에 다시 시도해 주세요."}` |
 | 410 | 기간이 끝난 공유 링크 | `{"detail": "공유 기간이 끝난 링크예요"}` |
 | 413 | 요청, GPX 파일, 사진이 너무 큼 | `{"detail": "파일이 너무 커요. 10MB까지 가져올 수 있어요."}` |
@@ -25,17 +28,29 @@
 
 ```json
 { "login_id": "dubu-mom", "password": "8자 이상", "name": "두부 보호자" }
+{ "email": "dubu@example.com", "password": "8자 이상", "name": "두부네 가족" }
 ```
 
-아이디는 공백을 지우고 소문자로 바꾼 뒤, 3~30자의 영문 소문자, 숫자, `.`, `_`, `-`(영문이나 숫자로 시작)인지 확인합니다. 비밀번호는 8~128자입니다. 가입하면 바로 로그인 쿠키를 주고 `201`을 돌려줍니다. 같은 아이디가 있으면 `409`입니다. 새 계정은 반려동물 없이 기본 일정(16~20시)으로 시작합니다.
+대표 계정(가족 계정)을 만듭니다. `login_id`와 `email` 중 하나만 보냅니다(둘 다 없거나 둘 다 있으면 `422`). 아이디는 공백을 지우고 소문자로 바꾼 뒤, 3~30자의 영문 소문자, 숫자, `.`, `_`, `-`(영문이나 숫자로 시작)인지 확인합니다. 이메일도 소문자로 바꾸며 소유 확인 메일은 보내지 않습니다. 비밀번호는 8~128자입니다. 가입하면 계정 이름으로 대표 프로필을 함께 만들고, 바로 로그인 쿠키를 주고 `201`을 돌려줍니다. 같은 아이디나 이메일이 있으면 `409`입니다. 새 계정은 반려동물 없이 기본 일정(16~20시)으로 시작합니다.
 
 ### `POST /auth/login` · `POST /auth/logout` · `GET /auth/me`
 
-로그인은 `{ "login_id", "password" }`를 받아 쿠키를 줍니다. 틀리면 아이디가 없는지 비밀번호가 틀렸는지 구분하지 않고 `401`, 같은 아이디로 5번 연달아 틀리면 10분 동안 `429`입니다. 로그아웃은 서버의 세션을 지우고 쿠키를 지웁니다. 세 요청 모두 아래 형식을 돌려줍니다.
+로그인은 `{ "login_id", "password" }`를 받아 쿠키를 줍니다. `login_id`에 `@`가 있으면 이메일로 찾습니다. 틀리면 아이디가 없는지 비밀번호가 틀렸는지 구분하지 않고 `401`, 같은 아이디로 5번 연달아 틀리면 10분 동안 `429`입니다. 로그아웃은 서버의 세션을 지우고 쿠키를 지웁니다. 세 요청 모두 아래 형식을 돌려줍니다.
 
 ```json
-{ "authenticated": true, "auth_required": false, "user": { "id": 2, "name": "두부 보호자", "login_id": "dubu-mom" } }
+{
+  "authenticated": true, "auth_required": false, "google_enabled": true,
+  "user": { "id": 2, "name": "두부 보호자", "login_id": "dubu-mom", "email": null, "provider": "password" },
+  "profiles": [{ "id": 3, "name": "엄마", "avatar_key": "heart", "is_default": true, "created_at": "...", "updated_at": "...", "last_active_at": "..." }],
+  "max_profiles": 5,
+  "current_profile": { "id": 3, "name": "엄마", "...": "..." },
+  "profile_required": false
+}
 ```
+
+프로필이 하나면 로그인하자마자 그 프로필로 씁니다. 여럿이면 `current_profile`이 `null`, `profile_required`가 `true`이고, `POST /profiles/{id}/select`로 고르기 전까지 프로필이 필요한 API(산책 기록, 산책길, 추천, 일정, 날씨, 리포트)는 `428`입니다. 반려동물 목록처럼 가족 공용인 API는 그대로 씁니다.
+
+세션은 로그인한 지 30일이 지나거나 7일 동안 요청이 없으면 끝납니다. 끝난 세션으로 보낸 요청은 시연 보호자로 처리하지 않고 `401`과 쿠키 삭제로 응답합니다.
 
 `/auth/me`는 만료된 쿠키를 지우고 로그인하지 않은 상태로 알려 줍니다. `google_enabled`는 서버에 Google 클라이언트가 설정되어 있는지입니다. `user.provider`는 `password` 또는 `google`이고, Google 사용자는 `login_id`가 `null`이며 Google이 확인한 이메일이 `email`에 들어갑니다.
 
@@ -43,11 +58,15 @@
 
 브라우저를 이 주소로 보내면(페이지 이동) Google 로그인 화면으로 `302` 리디렉션합니다. PKCE(S256), state, nonce를 붙이고, state를 `pawpath_google_state` 쿠키(HttpOnly, 10분, 경로 `/api/auth/google`)로도 줍니다. `next`는 로그인 뒤 돌아갈 앱 안의 경로이며 다른 사이트 주소면 `/`로 바꿉니다. Google 클라이언트가 설정되지 않았으면 `404`입니다.
 
+`?reauth=true`를 붙이면 로그인이 아니라 지금 Google 보호자의 본인 재확인입니다. 끝나면 `/account`로 돌아옵니다. 로그인하지 않았으면 `/login`, 아이디 계정이면 `/account?error=google_mismatch`로 보냅니다.
+
 ### `GET /auth/google/callback`
 
-Google이 돌려보내는 주소이며 콘솔의 리디렉션 URI와 같아야 합니다. 서버가 승인 코드를 클라이언트 비밀값과 PKCE 검증값으로 교환하고, ID 토큰의 발급자, 대상, 만료, nonce를 확인한 뒤 세션 쿠키를 주고 `next`로 `302` 리디렉션합니다. 같은 Google 계정(`sub`)은 늘 같은 보호자이고, 처음이면 보호자를 새로 만듭니다.
+Google이 돌려보내는 주소이며 콘솔의 리디렉션 URI와 같아야 합니다. 서버가 승인 코드를 클라이언트 비밀값과 PKCE 검증값으로 교환하고, ID 토큰의 발급자, 대상, 만료, nonce를 확인한 뒤 세션 쿠키를 주고 `next`로 `302` 리디렉션합니다. 같은 Google 계정(`sub`)은 늘 같은 대표 계정이고, 처음이면 대표 계정과 대표 프로필을 새로 만들고 `/profiles/setup?next=...`로 보내 프로필 이름과 아바타를 정하게 합니다. Google 로그인은 대표 계정 인증에만 쓰고, 프로필은 로그인 뒤 고릅니다.
 
 실패하면 `/login?error=이유`로 보냅니다.
+
+본인 재확인이면 새 세션을 만들지 않습니다. 같은 Google 계정(`sub`)이고 시작한 세션이 그대로일 때만 지금 세션에 기록하고 토큰을 바꿉니다. 다른 계정이면 `/account?error=google_mismatch`로 보내고, 실패와 취소도 `/account?error=이유`로 알립니다.
 
 | 이유 | 상황 |
 |---|---|
@@ -55,6 +74,114 @@ Google이 돌려보내는 주소이며 콘솔의 리디렉션 URI와 같아야 �
 | `google_state` | state가 없거나 브라우저 쿠키와 다름, 이미 썼거나 10분이 지남 |
 | `google_failed` | 토큰 교환 실패, ID 토큰 확인 실패, Google의 다른 오류 |
 | `google_unavailable` | 서버에 Google 클라이언트가 설정되지 않음 |
+| `google_mismatch` | 본인 재확인에서 로그인한 계정과 다른 Google 계정을 고름 |
+
+### `POST /auth/reauth`
+
+```json
+{ "password": "지금 비밀번호" }
+```
+
+비밀번호로 본인을 다시 확인합니다. 맞으면 세션 토큰을 바꾼 쿠키와 `{ "reauth_required": false }`를 줍니다. 세션의 남은 기간은 늘지 않습니다. 틀리면 `403`, 5번 연달아 틀리면 10분 동안 `429`입니다(로그인과 따로 세어 주인의 로그인은 막히지 않음). Google 계정은 `409`, 세션이 없으면 `401`입니다.
+
+### `GET /auth/account`
+
+탈퇴하면 지워질 데이터와 로그인 유지 기간입니다. 실제 세션이 있어야 하며 시연 보호자는 `401`입니다.
+
+```json
+{
+  "provider": "password",
+  "reauth_required": false,
+  "session_expires_at": "2026-11-30T17:59:00",
+  "session_idle_days": 7,
+  "data": { "pets": 1, "walks": 2, "feedback": 1, "recommendations": 1, "saved_walks": 2, "photos": 1, "personal_courses": 1, "shared_walks": 2, "community_trails": 0, "trail_reviews": 0 },
+  "backup_retention_days": 14
+}
+```
+
+`reauth_required`가 참이면 탈퇴 전에 본인을 다시 확인해야 합니다. 로그인이나 재확인 뒤 10분 동안은 거짓입니다. `backup_retention_days`는 자동 백업을 쓰지 않으면 `null`입니다.
+
+### `DELETE /auth/account`
+
+계정과 데이터를 유예 기간 없이 지우고 `204`와 함께 쿠키를 지웁니다. 다른 기기의 세션도 끝나고, 공유 링크는 `404`가 되며, 아이디는 다시 쓸 수 있습니다. `Clear-Site-Data: "cache"`로 이 브라우저의 사진 캐시도 지웁니다.
+
+본인 재확인이 안 되었으면 `403`, 탈퇴 기록을 남기지 못하면 아무것도 지우지 않고 `503`입니다.
+
+### `PATCH /auth/account`
+
+```json
+{ "name": "두부네 가족" }
+```
+
+대표 계정 이름을 바꿉니다. 로그인한 세션만 쓸 수 있습니다. 프로필 이름은 `PATCH /profiles/{id}`로 따로 바꿉니다.
+
+## 프로필
+
+대표 계정 하나에 프로필을 대표 프로필 포함 5개까지 둡니다. 프로필은 따로 로그인하지 않고, 세션이 지금 프로필을 기억합니다. 서버는 요청마다 세션의 프로필이 이 계정 소속이고 지우지 않았는지 다시 확인하며, 요청 본문이나 주소의 프로필 번호만으로는 권한을 주지 않습니다. 다른 계정의 프로필 번호는 모두 `404`입니다. 프로필 API는 로그인한 세션만 쓸 수 있습니다(시연 보호자는 `401`).
+
+| 데이터 | 단위 |
+|---|---|
+| 반려동물, 반려동물이 배운 취향, 커뮤니티 글과 좋아요 | 대표 계정(가족 공용) |
+| 산책 기록, 피드백, 추천, 일정, 나만의 산책길 | 만든 프로필. 목록은 지금 프로필 기준이고 `scope=family`면 가족 전체 |
+| 기록 고치기와 지우기 | 만든 프로필이나 대표 프로필만 (`403`) |
+
+### `GET /profiles` · `POST /profiles`
+
+```json
+{ "name": "아빠", "avatar_key": "moon" }
+```
+
+`avatar_key`는 `paw`, `bone`, `sun`, `moon`, `leaf`, `heart`, `star`, `flower` 중 하나입니다(기본 `paw`). 이름은 1~30자이고 같은 계정 안에서 겹치면 `409`, 5개를 넘으면 `409`입니다. 새 프로필은 대표 프로필의 일정으로 시작합니다. 만들어도 지금 프로필은 바뀌지 않습니다.
+
+### `GET /profiles/{id}` · `PATCH /profiles/{id}` · `DELETE /profiles/{id}`
+
+상세는 프로필 정보와 `activity`(산책 횟수, 거리, 시간, 저장한 산책길 수, 빼 둔 시연용 산책 수, 마지막 산책 시각)를 돌려줍니다. 수정은 보낸 항목(`name`, `avatar_key`)만 바꾸고 `null`이면 `422`입니다. 삭제는 프로필을 숨기기만 해 산책 기록과 산책길은 가족 기록에 남고(누가 했는지도 남음), 반려동물은 그대로입니다. 대표 프로필은 `409`로 지울 수 없습니다. 그 프로필을 쓰던 다른 기기의 세션은 다음 요청부터 프로필을 다시 고릅니다.
+
+### `POST /profiles/{id}/select`
+
+이 세션의 프로필을 바꾸고 `/auth/me`와 같은 형식을 돌려줍니다. 다시 로그인하지 않으며 세션 토큰도 바뀌지 않습니다. 고른 프로필의 `last_active_at`이 갱신됩니다.
+
+### `GET /family/overview`
+
+가족 전체 활동입니다. `totals`(가족 합계), `members`(프로필별 `activity`와 마지막 이용 시각, 기록이 남은 지운 프로필 포함), `pets`(반려동물별 가족 산책 수), `recent_walks`(최근 산책 10건, `profile` 포함)를 돌려줍니다. 시연용 산책은 통계에서 빼고 건수만 따로 셉니다.
+
+### `PATCH /auth/account`
+
+```json
+{ "name": "두부네 가족" }
+```
+
+대표 계정 이름을 바꿉니다. 로그인한 세션만 쓸 수 있습니다. 프로필 이름은 `PATCH /profiles/{id}`로 따로 바꿉니다.
+
+## 프로필
+
+대표 계정 하나에 프로필을 대표 프로필 포함 5개까지 둡니다. 프로필은 따로 로그인하지 않고, 세션이 지금 프로필을 기억합니다. 서버는 요청마다 세션의 프로필이 이 계정 소속이고 지우지 않았는지 다시 확인하며, 요청 본문이나 주소의 프로필 번호만으로는 권한을 주지 않습니다. 다른 계정의 프로필 번호는 모두 `404`입니다. 프로필 API는 로그인한 세션만 쓸 수 있습니다(시연 보호자는 `401`).
+
+| 데이터 | 단위 |
+|---|---|
+| 반려동물, 반려동물이 배운 취향, 커뮤니티 글과 좋아요 | 대표 계정(가족 공용) |
+| 산책 기록, 피드백, 추천, 일정, 나만의 산책길 | 만든 프로필. 목록은 지금 프로필 기준이고 `scope=family`면 가족 전체 |
+| 기록 고치기와 지우기 | 만든 프로필이나 대표 프로필만 (`403`) |
+
+### `GET /profiles` · `POST /profiles`
+
+```json
+{ "name": "아빠", "avatar_key": "moon" }
+```
+
+`avatar_key`는 `paw`, `bone`, `sun`, `moon`, `leaf`, `heart`, `star`, `flower` 중 하나입니다(기본 `paw`). 이름은 1~30자이고 같은 계정 안에서 겹치면 `409`, 5개를 넘으면 `409`입니다. 새 프로필은 대표 프로필의 일정으로 시작합니다. 만들어도 지금 프로필은 바뀌지 않습니다.
+
+### `GET /profiles/{id}` · `PATCH /profiles/{id}` · `DELETE /profiles/{id}`
+
+상세는 프로필 정보와 `activity`(산책 횟수, 거리, 시간, 저장한 산책길 수, 빼 둔 시연용 산책 수, 마지막 산책 시각)를 돌려줍니다. 수정은 보낸 항목(`name`, `avatar_key`)만 바꾸고 `null`이면 `422`입니다. 삭제는 프로필을 숨기기만 해 산책 기록과 산책길은 가족 기록에 남고(누가 했는지도 남음), 반려동물은 그대로입니다. 대표 프로필은 `409`로 지울 수 없습니다. 그 프로필을 쓰던 다른 기기의 세션은 다음 요청부터 프로필을 다시 고릅니다.
+
+### `POST /profiles/{id}/select`
+
+이 세션의 프로필을 바꾸고 `/auth/me`와 같은 형식을 돌려줍니다. 다시 로그인하지 않으며 세션 토큰도 바뀌지 않습니다. 고른 프로필의 `last_active_at`이 갱신됩니다.
+
+### `GET /family/overview`
+
+가족 전체 활동입니다. `totals`(가족 합계), `members`(프로필별 `activity`와 마지막 이용 시각, 기록이 남은 지운 프로필 포함), `pets`(반려동물별 가족 산책 수), `recent_walks`(최근 산책 10건, `profile` 포함)를 돌려줍니다. 시연용 산책은 통계에서 빼고 건수만 따로 셉니다.
 
 ## 반려동물
 
@@ -151,6 +278,8 @@ Google이 돌려보내는 주소이며 콘솔의 리디렉션 URI와 같아야 �
 
 ### `GET /courses` · `GET /courses/{course_id}`
 
+로그인 없이 열리며, 공용 코스와 보는 사람의 내 산책길 코스(`is_personal: true`)를 돌려줍니다. 다른 보호자의 내 산책길 코스는 번호로 조회해도 `404`입니다. 출발점 길찾기, 주변 시설, 안전 평가, 산책 기록, 대체 경로도 같은 기준으로 막습니다. 내 산책길 코스의 `data_sources.unknown`에는 측정도 추정도 없어 "확인 불가"로 다루는 속성이 들어갑니다.
+
 코스 정보, 경로(`route`: `[위도, 경도]` 배열), 시설(`facilities`), 출처(`data_sources`)를 돌려줍니다. 목록은 서버 설정 `SERVICE_AREA` 지역의 코스만 돌려주고, 번호로 조회하면 지역과 관계없이 돌려줍니다.
 
 ### `POST /courses/{course_id}/approach`
@@ -208,6 +337,46 @@ Google이 돌려보내는 주소이며 콘솔의 리디렉션 URI와 같아야 �
 ```json
 { "from_latitude": 37.55, "from_longitude": 126.9, "to_latitude": 37.551, "to_longitude": 126.9 }
 ```
+
+### `POST /routes/generate`
+
+출발 위치와 원하는 산책 시간으로 한 바퀴 도는 경로 후보를 만듭니다. 로그인이 필요합니다. 공용 도보 길찾기 서버를 여러 번 불러 **보통 약 10초, 후보가 모자라는 곳에서는 거리 보정까지 하느라 최대 30초 남짓** 걸립니다. 위치는 계산에만 쓰고 저장하지 않습니다.
+
+```json
+{ "latitude": 37.5559, "longitude": 126.9105, "duration_min": 30, "pet_id": 1, "weather_scenario": "live" }
+```
+
+`duration_min`은 20~90입니다(걷는 속도 60m/분). `pet_id`는 선택이며, 주면 후보를 그 반려동물의 성향·날씨·일정·지난 피드백으로 평가해 맞는 순서로 돌려줍니다. 응답:
+
+```json
+{
+  "target_min": 30,
+  "candidates": [
+    {
+      "route": [[37.5559, 126.9105], "..."], "distance_m": 1840.2, "duration_min": 30.7, "repeated_pct": 4.1, "start_snap_m": 1.0,
+      "fit": {
+        "score": 78.4, "level": "good", "summary": "두부에게는 ...", "details": ["..."], "cautions": [],
+        "highlights": ["공원을 지나는 길이 약 32%", "큰 도로변 비율 약 0%", "가까이 있는 시설: 화장실 2곳"],
+        "start_label": "오후 4시", "unknown": [], "excluded": []
+      }
+    }
+  ],
+  "notice": null,
+  "scored_for": "두부",
+  "fit_notice": null
+}
+```
+
+- `fit`은 `pet_id`를 줬을 때만 있고(없으면 `null`, `scored_for`도 `null`), 후보 순서가 곧 맞는 순서입니다. 점수는 저장한 코스를 추천할 때와 같은 엔진(`/recommendations`)으로 계산하므로 반려동물 성향·날씨·일정·지난 피드백이 같은 기준으로 들어갑니다. 시간 오차, 되돌아오는 구간 같은 기준은 먼저 후보를 거르는 데 쓰고, 그 뒤 엔진이 시간·거리 적합도를 포함해 점수를 매깁니다.
+- 주변 환경(도로 종류, 조명, 노면, 나무, 공원)은 **미리 수집해 둔 서비스 지역(망원동·개포동 주변 약 6km 상자)의 OpenStreetMap 자료**로 측정합니다. 자료가 덮지 않는 곳이거나 OSM에 태그가 없는 항목은 `unknown`에 이름이 담기고 중립값으로 계산하되 안전하다고 보지 않습니다. `highlights`는 측정한 사실만 담습니다.
+- `excluded`가 비어 있지 않은 후보는 추천 엔진이 이 시간대에는 권하지 않은 경로입니다(점수 없음, 순서는 뒤). 모든 후보가 그렇다면 `fit_notice`에 이유가 담깁니다.
+
+- 후보는 최대 5개이며 목표 시간에 가깝고 서로 덜 겹치는 순입니다. 목표 시간보다 20% 넘게 짧거나 50% 넘게 긴 경로, 같은 길을 다시 지나는 비율이 25%를 넘는 경로, 출발·경유 지점이 가장 가까운 길에서 150m 넘게 떨어진 경로는 내놓지 않습니다. 출발 위치가 공원이나 단지 안이면 `start_snap_m`만큼 떨어진 가까운 길에서 경로가 시작합니다. 기준에 맞는 경로가 없으면 `candidates`가 비고 `notice`에 이유가 담깁니다(200).
+- 경사와 반려견 출입 여부는 평가하지 않습니다. 20분과 90분 조건은 실측하지 않았습니다.
+- 마음에 드는 후보는 `POST /my-walks`에 `source_type: "generated"`로 저장하고, 이어서 `POST /my-walks/{id}/course`로 추천 후보에 넣습니다.
+- `429`: 다른 경로를 만드는 중이거나 이 계정이 방금 만들었습니다. `Retry-After` 초 뒤에 다시 시도합니다. `502`: 길찾기 서버에서 경로를 받지 못했습니다. `503`: 길찾기를 사용하지 않도록 설정되어 있습니다.
+- 기본 설정에서는 8방향(45° 간격)을 항상 모두 시도한 뒤 좋은 후보를 고릅니다. 5개가 모이지 않으면 시간 오차가 큰 후보의 거리 보정(최대 3회)을 더해, 한 번에 8~11회 공용 서버를 호출합니다. 전체 제한 시간은 30초입니다. 방위 수, 경유점 거리·각도 조합, 요청 상한, 돌려주는 후보 수는 `GENERATION_*` 설정으로 바꿀 수 있습니다(자체 서버용, README 참고).
+- 한 프로세스에서 한 번에 한 건만 처리하고 계정마다 완료 뒤 10초를 쉽니다. 서버 워커가 여러 개면 이 제한은 워커마다 따로 적용됩니다.
 
 ### `POST /routes/alternative`
 
@@ -290,8 +459,11 @@ Google이 돌려보내는 주소이며 콘솔의 리디렉션 URI와 같아야 �
   "pet_id": 1,
   "pet_name": "두부",
   "walkable": true,
-  "weather": { "source": "scenario:rain_later", "scenario": "rain_later", "is_mock": true, "notice": "시연용 시나리오: 곧 비가 오는 날" },
-  "weights": { "weather": 0.25, "personality": 0.25, "activity": 0.15, "schedule": 0.15, "safety": 0.1, "preference": 0.1 },
+  "status": "ok",
+  "data_notice": null,
+  "algorithm": { "version": "rule-v2", "ranker": "weighted-sum", "base_weights": { "pet_fit": 0.25, "user_preference": 0.25, "distance_time": 0.2, "weather_env": 0.15, "feedback": 0.15 } },
+  "weather": { "source": "scenario:rain_later", "scenario": "rain_later", "is_mock": true, "notice": "시연용 시나리오: 곧 비가 오는 날", "fetched_at": "2026-10-30T23:00:00", "is_available": true },
+  "weights": { "pet_fit": 0.4167, "user_preference": 0.0, "distance_time": 0.3333, "weather_env": 0.25, "feedback": 0.0 },
   "learning": { "feedback_total": 0, "is_personalized": false },
   "time_recommendation": {
     "recommended_duration_min": 30,
@@ -305,18 +477,28 @@ Google이 돌려보내는 주소이며 콘솔의 리디렉션 URI와 같아야 �
       "name": "망원초록길 공원 코스",
       "distance_km": 1.58,
       "duration_min": 25,
-      "total_score": 90.0,
-      "baseline_score": 90.0,
+      "total_score": 93.93,
+      "personalization_score": 95.43,
+      "safety_penalty": 1.5,
+      "skip_penalty": 0.0,
+      "baseline_score": 93.93,
       "learning_delta": 0.0,
       "rank_change": 0,
+      "exploration": false,
+      "similar_to": null,
       "recommended_time": {},
       "safety": {},
+      "score_groups": [
+        { "key": "pet_fit", "label": "반려견 특성 적합도", "score": 93.6, "weight": 0.4167, "contribution": 39.0, "evidence": ["익숙한 코스"], "available": true, "source": "반려견 프로필, 코스 데이터" },
+        { "key": "user_preference", "label": "사용자 선호도", "score": null, "weight": 0.0, "contribution": 0.0, "evidence": ["선호 거리와 시간이 없어 반영하지 않았어요"], "available": false, "source": "" }
+      ],
       "factors": [
         { "key": "weather", "label": "날씨 적합도", "score": 100.0, "weight": 0.25, "contribution": 25.0, "evidence": ["16시 체감 21°C, 강수 확률 20%"] }
       ],
       "reason": {
         "summary": "낯선 길을 싫어하는 두부를 위해 익숙한 공원 코스를 골랐어요. 비가 오기 전 짧게 다녀올 수 있어요.",
-        "details": []
+        "details": [],
+        "basis": [{ "key": "feedback", "label": "과거 선호도", "text": "아직 피드백이 없어 과거 선호도는 반영하지 않았어요.", "source": "없음" }]
       },
       "cautions": []
     }
@@ -331,9 +513,14 @@ Google이 돌려보내는 주소이며 콘솔의 리디렉션 URI와 같아야 �
 
 | 필드 | 내용 |
 |---|---|
-| `score_breakdown` | 6개 평가 묶음: 반려동물 적합도, 사용자 선호도, 날씨, 안전, 시간, 과거 만족도 |
-| `factors` | 세부 항목 7개와 근거 |
-| `safety_assessment` | 안전 지수 (`GET /safety`와 같은 형식) |
+| `score_groups` | v2의 5개 묶음 전부: 반려견 특성, 사용자 선호, 거리·시간, 날씨·환경, 과거 피드백. 데이터가 없는 묶음은 `available: false`, `score: null`, 가중치 0 |
+| `score_breakdown` | 화면 막대용. v2는 `score_groups` 중 데이터가 있는 묶음만, v1은 6개 평가 묶음 |
+| `factors` | 세부 항목과 근거. v2는 점수에 들어간 항목만 |
+| `personalization_score`, `safety_penalty`, `skip_penalty` | `total_score = personalization_score - safety_penalty - skip_penalty` (v2) |
+| `exploration` | 다녀온 코스만 남아 3위를 아직 안 가 본 코스로 바꿨는지 |
+| `similar_to` | 경로가 60% 이상 겹치는 상위 코스 이름. 다른 후보가 없어 함께 올렸을 때만 |
+| `reason.basis` | 항목별 추천 근거와 출처. 쓰지 않은 항목은 "반영하지 않았어요"로 밝힘 |
+| `safety_assessment` | 안전 지수 (`GET /safety`와 같은 형식). `data_quality`(출처별 비중, 데이터 없는 항목, 코스 환경 기록일)와 위험 수준일 때의 `warning`이 있음 |
 | `alternative` | 위험 수준이 실제로 낮은 대체 코스, 없으면 `null` |
 | `other_cautions` | 안전 지수에 없는 주의사항 |
 | `reason.llm_summary` | 사실 검증을 통과한 LLM 문장 (있을 때만) |
@@ -341,6 +528,26 @@ Google이 돌려보내는 주소이며 콘솔의 리디렉션 URI와 같아야 �
 응답 최상위에는 `excluded_courses`(제외 코스와 이유), `learning.mode`(`rule_based`, `personalized`), `explanation_engine`(`status`: `disabled`, `pending`, `ok`, `rejected`, `failed`)이 있습니다.
 
 `learning_delta`와 `rank_change`는 같은 날씨에서 학습 상태를 비운 기준선과의 차이입니다. 모든 시간대가 부적합하면 `walkable`이 `false`이고 `courses`가 비며, `blocked_reasons`와 `indoor_alternatives`를 채웁니다.
+
+`status`는 추천하지 못한 이유를 나눕니다: `ok`, `unsafe`(날씨나 코스 조건이 위험), `no_forecast`(예보를 받지 못함), `no_window`(24시간 안에 가능 시간이 없음), `no_candidates`(걸을 수 있는 코스가 없음). 날씨 API가 실패해 모의 날씨로 대신하면 `weather.is_available`이 `false`이고, `data_notice`로 알리며, 안전 평가의 날씨 항목을 "확인 불가"로 둡니다. `RECOMMENDER_VERSION=v1`이면 이전 응답 형식(6항목 가중치)이 나옵니다.
+
+### `POST /recommendations/{recommendation_id}/events`
+
+추천 뒤 행동을 남깁니다. 산책 완료와 피드백은 산책 기록에서 알 수 있어, 서버가 모르는 두 가지만 받습니다.
+
+```json
+{ "course_id": 3, "event": "start" }
+```
+
+`event`는 `select`(추천 카드에서 **이 코스로 산책**)나 `start`(길 안내에서 산책 시작)입니다. 같은 행동은 한 번만 남기고 `204`를 돌려줍니다. 이 추천에 없는 코스는 `422`, 다른 계정의 추천은 `404`입니다.
+
+### `GET /recommendations/{recommendation_id}/candidates`
+
+추천 당시 후보 코스 전부의 점수입니다. TOP 3 밖의 코스(`rank: null`)와 제외된 코스(`excluded_reasons`)도 나옵니다. 필드는 `algorithm_version`, `rank`, `position`, `total_score`, `personalization_score`, `safety_penalty`, `skip_penalty`, `safety_level`, `safety_score`, `group_scores`, `data_quality`, `duplicate_of`, `exploration`입니다.
+
+### `GET /pets/{pet_id}/recommendation-metrics`
+
+이 반려동물의 추천 지표입니다. `all`과 알고리즘 버전별(`by_version`) 값이 있고, 표본이 30건 미만이면 `reliable`이 `false`입니다. 계산할 수 없는 지표는 `null`이고 `not_measured`에 이유가 있습니다. 지표 정의는 [추천 알고리즘](RECOMMENDER.md#평가-지표)에 있습니다.
 
 ### `POST /recommendations/{recommendation_id}/explain`
 
@@ -362,13 +569,19 @@ Google이 돌려보내는 주소이며 콘솔의 리디렉션 URI와 같아야 �
 { "pet_id": 1, "course_id": 3, "recommendation_id": 12, "duration_min": 20, "started_at": "2026-10-31T16:00:00" }
 ```
 
-`recommendation_id`, `started_at`은 선택입니다. `started_at`이 없으면 지금 끝난 산책으로 기록합니다. 코스 방문 수가 함께 올라갑니다.
+`recommendation_id`, `started_at`은 선택입니다. `started_at`이 없으면 지금 끝난 산책으로 기록합니다. 코스 방문 수가 함께 올라갑니다. `started_at`은 시간대 학습에 쓰이므로 나중에 기록할 때는 실제 출발 시각을 보냅니다. 타임존이 붙어 있으면 서비스 현지 시각으로 바꾸고, 끝나는 시각(`started_at` + `duration_min`)이 지금보다 30분 넘게 늦으면 422로 거부합니다. 30분은 휴대폰과 서버 시계 차이를 위한 여유입니다.
 
 선택 필드: `tracking_source`(`gps`, `manual`, `simulation`, 기본 `manual`), `distance_km`(실제 걸은 거리, 없으면 코스 거리). `simulation`은 활동 통계에서 제외합니다.
 
-### `GET /walks?pet_id=1`
+### `GET /walks?pet_id=1&scope=family&profile_id=3`
+
+기본은 지금 프로필의 기록입니다. `scope=family`면 가족 전체, `profile_id`를 주면 그 가족 구성원의 기록입니다(지운 프로필 포함). 각 기록에 `profile`(`id`, `name`, `avatar_key`, `is_default`, `deleted`)이 붙습니다. `/my-walks`, `/walks/report`, `/pets/{id}/insights`도 같은 `scope`를 받습니다. 인사이트의 코스 선호도와 취향 분석은 반려동물의 학습 상태라 범위와 상관없이 가족이 함께 쓴 값입니다.
 
 최신순 산책 기록과 각 산책의 피드백입니다. `tracking_source`, `is_simulated`를 함께 돌려줍니다.
+
+### `DELETE /walks/{walk_id}`
+
+잘못 남긴 산책 기록을 지웁니다(204). 기록할 때 올린 코스 방문 수를 되돌립니다. 피드백을 남긴 산책은 이미 학습에 반영되어 409로 거부합니다. 남의 기록이면 404입니다.
 
 ### `GET /walks/report?pet_id=1&week_offset=0`
 
@@ -429,9 +642,10 @@ Google이 돌려보내는 주소이며 콘솔의 리디렉션 URI와 같아야 �
 
 - `points`는 2개 이상 10만 개 이하이고 순서대로 저장합니다. `segment`가 바뀌는 곳(일시정지, GPX `trkseg`)은 선을 잇지 않고 거리에 넣지 않습니다.
 - `visibility`: `private`(기본), `link`, `public`. `private`가 아니면 공유 토큰을 함께 만듭니다.
-- `source_type`: `recorded`(직접 기록) 또는 `imported`(GPX). 기록은 같은 좌표가 이어진 지점을 빼고, `duration_sec`(일시정지를 뺀 시간)을 씁니다. GPX는 시각으로 시간을 계산하고, 시각이 없으면 `null`입니다.
+- `source_type`: `recorded`(직접 기록), `imported`(GPX), `generated`(`/routes/generate`로 만든 경로. 시각이 없고 서버가 출처를 검증하지 않는 값입니다). 기록은 같은 좌표가 이어진 지점을 빼고, `duration_sec`(일시정지를 뺀 시간)을 씁니다. GPX는 시각으로 시간을 계산하고, 시각이 없으면 `null`입니다.
 - 거리, 평균 속도, 시작과 끝 시각은 서버가 좌표로 다시 계산합니다. 100m 넘게 움직이면서 시속 252km(초속 70m)를 넘는 이동, 시각이 없거나 같으면 5km를 넘는 간격은 구간을 나눠 거리에서 뺍니다.
 - `client_id`가 같은 요청을 다시 보내면 새로 만들지 않고 저장된 산책길을 `200`으로 돌려줍니다. 처음 저장하면 `201`입니다.
+- 저장하면 바로 내 추천 후보 코스가 됩니다(기록한 길과 GPX 모두). 응답의 `course`에 상태가 들어가고, 주변 환경 측정은 응답을 보낸 뒤에 합니다. 코스로 만들 수 없는 길(서비스 지역 밖, 0.1km 미만, 10km 초과, 100m 넘게 끊긴 구간)은 산책길만 저장하고 이유를 `course_blocked`에 담습니다. `client_id`로 다시 보낸 요청은 다시 등록하지 않습니다.
 
 ### `GET /my-walks?sort=recent&pet_id=1&visibility=link`
 
@@ -439,7 +653,7 @@ Google이 돌려보내는 주소이며 콘솔의 리디렉션 URI와 같아야 �
 
 ### `GET /my-walks/{walk_id}` · `PATCH /my-walks/{walk_id}` · `DELETE /my-walks/{walk_id}`
 
-상세에는 `route`(구간별 전체 경로), `memo`, `share_token`, `share_expires_at`이 더해집니다. `PATCH`는 보낸 항목만 바꾸며 `title`, `pet_id`, `memo`, `visibility`, `share_memo`를 받습니다. `pet_id`만 `null`로 비울 수 있습니다. 비공개로 바꾸면 공유 토큰을 지웁니다. `DELETE`는 지점까지 함께 지우고 `204`를 돌려줍니다.
+상세에는 `route`(구간별 전체 경로), `memo`, `share_token`, `share_expires_at`, `course`(추천 후보 상태), `course_blocked`(후보가 되지 못한 이유)가 더해집니다. `PATCH`는 보낸 항목만 바꾸며 `title`, `pet_id`, `memo`, `visibility`, `share_memo`를 받습니다. `pet_id`만 `null`로 비울 수 있습니다. 비공개로 바꾸면 공유 토큰을 지웁니다. `DELETE`는 지점까지 함께 지우고 `204`를 돌려줍니다.
 
 ### `GET /my-walks/{walk_id}/gpx`
 
@@ -465,6 +679,18 @@ GPX 파일 원본을 요청 본문으로 보냅니다(`Content-Type: application
 사진 원본을 요청 본문으로 보냅니다. 형식은 `Content-Type`이 아니라 파일 내용으로 판단하며 JPG와 PNG만 받습니다. JPEG는 EXIF(촬영 위치), XMP, IPTC, 주석과 끝 표시 뒤에 붙은 보조 이미지를, PNG는 `eXIf`, `tEXt`, `zTXt`, `iTXt`, `tIME` 조각을 지우고 저장합니다. 산책길마다 5장, 장당 5MB까지이며 넘으면 `409`, `413`입니다. 손상된 파일은 `422`입니다.
 
 `GET`은 사진 파일을 `Cache-Control: private`, `X-Content-Type-Options: nosniff`와 함께 돌려줍니다. 상세 응답의 `photos`에는 `id`, `content_type`, `size_bytes`, `created_at`만 담습니다. 사진은 공유 응답과 공개 목록에 나오지 않습니다.
+
+### `POST /my-walks/{walk_id}/course` · `DELETE /my-walks/{walk_id}/course`
+
+산책길을 내 추천 후보 코스로 다시 넣거나 뺍니다. 저장할 때 자동으로 넣으므로 `POST`는 후보에서 뺀 뒤 되돌리거나 주변 환경을 다시 측정할 때 씁니다. 응답은 산책길 상세이며 `course`에 상태가 들어갑니다.
+
+```json
+{ "id": 17, "active": true, "area": "서울 마포구 망원동 일대", "in_current_area": true, "environment_measured": false, "measurement": "pending", "unknown": ["crowd_level", "difficulty", "has_park", "is_paved", "shade_level", "traffic_exposure"], "notes": ["주변 도로, 조명, 노면, 나무, 공원을 OpenStreetMap에서 측정하고 있어요. ..."] }
+```
+
+- 등록은 바로 응답하고, 주변 환경은 응답을 보낸 뒤 Overpass로 측정합니다. `measurement`는 `pending`(측정 중), `done`, `failed`, `off`(`ENVIRONMENT_PROVIDER=none`)이고, 5분이 지나도 끝나지 않으면 `failed`로 봅니다. 다시 `POST`하면 다시 측정합니다.
+- 서비스 지역 5km 밖, 0.1km 미만 또는 10km 초과, 구간 사이가 100m 넘게 떨어진 산책길은 이유와 함께 `422`입니다.
+- `DELETE`는 추천 후보에서만 빼고, 이 코스로 남긴 산책 기록과 피드백은 그대로 둡니다. 산책길을 지워도 코스는 추천에서만 빠집니다.
 
 ### `POST /my-walks/{walk_id}/share` · `DELETE /my-walks/{walk_id}/share`
 
@@ -493,6 +719,115 @@ GPX 파일 원본을 요청 본문으로 보냅니다(`Content-Type: application
 ### `GET /public-walks`
 
 공개로 설정한 산책길 목록입니다. 각 항목은 `token`, `title`, `distance_m`, `duration_sec`, `preview`만 담습니다.
+
+## 산책길 커뮤니티
+
+내 산책길을 공개하고 둘러보는 API입니다. `GET`과 `/view`, `/start`, `/nearby`는 로그인 없이 부를 수 있고, 나머지는 실제 로그인이 필요합니다. 시연 보호자로는 쓸 수 없어 `AUTH_REQUIRED=false`여도 `401`입니다. 다른 보호자의 비공개 산책길은 없는 산책길과 같은 `404`이고, 공개 산책길을 주인이 아닌 사람이 고치면 `403`입니다.
+
+공개 값에는 출발점과 도착점 반경 안의 지점이 없고, 원본 산책길의 이름, 메모, 걸은 시각, 공유 토큰, 반려동물, 가리는 반경이 들어가지 않습니다. 작성자는 이름(`author_name`)만 보냅니다.
+
+### `POST /community/trails/preview`
+
+```json
+{ "saved_walk_id": 12, "hide_radius_m": 200 }
+```
+
+공개될 경로와 계산 값을 미리 돌려줍니다. 저장하지 않습니다. 응답은 `route`, `distance_m`, `estimated_min`, `elevation_gain_m`, `difficulty`, `region`(추천 지역), `start_label`, `end_label`, `hidden_m`, `can_navigate`입니다. 가린 뒤 100m보다 짧게 남으면 `422`입니다.
+
+### `POST /community/trails`
+
+```json
+{
+  "saved_walk_id": 12,
+  "title": "망원 한강공원 저녁 산책길",
+  "description": "해 질 때 걷기 좋아요",
+  "cover_photo_id": 3,
+  "visibility": "public",
+  "region": "",
+  "features": ["park", "waterside"],
+  "suitable_for": ["small", "senior"],
+  "hide_radius_m": 200
+}
+```
+
+- `saved_walk_id`만 내 산책길을 가리키면 되고 좌표는 보내지 않습니다. 남의 산책길이면 `404`입니다.
+- `title` 1~80자, `description` 2000자까지. 제어 문자는 지웁니다.
+- `visibility`: `public`(기본), `private`. `hide_radius_m`: `100`, `200`(기본), `300`, `500`.
+- `features`: `park`, `shade`, `flat`, `paved`, `waterside`, `forest`, `quiet`, `lit`. `suitable_for`: `small`, `medium`, `large`, `senior`, `puppy`, `active`, `timid`.
+- `region`을 비우면 출발점 5km 안의 서비스 지역 이름, 없으면 `기타 지역`을 씁니다. 주소 검색 API는 위치를 외부로 보내게 되어 쓰지 않습니다.
+- `cover_photo_id`는 이 산책길의 사진만 고를 수 있고(`422`), 고른 한 장만 공개됩니다.
+- 이미 공유한 산책길이나 같은 경로면 `409`입니다.
+- 직접 기록(`recorded`)과 GPX(`imported`)만 공유합니다. 자동 생성 경로(`generated`)는 미리보기와 공유 모두 `422`입니다.
+
+### `GET /community/trails`
+
+`q`(이름, 지역, 설명), `region`, `min_km`, `max_km`, `min_minutes`, `max_minutes`, `difficulty`(`easy`, `moderate`, `hard`), `suitable`, `feature`, `sort`(`recent`, `popular`, `rating`), `page`, `size`(최대 50, 기본 12).
+
+```json
+{ "items": [{ "id": 1, "title": "...", "region": "...", "author_name": "앨리스", "distance_m": 2998.4, "estimated_min": 39, "elevation_gain_m": 23.0, "difficulty": "moderate", "preview": [[[37.55, 126.91]]], "cover_photo_id": 3, "view_count": 12, "like_count": 4, "bookmark_count": 2, "review_count": 1, "average_rating": 5.0, "liked": false, "bookmarked": false, "is_mine": false, "visibility": "public", "features": [], "suitable_for": [], "description": "", "created_at": "...", "updated_at": "..." }], "total": 1, "page": 1, "size": 12, "has_next": false }
+```
+
+좋아요 수와 평점은 저장하지 않고 읽을 때 집계합니다. 인기순은 `좋아요×3 + 저장×2 + 후기×2 + 조회×0.1`, 평점순은 후기 3개 분량의 3.5점을 섞은 평균입니다. 후기가 하나뿐인 5점이 후기가 많은 높은 평균을 앞서지 않게 하기 위해서입니다. 난이도는 5km 이상이나 오르막 100m 이상이면 `hard`, 2km 이상이나 30m 이상이면 `moderate`입니다. 고도 기록이 절반이 안 되면 `elevation_gain_m`이 `null`이고 거리로만 정합니다.
+
+### `POST /community/trails/nearby`
+
+```json
+{ "latitude": 37.55, "longitude": 126.91, "radius_km": 5, "limit": 20 }
+```
+
+위치가 접근 로그에 남지 않도록 본문으로 받고 저장하지 않습니다. 각 항목에 `distance_from_me_m`(10m 단위)가 더해집니다.
+
+### `GET /community/trails/recommended?pet_id=1&limit=6`
+
+내 반려동물에게 맞는 순서입니다. 내가 공유한 길은 뺍니다. 각 항목에 `match_score`(0~100)와 `reasons`가 더해집니다. 점수는 권장 거리 35%, 추천 대상 20%, 평점 20%, 학습된 취향 15%, 지형 10%입니다. 남의 반려동물이면 `404`입니다.
+
+### `GET /community/regions`
+
+공개 산책길이 있는 지역과 개수입니다. `[{ "region": "서울 마포구 망원동 일대", "count": 3 }]`
+
+### `GET /community/trails/{id}` · `PATCH /community/trails/{id}` · `DELETE /community/trails/{id}`
+
+상세에는 `route`(가린 경로), `start`, `end`, `start_label`, `end_label`(가까운 공원 이름, 없으면 `null`), `can_navigate`, `my_review`, `walked`(보는 사람이 GPS로 걸은 기록 여부), `owner`(주인에게만 `saved_walk_id`, `hide_radius_m`)가 더해집니다. `PATCH`는 만든 때와 같은 항목에서 보낸 것만 바꾸며, `cover_photo_id`만 `null`로 비울 수 있습니다. `hide_radius_m`을 바꾸면 공개 값과 길 안내 코스를 다시 계산합니다. `DELETE`는 공유 해제입니다. 좋아요, 저장, 후기를 함께 지우고 원본 산책길은 남깁니다(`204`).
+
+### `POST /community/trails/{id}/view`
+
+조회수를 올립니다(`204`). 화면이 세션마다 한 번 부르고, 주인은 세지 않습니다. 상세를 읽는 것만으로는 올라가지 않습니다.
+
+### `GET /community/trails/{id}/gpx`
+
+공개용 GPX입니다. 가린 경로만 담고 시각, 고도, 원본 이름, 메모, 작성자를 넣지 않으며 파일 이름에도 날짜가 없습니다.
+
+### `GET /community/trails/{id}/cover`
+
+대표 이미지입니다. `Cache-Control: private, max-age=300`, `X-Content-Type-Options: nosniff`와 함께 돌려줍니다. 없으면 `404`입니다.
+
+### `POST /community/trails/{id}/start`
+
+이 산책길의 길 안내 코스 번호를 돌려줍니다. `{ "course_id": 21 }`. 산책길마다 하나만 만들어 함께 쓰며 추천 후보에는 넣지 않습니다. `/courses/{id}`, `/walks`, `/feedback`을 기존과 같이 쓸 수 있고, `/walks` 응답의 `community_trail_id`로 후기에 이을 수 있습니다. 산책길이 비공개가 되면 코스도 주인에게만 열리고, 공유를 해제하면 경로를 지워 `404`가 됩니다. 가린 구간이나 끊긴 구간이 100m를 넘어 한 줄로 이을 수 없으면 `422`입니다.
+
+### `POST /community/trails/{id}/like` · `DELETE` · `POST /community/trails/{id}/bookmark` · `DELETE`
+
+`{ "liked": true, "like_count": 4 }`, `{ "bookmarked": true, "bookmark_count": 2 }`. 여러 번 보내도 결과가 같고, DB 고유 제약이 동시 요청의 중복도 막습니다.
+
+### `GET /community/trails/{id}/reviews` · `POST /community/trails/{id}/reviews`
+
+```json
+{ "rating": 5, "content": "직접 걸어 보니 좋았어요" }
+```
+
+`rating` 1~5, `content` 1~1000자입니다. 산책길마다 한 번만 쓰며 두 번째는 `409`, 내 산책길이면 `403`입니다. 응답의 `verified`는 이 산책길의 코스를 `tracking_source: "gps"`로 절반 이상 걸은 기록이 있을 때 참이며, 읽을 때 계산하므로 나중에 걸으면 붙고 기록을 지우면 떨어집니다. 시연용 걷기와 직접 입력은 세지 않습니다.
+
+### `PATCH /community/reviews/{id}` · `DELETE /community/reviews/{id}`
+
+내 후기만 고치거나 지웁니다. 남의 후기면 `403`입니다.
+
+### `POST /community/reviews/{id}/photos` · `GET /community/reviews/{id}/photos/{photo_id}` · `DELETE ...`
+
+산책길 사진과 같은 검사를 거칩니다(JPG, PNG, 5MB, 메타데이터 제거). 후기마다 3장이며 넘으면 `409`입니다. 산책길을 볼 수 없으면 사진도 `404`입니다.
+
+### `GET /community/my/trails` · `/my/bookmarks` · `/my/likes` · `/my/reviews`
+
+내 활동입니다. `bookmarks`와 `likes`는 작성자가 비공개로 돌린 길을 빼고 `hidden_count`로 개수만 알려 줍니다. `reviews`의 각 항목에는 `trail_available`, `trail_title`이 더해지고, 볼 수 없는 길이면 이름이 `null`입니다.
 
 ## 시스템
 

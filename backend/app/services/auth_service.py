@@ -8,15 +8,23 @@ import threading
 import time
 from datetime import datetime, timedelta
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import AuthSession, User
 from app.seed import new_user_defaults
+from app.services.profile_service import new_default_profile
 
 SESSION_COOKIE = "pawpath_session"
+# 로그인한 지 이 기간이 지나면 계속 쓰고 있어도 끝난다.
 SESSION_DAYS = 30
+# 이 기간 동안 요청이 없으면 끝난다.
+SESSION_IDLE_DAYS = 7
+# 요청마다 DB에 쓰지 않도록 마지막 사용 시각은 이 간격으로만 갱신한다.
+TOUCH_MINUTES = 5
+# 본인을 다시 확인한 뒤 되돌릴 수 없는 작업을 할 수 있는 시간.
+REAUTH_MINUTES = 10
 SCRYPT_N, SCRYPT_R, SCRYPT_P = 2**14, 8, 1
 MAX_FAILURES = 5
 LOCK_SECONDS = 600
@@ -89,48 +97,98 @@ def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def signup(db: Session, login_id: str, password: str, name: str) -> User:
-    if db.scalar(select(User.id).where(User.login_id == login_id)) is not None:
-        raise AuthError(409, "이미 사용 중인 아이디예요.")
-    user = User(name=name, login_id=login_id, password_hash=hash_password(password), **new_user_defaults())
+def signup(db: Session, login_id: str | None, password: str, name: str, email: str | None = None) -> User:
+    """대표 계정을 만든다. 아이디나 이메일 중 하나로 로그인하고, 대표 프로필이 함께 만들어진다."""
+    taken = AuthError(409, "이미 사용 중인 이메일이에요." if email else "이미 사용 중인 아이디예요.")
+    if db.scalar(select(User.id).where(User.email == email if email else User.login_id == login_id)) is not None:
+        raise taken
+    user = User(name=name, login_id=login_id, email=email, password_hash=hash_password(password), **new_user_defaults())
+    new_default_profile(user)
     db.add(user)
     try:
         db.commit()
     except IntegrityError as error:
         # 같은 아이디로 동시에 가입한 경우다.
         db.rollback()
-        raise AuthError(409, "이미 사용 중인 아이디예요.") from error
+        raise taken from error
     return user
+
+
+def _check_password(throttle_key: str, stored: str | None, password: str, failure: AuthError, clock: float | None) -> None:
+    now = time.monotonic() if clock is None else clock
+    wait = throttle.seconds_locked(throttle_key, now)
+    if wait:
+        raise AuthError(429, f"로그인 시도가 너무 많아요. {math.ceil(wait / 60)}분 뒤에 다시 시도해 주세요.")
+    matched = verify_password(password, stored or _DUMMY_HASH)
+    if stored is None or not matched:
+        throttle.fail(throttle_key, now)
+        raise failure
+    throttle.clear(throttle_key)
 
 
 def login(db: Session, login_id: str, password: str, clock: float | None = None) -> User:
-    now = time.monotonic() if clock is None else clock
-    wait = throttle.seconds_locked(login_id, now)
-    if wait:
-        raise AuthError(429, f"로그인 시도가 너무 많아요. {math.ceil(wait / 60)}분 뒤에 다시 시도해 주세요.")
-    user = db.scalar(select(User).where(User.login_id == login_id))
+    """아이디에는 @를 쓸 수 없으므로 @가 있으면 이메일로 찾는다."""
+    user = db.scalar(select(User).where(User.email == login_id if "@" in login_id else User.login_id == login_id))
     stored = user.password_hash if user is not None and user.password_hash else None
-    matched = verify_password(password, stored or _DUMMY_HASH)
-    if stored is None or not matched:
-        throttle.fail(login_id, now)
-        raise AuthError(401, "아이디나 비밀번호가 맞지 않아요.")
-    throttle.clear(login_id)
+    _check_password(login_id, stored, password, AuthError(401, "아이디나 비밀번호가 맞지 않아요."), clock)
     return user
 
 
-def create_session(db: Session, user: User, now: datetime) -> str:
+def create_session(db: Session, user: User, now: datetime, profile_id: int | None = None) -> str:
+    """profile_id는 로그인하자마자 쓸 프로필이다. 비우면 화면에서 프로필을 고른다."""
     token = secrets.token_urlsafe(32)
-    db.execute(delete(AuthSession).where(AuthSession.expires_at <= now))
-    db.add(AuthSession(user_id=user.id, token_hash=_token_hash(token), created_at=now, expires_at=now + timedelta(days=SESSION_DAYS)))
+    idle_limit = now - timedelta(days=SESSION_IDLE_DAYS)
+    db.execute(delete(AuthSession).where(or_(AuthSession.expires_at <= now, func.coalesce(AuthSession.last_seen_at, AuthSession.created_at) <= idle_limit)))
+    db.add(AuthSession(user_id=user.id, token_hash=_token_hash(token), created_at=now, expires_at=now + timedelta(days=SESSION_DAYS), last_seen_at=now, profile_id=profile_id))
     db.commit()
     return token
 
 
-def user_for_token(db: Session, token: str, now: datetime) -> User | None:
+def find_session(db: Session, token: str, now: datetime) -> AuthSession | None:
+    """쓸 수 있는 세션을 돌려주고 마지막 사용 시각을 갱신한다. 끝난 세션은 지운다.
+
+    화면은 같은 쿠키로 요청을 동시에 보내므로, 다른 요청이 먼저 지웠어도 오류가 나지 않는 구문으로 쓴다.
+    """
     session = db.scalar(select(AuthSession).where(AuthSession.token_hash == _token_hash(token)))
-    if session is None or session.expires_at <= now:
+    if session is None:
         return None
-    return db.get(User, session.user_id)
+    last_seen = session.last_seen_at or session.created_at
+    if session.expires_at <= now or last_seen + timedelta(days=SESSION_IDLE_DAYS) <= now:
+        db.execute(delete(AuthSession).where(AuthSession.id == session.id))
+        db.commit()
+        return None
+    if now - last_seen >= timedelta(minutes=TOUCH_MINUTES):
+        db.execute(update(AuthSession).where(AuthSession.id == session.id).values(last_seen_at=now))
+        db.commit()
+    return session
+
+
+def user_for_token(db: Session, token: str, now: datetime) -> User | None:
+    session = find_session(db, token, now)
+    return db.get(User, session.user_id) if session else None
+
+
+def needs_reauth(session: AuthSession, now: datetime) -> bool:
+    return (session.reauthenticated_at or session.created_at) + timedelta(minutes=REAUTH_MINUTES) <= now
+
+
+def confirm_password(user: User, password: str, clock: float | None = None) -> None:
+    """로그인 중인 보호자의 비밀번호를 다시 확인한다.
+
+    로그인과 따로 세어, 세션을 훔친 사람이 일부러 틀려서 주인의 로그인까지 막지 못하게 한다.
+    """
+    if not user.password_hash:
+        raise AuthError(409, "Google 계정은 Google로 본인을 확인해 주세요.")
+    _check_password(f"reauth:{user.id}", user.password_hash, password, AuthError(403, "비밀번호가 맞지 않아요."), clock)
+
+
+def reauthenticate(db: Session, session: AuthSession, now: datetime) -> str:
+    """본인 확인을 기록하고 토큰을 바꾼다. 쿠키를 훔친 사람은 주인이 확인한 권한을 함께 얻지 못한다."""
+    token = secrets.token_urlsafe(32)
+    session.token_hash = _token_hash(token)
+    session.reauthenticated_at = now
+    db.commit()
+    return token
 
 
 def end_session(db: Session, token: str) -> None:

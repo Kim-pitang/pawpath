@@ -15,26 +15,25 @@
 """
 import argparse
 import json
-import math
+import sys
 from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "backend"))
+# 계산은 앱과 같은 모듈을 쓴다. 내 산책길을 추천 후보로 등록할 때도 같은 기준으로 측정한다.
+from app.services.environment_service import (  # noqa: E402
+    measure_parks,
+    measure_roads,
+    measure_trees,
+    prepared_ways,
+    sample_route,
+)
 DATA_DIR = ROOT / "backend" / "app" / "data"
 AREA_FILES = {
     "mangwon": (DATA_DIR / "courses.json", DATA_DIR / "places.json"),
     "gaepo": (DATA_DIR / "courses_gaepo.json", DATA_DIR / "places_gaepo.json"),
 }
-
-SAMPLE_M = 10.0
-WAY_MATCH_M = 15.0
-TREE_MATCH_M = 15.0
-
-PEDESTRIAN = {"footway", "path", "pedestrian", "steps", "cycleway", "track", "bridleway"}
-LOCAL = {"residential", "living_street", "service", "unclassified", "road"}
-MAJOR = {"tertiary", "tertiary_link", "secondary", "secondary_link", "primary", "primary_link", "trunk", "trunk_link", "motorway", "motorway_link"}
-PAVED = {"paved", "asphalt", "concrete", "concrete:plates", "paving_stones", "sett", "metal", "wood", "tartan"}
-UNPAVED = {"unpaved", "dirt", "earth", "ground", "grass", "gravel", "fine_gravel", "compacted", "mud", "sand", "pebblestone", "woodchips"}
 
 PLACE_FILES = {
     "park": "place_park",
@@ -48,118 +47,9 @@ PLACE_FILES = {
 PET_FRIENDLY_FILES = ("place_dog_tag", "place_pets_tag")
 
 
-def to_xy(lat: float, lng: float, origin_lat: float) -> tuple[float, float]:
-    return lng * 111320 * math.cos(math.radians(origin_lat)), lat * 110540
-
-
-def point_segment_m(p, a, b) -> float:
-    dx, dy = b[0] - a[0], b[1] - a[1]
-    if dx == dy == 0:
-        return math.hypot(p[0] - a[0], p[1] - a[1])
-    t = max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy)))
-    return math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy)
-
-
-def sample_route(route: list[list[float]]) -> list[tuple[float, float]]:
-    origin = route[0][0]
-    samples = []
-    for (lat1, lng1), (lat2, lng2) in zip(route, route[1:]):
-        ax, ay = to_xy(lat1, lng1, origin)
-        bx, by = to_xy(lat2, lng2, origin)
-        steps = max(1, round(math.hypot(bx - ax, by - ay) / SAMPLE_M))
-        for step in range(steps):
-            t = step / steps
-            samples.append((lat1 + (lat2 - lat1) * t, lng1 + (lng2 - lng1) * t))
-    return samples
-
-
 def load_elements(folder: Path, name: str) -> list[dict] | None:
     path = folder / f"{name}.json"
     return json.loads(path.read_text(encoding="utf-8"))["elements"] if path.exists() else None
-
-
-def prepared_ways(elements: list[dict], origin: float) -> list[tuple[dict, list[tuple[float, float]]]]:
-    ways = []
-    for element in elements:
-        geometry = element.get("geometry") or []
-        if len(geometry) >= 2:
-            ways.append((element.get("tags", {}), [to_xy(node["lat"], node["lon"], origin) for node in geometry]))
-    return ways
-
-
-def nearest_way(point, ways, limit: float) -> dict | None:
-    best = None
-    best_distance = limit
-    for tags, points in ways:
-        for a, b in zip(points, points[1:]):
-            distance = point_segment_m(point, a, b)
-            if distance <= best_distance:
-                best, best_distance = tags, distance
-    return best
-
-
-def share(counter: dict[str, int], total: int) -> dict[str, float]:
-    return {key: round(value / total, 3) for key, value in counter.items()}
-
-
-def measure_roads(samples, ways, origin) -> dict:
-    road = {"pedestrian": 0, "local": 0, "major": 0, "unknown": 0}
-    lit = {"yes": 0, "no": 0, "unknown": 0}
-    surface = {"paved": 0, "unpaved": 0, "unknown": 0}
-    for lat, lng in samples:
-        tags = nearest_way(to_xy(lat, lng, origin), ways, WAY_MATCH_M) or {}
-        kind = tags.get("highway")
-        road["pedestrian" if kind in PEDESTRIAN else "local" if kind in LOCAL else "major" if kind in MAJOR else "unknown"] += 1
-        value = tags.get("lit")
-        lit["yes" if value in ("yes", "24/7", "automatic") else "no" if value == "no" else "unknown"] += 1
-        kind_surface = tags.get("surface")
-        surface["paved" if kind_surface in PAVED else "unpaved" if kind_surface in UNPAVED else "unknown"] += 1
-    total = len(samples)
-    return {"road": share(road, total), "lit": share(lit, total), "surface": share(surface, total)}
-
-
-def point_in_polygon(point, polygon) -> bool:
-    x, y = point
-    inside = False
-    for (x1, y1), (x2, y2) in zip(polygon, polygon[1:]):
-        if (y1 > y) != (y2 > y) and x < (x2 - x1) * (y - y1) / (y2 - y1) + x1:
-            inside = not inside
-    return inside
-
-
-def measure_trees(samples, elements, origin) -> float:
-    nodes = []
-    lines = []
-    polygons = []
-    for element in elements:
-        if element["type"] == "node":
-            nodes.append(to_xy(element["lat"], element["lon"], origin))
-            continue
-        points = [to_xy(node["lat"], node["lon"], origin) for node in element.get("geometry") or []]
-        if len(points) < 2:
-            continue
-        lines.append(points)
-        if points[0] == points[-1] and len(points) >= 4:
-            polygons.append(points)
-
-    near = 0
-    for lat, lng in samples:
-        point = to_xy(lat, lng, origin)
-        close = any(math.hypot(point[0] - n[0], point[1] - n[1]) <= TREE_MATCH_M for n in nodes)
-        close = close or any(point_in_polygon(point, polygon) for polygon in polygons)
-        close = close or any(point_segment_m(point, a, b) <= TREE_MATCH_M for line in lines for a, b in zip(line, line[1:]))
-        near += close
-    return round(near / len(samples), 3)
-
-
-def measure_parks(samples, elements, origin) -> float:
-    polygons = []
-    for element in elements:
-        points = [to_xy(node["lat"], node["lon"], origin) for node in element.get("geometry") or []]
-        if len(points) >= 4 and points[0] == points[-1]:
-            polygons.append(points)
-    inside = sum(1 for lat, lng in samples if any(point_in_polygon(to_xy(lat, lng, origin), polygon) for polygon in polygons))
-    return round(inside / len(samples), 3)
 
 
 def build_environment(course: dict, folder: Path, today: str) -> tuple[dict, list[str]]:

@@ -35,8 +35,11 @@ def test_01_new_user_gets_a_rule_based_recommendation(client):
     assert len(body["courses"]) == 3
     for course in body["courses"]:
         assert course["learning_delta"] == 0
-        assert next(g for g in course["score_breakdown"] if g["key"] == "past_satisfaction")["score"] == 50
-        assert next(g for g in course["score_breakdown"] if g["key"] == "user_preference")["score"] == 50
+        # 데이터가 없는 과거 피드백과 사용자 선호는 중립값으로 채우지 않고 반영하지 않았다고 밝힌다.
+        groups = {g["key"]: g for g in course["score_groups"]}
+        assert groups["feedback"]["available"] is False and groups["feedback"]["weight"] == 0
+        assert groups["user_preference"]["available"] is False and groups["user_preference"]["weight"] == 0
+        assert any("과거 선호도는 반영하지 않았어요" in item["text"] for item in course["reason"]["basis"])
         assert course["reason"]["summary"]
         assert course["safety_assessment"]["items"]
 
@@ -99,9 +102,12 @@ def test_06_past_satisfaction_changes_the_ranking(client):
     pet_id = dubu_id(client)
     first = client.post("/api/recommendations", json={"pet_id": pet_id, "weather_scenario": "rain_later"}).json()
     target = first["courses"][1]
-    walk = client.post("/api/walks", json={"pet_id": pet_id, "course_id": target["course_id"], "duration_min": target["duration_min"], "recommendation_id": first["id"]}).json()
-    client.post("/api/feedback", json={"walk_id": walk["id"], **FIVE_STARS})
-    second = client.post("/api/recommendations", json={"pet_id": pet_id, "weather_scenario": "rain_later"}).json()
+    second = first
+    for _ in range(2):
+        walk = client.post("/api/walks", json={"pet_id": pet_id, "course_id": target["course_id"], "duration_min": target["duration_min"], "recommendation_id": second["id"]}).json()
+        client.post("/api/feedback", json={"walk_id": walk["id"], **FIVE_STARS})
+        second = client.post("/api/recommendations", json={"pet_id": pet_id, "weather_scenario": "rain_later"}).json()
+    # 5점 두 번이면 2위 코스가 1위로 오른다.
     assert second["learning"]["mode"] == "personalized"
     assert second["courses"][0]["course_id"] == target["course_id"]
     assert second["courses"][0]["rank_change"] == 1

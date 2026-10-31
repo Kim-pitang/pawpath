@@ -78,7 +78,10 @@ export default function CourseMap({ courses, selectedId, rankById, onSelect }: C
         lineJoin: 'round',
         className: `course-line course-${course.id}`,
       }).addTo(layer);
-      line.bindTooltip(course.name);
+      // 툴팁은 문자열을 HTML로 넣는다. 내 산책길 코스의 이름은 사용자가 쓴 글이라 글자로만 넣는다.
+      const tooltip = document.createElement('span');
+      tooltip.textContent = course.name;
+      line.bindTooltip(tooltip);
       line.on('click', () => onSelect(course.id));
     }
 

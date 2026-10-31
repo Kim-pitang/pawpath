@@ -160,7 +160,7 @@ def test_expired_session_does_not_fall_back_to_the_demo_account(client):
 def test_me_clears_an_unknown_cookie_and_reports_a_guest(client):
     client.cookies.set("pawpath_session", "not-a-real-token")
     response = client.get("/api/auth/me")
-    assert response.json() == {"authenticated": False, "auth_required": False, "google_enabled": True, "user": None}
+    assert response.json() == {"authenticated": False, "auth_required": False, "google_enabled": True, "user": None, "profiles": [], "max_profiles": 5, "current_profile": None, "profile_required": False}
     assert "pawpath_session=" in response.headers["set-cookie"]
 
 
@@ -203,6 +203,7 @@ def assert_cannot_touch(intruder, data):
         intruder.get("/api/walks", params={"pet_id": pet}),
         intruder.get("/api/walks/report", params={"pet_id": pet}),
         intruder.post("/api/feedback", json={"walk_id": data["walk"], **FIVE_STARS}),
+        intruder.delete(f"/api/walks/{data['walk']}"),
         intruder.get(f"/api/feedback/{pet}"),
         intruder.get(f"/api/my-walks/{saved}"),
         intruder.patch(f"/api/my-walks/{saved}", json={"title": "탈취"}),
@@ -266,7 +267,7 @@ def test_required_mode_blocks_guests_but_keeps_public_pages(auth_required, clien
     assert client.post("/api/my-walks", json={"title": "x", "points": POINTS}).status_code == 401
     for path in ("/api/health", "/api/courses", "/api/public-walks"):
         assert client.get(path).status_code == 200, path
-    assert client.get("/api/auth/me").json() == {"authenticated": False, "auth_required": True, "google_enabled": True, "user": None}
+    assert client.get("/api/auth/me").json() == {"authenticated": False, "auth_required": True, "google_enabled": True, "user": None, "profiles": [], "max_profiles": 5, "current_profile": None, "profile_required": False}
     signup(client)
     assert client.get("/api/pets").status_code == 200
     assert client.get("/api/auth/me").json()["auth_required"] is True

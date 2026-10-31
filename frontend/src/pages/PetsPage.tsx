@@ -16,7 +16,7 @@ export default function PetsPage() {
 
   return (
     <div>
-      <PageTitle sub="프로필이 추천 점수와 설명에 바로 반영돼요.">반려동물 프로필</PageTitle>
+      <PageTitle sub="가족이 함께 돌보는 아이들이에요. 아이 정보가 추천 점수와 설명에 바로 반영돼요.">반려동물 프로필</PageTitle>
       <div className="grid gap-4 md:grid-cols-2">
         {pets.map((pet) => {
           const selected = selectedPet?.id === pet.id;

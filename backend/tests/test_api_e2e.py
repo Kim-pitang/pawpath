@@ -1,4 +1,8 @@
 """API 전체 흐름 검증. 기획서의 최종 검증 시나리오를 그대로 수행한다."""
+from datetime import timedelta
+
+from app.clock import now_local
+
 EXPECTED_SENTENCE = "낯선 길을 싫어하는 두부를 위해 익숙한 공원 코스를 골랐어요. 비가 오기 전 짧게 다녀올 수 있어요."
 
 PET_BODY = {
@@ -55,12 +59,15 @@ def test_final_verification_scenario(client):
     assert len(first["courses"]) == 3
     top = first["courses"][0]
     assert top["reason"]["summary"] == EXPECTED_SENTENCE
-    # 기획서의 6개 평가 묶음과 세부 항목을 함께 돌려준다.
-    assert [group["key"] for group in top["score_breakdown"]] == ["pet_fit", "user_preference", "weather", "safety", "time", "past_satisfaction"]
-    assert len(top["factors"]) == 7
-    assert first["weights"] == {"weather": 0.25, "personality": 0.25, "activity": 0.15, "schedule": 0.15, "safety": 0.1, "preference": 0.1, "user_preference": 0.1}
-    assert next(f for f in top["factors"] if f["key"] == "preference")["score"] == 50
+    # v2: 5개 묶음을 모두 돌려주고, 데이터가 없는 묶음(선호 입력, 피드백)은 빼고 나머지로 100%를 나눈다.
+    assert first["algorithm"]["version"] == "rule-v2"
+    assert [group["key"] for group in top["score_groups"]] == ["pet_fit", "user_preference", "distance_time", "weather_env", "feedback"]
+    assert [group["key"] for group in top["score_breakdown"]] == ["pet_fit", "distance_time", "weather_env"]
+    assert {group["key"] for group in top["score_groups"] if not group["available"]} == {"user_preference", "feedback"}
+    assert first["weights"] == {"pet_fit": 0.4167, "user_preference": 0.0, "distance_time": 0.3333, "weather_env": 0.25, "feedback": 0.0}
+    assert [f["key"] for f in top["factors"]] == ["personality", "activity", "schedule", "weather"]
     assert top["learning_delta"] == 0
+    assert top["total_score"] == round(top["personalization_score"] - top["safety_penalty"], 2)
 
     # 저장된 추천을 다시 조회할 수 있다.
     stored = client.get(f"/api/recommendations/{first['id']}").json()
@@ -81,18 +88,27 @@ def test_final_verification_scenario(client):
     body = feedback.json()
     assert body["affinity_after"] > body["affinity_before"] == 50
 
-    # 8. 다음 추천에 반영
+    # 8. 다음 추천에 반영: 점수가 오르지만 피드백 1건으로 순위를 뒤집을 만큼 과하게 반영하지는 않는다.
     second = client.post("/api/recommendations", json={"pet_id": pet_id, "weather_scenario": "rain_later"}).json()
     updated = next(course for course in second["courses"] if course["course_id"] == target["course_id"])
     assert updated["total_score"] > target["total_score"]
     assert updated["learning_delta"] > 0
     assert updated["preference_score"] > 50
+    assert updated["rank"] <= target["rank"]
     assert second["learning"]["feedback_total"] == 1
-    # 시연 시나리오: 2위 코스에 5점을 주면 다음 추천에서 1위로 오른다.
-    assert second["courses"][0]["course_id"] == target["course_id"]
-    assert second["courses"][0]["rank_change"] == 1
-    assert second["weights"]["preference"] > 0.1
-    assert second["weights"]["weather"] == first["weights"]["weather"]
+    assert second["weights"]["feedback"] == 0.075
+    assert second["weights"]["pet_fit"] == first["weights"]["pet_fit"]
+
+    # 시연 시나리오: 같은 코스에 5점을 한 번 더 주면 다음 추천에서 1위로 오른다.
+    walk = client.post(
+        "/api/walks",
+        json={"pet_id": pet_id, "course_id": target["course_id"], "recommendation_id": second["id"], "duration_min": target["duration_min"]},
+    ).json()
+    client.post("/api/feedback", json={"walk_id": walk["id"], **FIVE_STARS})
+    third = client.post("/api/recommendations", json={"pet_id": pet_id, "weather_scenario": "rain_later"}).json()
+    assert third["courses"][0]["course_id"] == target["course_id"]
+    assert third["courses"][0]["rank_change"] == 1
+    assert third["weights"]["feedback"] > second["weights"]["feedback"]
 
 
 def test_pet_create_read_update(client):
@@ -207,6 +223,69 @@ def test_walk_validation(client):
     assert client.post("/api/walks", json={"pet_id": 999, "course_id": 1, "duration_min": 25}).status_code == 404
     assert client.post("/api/walks", json={"pet_id": pet_id, "course_id": 1, "duration_min": 0}).status_code == 422
     assert client.post("/api/walks", json={"pet_id": pet_id, "course_id": 1, "duration_min": 25, "recommendation_id": 999}).status_code == 404
+
+
+def test_walk_can_be_logged_for_an_earlier_time_but_not_the_future(client):
+    pet_id = dubu_id(client)
+    course_id = client.get("/api/courses").json()[0]["id"]
+    now = now_local()
+    morning = (now - timedelta(days=1)).replace(hour=7, minute=30)
+    walk = client.post(
+        "/api/walks", json={"pet_id": pet_id, "course_id": course_id, "duration_min": 30, "started_at": morning.isoformat()}
+    ).json()
+    assert walk["started_at"] == morning.isoformat()
+    assert walk["ended_at"] == (morning + timedelta(minutes=30)).isoformat()
+
+    # 타임존이 붙은 시각은 서비스 현지 시각으로 바꿔 저장한다.
+    utc = (morning - timedelta(hours=9)).isoformat() + "Z"
+    aware = client.post("/api/walks", json={"pet_id": pet_id, "course_id": course_id, "duration_min": 30, "started_at": utc})
+    assert aware.status_code == 201
+    assert aware.json()["started_at"] == morning.isoformat()
+
+    later = (now + timedelta(hours=2)).isoformat()
+    future = client.post("/api/walks", json={"pet_id": pet_id, "course_id": course_id, "duration_min": 30, "started_at": later})
+    assert future.status_code == 422
+    assert "끝나지 않은" in future.json()["detail"]
+    # 방금 시작해서 아직 걷는 중인 시각도 끝난 산책으로 받지 않는다.
+    walking = client.post(
+        "/api/walks", json={"pet_id": pet_id, "course_id": course_id, "duration_min": 120, "started_at": now.isoformat()}
+    )
+    assert walking.status_code == 422
+
+
+def test_walk_without_feedback_can_be_deleted_and_visits_roll_back(client):
+    pet_id = dubu_id(client)
+    course_id = client.get("/api/courses").json()[0]["id"]
+
+    def visits() -> int:
+        courses = client.get(f"/api/pets/{pet_id}/insights").json()["courses"]
+        return next((course["visit_count"] for course in courses if course["course_id"] == course_id), 0)
+
+    kept = client.post("/api/walks", json={"pet_id": pet_id, "course_id": course_id, "duration_min": 25}).json()
+    mistake = client.post("/api/walks", json={"pet_id": pet_id, "course_id": course_id, "duration_min": 25}).json()
+    assert visits() == 2
+
+    assert client.delete(f"/api/walks/{mistake['id']}").status_code == 204
+    assert [walk["id"] for walk in client.get("/api/walks", params={"pet_id": pet_id}).json()] == [kept["id"]]
+    assert visits() == 1
+    assert client.delete(f"/api/walks/{mistake['id']}").status_code == 404
+
+    # 하나뿐인 기록을 지우면 그 코스는 다녀온 적 없는 코스로 돌아간다.
+    assert client.delete(f"/api/walks/{kept['id']}").status_code == 204
+    assert all(course["course_id"] != course_id for course in client.get(f"/api/pets/{pet_id}/insights").json()["courses"])
+
+
+def test_walk_with_feedback_cannot_be_deleted(client):
+    pet_id = dubu_id(client)
+    course_id = client.get("/api/courses").json()[0]["id"]
+    walk = client.post("/api/walks", json={"pet_id": pet_id, "course_id": course_id, "duration_min": 25}).json()
+    client.post("/api/feedback", json={"walk_id": walk["id"], **FIVE_STARS})
+
+    response = client.delete(f"/api/walks/{walk['id']}")
+    assert response.status_code == 409
+    assert "학습" in response.json()["detail"]
+    assert len(client.get("/api/walks", params={"pet_id": pet_id}).json()) == 1
+    assert client.get(f"/api/pets/{pet_id}").json()["feedback_total"] == 1
 
 
 def test_learning_is_isolated_between_pets(client):

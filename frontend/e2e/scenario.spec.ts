@@ -35,9 +35,13 @@ test('최종 검증 시나리오: 추천, 산책, 5점 피드백, 다음 추천 
 
   const firstCard = page.getByTestId('course-card-1');
   await firstCard.getByRole('button', { name: '점수 근거 보기' }).click();
-  await expect(firstCard.getByLabel('항목별 점수').getByRole('listitem')).toHaveCount(6);
-  await expect(firstCard.getByText('과거 만족도', { exact: true })).toBeVisible();
-  await expect(firstCard.getByText('사용자 선호도', { exact: true })).toBeVisible();
+  // 신규 사용자는 데이터가 있는 3개 묶음으로 계산하고, 선호 입력과 피드백은 반영하지 않았다고 밝힌다.
+  await expect(firstCard.getByLabel('항목별 점수').getByRole('listitem')).toHaveCount(3);
+  await expect(firstCard.getByText('반려견 특성 적합도', { exact: true })).toBeVisible();
+  await expect(firstCard.getByTestId('skipped-groups')).toContainText('사용자 선호도');
+  await expect(firstCard.getByTestId('skipped-groups')).toContainText('과거 산책 피드백');
+  await expect(firstCard.getByLabel('추천 근거')).toContainText('아직 피드백이 없어 과거 선호도는 반영하지 않았어요');
+  await expect(firstCard.getByTestId('score-formula')).toContainText('= 추천 점수');
 
   // 안전 평가: 출처를 구분하고, 데이터가 없는 항목은 확인 불가로 표시한다.
   const safety = firstCard.getByTestId('safety-panel');
@@ -47,6 +51,7 @@ test('최종 검증 시나리오: 추천, 산책, 5점 피드백, 다음 추천 
   await expect(safety.getByLabel('안전 평가 항목').getByRole('listitem').first()).toBeVisible();
   await expect(safety).toContainText('모의');
   await expect(safety).toContainText('보장하지 않아요');
+  await expect(safety.getByTestId('safety-data-quality')).toContainText('데이터 없음');
 
   // 2위 코스로 산책해서 순위 변화까지 확인한다.
   const secondCard = page.getByTestId('course-card-2');
@@ -60,6 +65,8 @@ test('최종 검증 시나리오: 추천, 산책, 5점 피드백, 다음 추천 
 
   // 7. 만족도 5점 피드백
   await expect(page.getByText(`${secondName}, 어땠나요?`)).toBeVisible();
+  // 넘겨받은 추천 번호는 이번 기록에만 쓰고 주소에서 지운다.
+  await expect(page).toHaveURL(/\/walk$/);
   await page.getByRole('button', { name: '산책 만족도 5점' }).click();
   await page.getByRole('button', { name: '두부 만족도 5점' }).click();
   await page.getByRole('button', { name: '딱 좋았어요' }).click();
@@ -69,15 +76,32 @@ test('최종 검증 시나리오: 추천, 산책, 5점 피드백, 다음 추천 
   await page.getByRole('button', { name: '피드백 남기기' }).click();
   await expect(page.getByTestId('affinity-change')).toContainText('50점에서');
 
-  // 8. 다음 추천에 반영
+  // 8. 다음 추천에 반영: 점수가 오르지만 피드백 1건으로는 순위를 뒤집지 않는다.
   await page.getByRole('button', { name: '달라진 추천 보기' }).click();
+  const updated = page.getByRole('article').filter({ hasText: secondName });
+  await expect(updated.getByTestId('reason-summary')).toContainText('지난번 만족도가 높았던');
+
+  // 같은 코스에 5점을 한 번 더 남기면 1위로 오른다.
+  await updated.getByRole('link', { name: '이 코스로 산책' }).click();
+  await page.getByRole('link', { name: 'GPS 없이 기록하기' }).click();
+  await page.getByRole('button', { name: '산책 완료' }).click();
+  await expect(page.getByText(`${secondName}, 어땠나요?`)).toBeVisible();
+  await page.getByRole('button', { name: '산책 만족도 5점' }).click();
+  await page.getByRole('button', { name: '두부 만족도 5점' }).click();
+  await page.getByRole('button', { name: '딱 좋았어요' }).click();
+  await page.getByRole('button', { name: '날씨 만족도 5점' }).click();
+  await page.getByRole('button', { name: '또 갈래요' }).click();
+  await page.getByRole('button', { name: '피드백 남기기' }).click();
+  await page.getByRole('button', { name: '달라진 추천 보기' }).click();
+  // 학습 안내 태그는 숨겨도 개인화 결과는 유지한다.
+  await expect(page.getByText(/학습 효과/)).toHaveCount(0);
   await expect(page.getByTestId('course-card-1').getByRole('heading')).toHaveText(secondName);
-  await expect(page.getByTestId('course-card-1').getByTestId('reason-summary')).toContainText('지난번 만족도가 높았던');
+  await expect(page.getByTestId('course-card-1').getByText('학습 전보다 1계단 상승')).toHaveCount(0);
 
   // 마이페이지 분석
   await page.getByRole('navigation', { name: '주요 메뉴' }).getByRole('link', { name: '마이' }).click();
   await expect(page.getByText('두부의 산책 리포트')).toBeVisible();
-  await expect(page.getByText('1번').first()).toBeVisible();
+  await expect(page.getByText('2번').first()).toBeVisible();
   await expect(page.getByLabel('코스별 선호도').getByText(secondName)).toBeVisible();
   await expect(page.getByText('두부의 취향 분석')).toBeVisible();
   await expect(page.getByText('추천 결과 변화')).toHaveCount(0);
@@ -86,8 +110,12 @@ test('최종 검증 시나리오: 추천, 산책, 5점 피드백, 다음 추천 
 test('지도에 코스 경로와 시설이 표시된다', async ({ page }) => {
   await page.goto('/map');
   await expect(page.getByTestId('course-map')).toBeVisible();
-  await expect(page.locator('path.course-line')).toHaveCount(10);
-  await page.getByRole('list', { name: '코스 목록' }).getByRole('button').first().click();
+  // 시드 코스 10개에, 저장과 동시에 후보가 된 내 산책길이 더해진다.
+  const list = page.getByRole('list', { name: '코스 목록' });
+  await expect(list.getByRole('button').first()).toBeVisible();
+  const personal = await list.getByText('내 산책길').count();
+  await expect(page.locator('path.course-line')).toHaveCount(10 + personal);
+  await list.getByRole('button').first().click();
   await expect(page.getByTestId('selected-course-name')).toBeVisible();
   await expect(page.locator('.pp-marker').first()).toBeVisible();
   await expect(page.getByText(/OpenStreetMap 기준/)).toBeVisible();
@@ -153,7 +181,9 @@ test('보호자 일정을 바꾸면 추천 시간이 그 안으로 들어온다'
 
 test('폭우 시나리오에서는 코스 대신 실내 대안을 안내한다', async ({ page }) => {
   await page.goto('/pets');
-  await page.getByRole('button', { name: '이 아이로 추천받기' }).first().click();
+  const firstPet = page.getByRole('button', { name: /지금 산책할 아이|이 아이로 추천받기/ }).first();
+  await expect(firstPet).toBeVisible();
+  if (await firstPet.isEnabled()) await firstPet.click();
   await chooseScenario(page, '폭우');
   await expect(page.getByText('오늘은 실내 놀이를 추천해요')).toBeVisible();
   await expect(page.getByText(/노즈워크/)).toBeVisible();

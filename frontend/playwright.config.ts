@@ -35,10 +35,13 @@ export default defineConfig({
         RECOMMENDER_WEIGHTS: '{}',
         SERVICE_AREA: 'mangwon',
         AUTH_REQUIRED: 'false',
+        ENVIRONMENT_PROVIDER: 'none',
         // 가짜 Google 클라이언트. E2E는 Google 화면으로 보내는 데까지만 확인하고 실제 Google을 부르지 않는다.
         GOOGLE_CLIENT_ID: 'e2e-client.apps.googleusercontent.com',
         GOOGLE_CLIENT_SECRET: 'e2e-google-secret',
         GOOGLE_REDIRECT_URI: `http://127.0.0.1:${WEB_PORT}/api/auth/google/callback`,
+        BACKUP_ENABLED: 'false',
+        BACKUP_DIR: `${dbDir}/backups`,
       },
     },
     {

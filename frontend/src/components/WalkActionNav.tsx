@@ -1,4 +1,4 @@
-import { CheckCircle2, Footprints, Home, Locate, Map as MapIcon, PawPrint, Sparkles, X } from 'lucide-react';
+import { CheckCircle2, Footprints, Home, Locate, Map as MapIcon, PawPrint, Sparkles, UsersRound, WandSparkles, X } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
@@ -66,7 +66,12 @@ export default function WalkActionNav() {
                   <X size={20} aria-hidden />
                 </button>
               </div>
-              <ul className="flex flex-col gap-2 pb-2">
+              <ul
+                className="flex flex-col gap-2 pb-2"
+                onClick={(event) => {
+                  if (event.target instanceof Element && event.target.closest('a')) setOpen(false);
+                }}
+              >
                 <SheetOption
                   to="/recommend"
                   icon={<Sparkles size={20} aria-hidden />}
@@ -76,6 +81,8 @@ export default function WalkActionNav() {
                 />
                 <SheetOption to="/record" icon={<Locate size={20} aria-hidden />} title="내 길로 GPS 기록" note="걷는 길을 그대로 기록하고 사진을 남겨요" />
                 <SheetOption to="/walk" icon={<CheckCircle2 size={20} aria-hidden />} title="다녀온 산책 기록" note="완료 처리와 지난 산책을 볼 수 있어요" />
+                <SheetOption to="/generate" icon={<WandSparkles size={20} aria-hidden />} title="산책길 자동 만들기" note="원하는 거리와 조건으로 산책길을 만들어요" />
+                <SheetOption to="/community" icon={<UsersRound size={20} aria-hidden />} title="산책길 커뮤니티" note="다른 보호자의 산책길을 둘러봐요" />
               </ul>
             </div>
           </div>

@@ -4,14 +4,29 @@
 과거 선호도가 중립값에서 벗어난 만큼을 더 강하게 반영한다.
 """
 import math
+from collections.abc import Mapping
 
-from app.recommender.config import BASE_WEIGHTS, DEFAULT_CONFIG, ScoringConfig
-from app.recommender.preference import DISLIKED_AFFINITY, NEUTRAL, preference_score, user_preference_score
+from app.recommender.config import BASE_WEIGHTS, DEFAULT_CONFIG, FEEDBACK_RAMP, ScoringConfig
+from app.recommender.preference import (
+    BUCKET_LABELS,
+    DISLIKED_AFFINITY,
+    GENERALIZATION_DISCOUNT,
+    NEUTRAL,
+    PRIOR_STRENGTH,
+    predict_from_attributes,
+    preference_score,
+    preferred_time_match,
+    user_preference_score,
+)
+from dataclasses import replace
+
+from app.recommender.profile import LearnedProfile, adjusted_ideal_km
 from app.recommender.safety import assess_course
 from app.recommender.types import (
     CourseData,
     CoursePreference,
     FactorScore,
+    GroupScore,
     PetFeatures,
     PetProfile,
     PreferenceState,
@@ -149,7 +164,7 @@ def score_personality(
         evidence.append("익숙한 코스" if known >= 0.5 else "아직 낯선 코스")
     elif novelty > 0.6:
         evidence.append("새로운 경험을 주는 코스" if known < 0.5 else "이미 익숙한 코스")
-    evidence.append(f"혼잡도: {CROWD_TEXT[course.crowd_level]}")
+    evidence.append("혼잡도: 확인 불가" if "crowd_level" in course.unknown else f"혼잡도: {CROWD_TEXT[course.crowd_level]}")
 
     return _clip(0.45 * path_score + 0.3 * crowd_score + 0.25 * temperament), tuple(evidence)
 
@@ -249,3 +264,207 @@ def score_course(
     penalty = assess_course(course, slot, features).penalty
     total = config.ranker.score(contributions, {key: score for key, (score, _) in raw.items()}, penalty)
     return round(_clip(total), 2), factors, preference
+
+
+# ---- v2: 5개 묶음 개인화 점수 ----
+
+GROUP_LABELS = {
+    "pet_fit": "반려견 특성 적합도",
+    "user_preference": "사용자 선호도",
+    "distance_time": "거리·시간 적합도",
+    "weather_env": "날씨·환경 적합도",
+    "feedback": "과거 산책 피드백",
+}
+GROUP_SOURCES = {
+    "pet_fit": "반려견 프로필, 코스 데이터",
+    "distance_time": "보호자 일정, 코스 예상 시간",
+    "weather_env": "시간별 예보, 코스 데이터",
+}
+# 반려견 특성 묶음 안의 비중: 성향(익숙함, 혼잡, 기질) 절반, 활동량에 맞는 거리와 경사 절반
+PET_FIT_SPLIT = {"personality": 0.5, "activity": 0.5}
+DISTANCE_SIGMA = 0.35
+
+
+BASE_GROUPS = ("pet_fit", "user_preference", "distance_time", "weather_env")
+
+
+def feedback_strength(feedback_total: int, config: ScoringConfig = DEFAULT_CONFIG) -> float:
+    """피드백 조정의 비중. 신규 사용자는 0이고, 쌓일수록 기준 가중치(15%)에 가까워진다."""
+    if feedback_total <= 0:
+        return 0.0
+    return round(config.group_weights["feedback"] * feedback_total / (feedback_total + FEEDBACK_RAMP), 4)
+
+
+def effective_group_weights(available: Mapping[str, bool], feedback_total: int, config: ScoringConfig = DEFAULT_CONFIG) -> dict[str, float]:
+    """기본 4개 묶음은 데이터가 있는 것만 남겨 합이 1이 되게 다시 나눈다. 피드백은 조정 비중이다.
+
+    피드백까지 가중합에 넣으면, 피드백이 없는 코스의 중립값 50이 다른 묶음(대부분 80~100점)보다 낮아
+    피드백 1건만 남겨도 모든 코스의 점수가 4~5점씩 내려간다. 그래서 피드백은 중립값에서 벗어난 만큼만
+    기본 적합도에 더한다(최대 ±기준 가중치 × 100점).
+    """
+    usable = {key: config.group_weights[key] for key in BASE_GROUPS if available.get(key, True) and config.group_weights[key] > 0}
+    total = sum(usable.values())
+    weights = {key: round(usable.get(key, 0.0) / total, 4) if total else 0.0 for key in BASE_GROUPS}
+    weights["feedback"] = feedback_strength(feedback_total, config) if available.get("feedback", True) else 0.0
+    return weights
+
+
+def _distance_match(distance_km: float, preferred_km: float) -> float:
+    return 100 * math.exp(-(math.log(distance_km / preferred_km) ** 2) / (2 * DISTANCE_SIGMA**2))
+
+
+def user_preference_v2(
+    course: CourseData,
+    start_hour: int,
+    features: PetFeatures,
+    profile: LearnedProfile,
+) -> tuple[float | None, tuple[str, ...], str]:
+    """보호자가 입력한 선호 거리와 시간. 입력이 없으면 None이다.
+
+    v1의 '선택 이력' 항목은 같은 방문이 익숙함과 과거 선호도에 이미 들어가 있어 뺐다. 산책 기록으로 배운
+    거리는 여기가 아니라 반려견 특성 점수의 권장 거리를 보정하는 데 쓴다(profile.adjusted_ideal_km).
+    """
+    parts: list[float] = []
+    evidence: list[str] = []
+    sources: list[str] = []
+    if features.preferred_distance_km:
+        parts.append(_distance_match(course.distance_km, features.preferred_distance_km))
+        evidence.append(f"선호 거리 {features.preferred_distance_km:g}km(보호자 입력), 이 코스 {course.distance_km:.1f}km")
+        sources.append("보호자 입력")
+    time_match = preferred_time_match(features.preferred_time_bucket, start_hour)
+    if time_match is not None:
+        parts.append(time_match)
+        evidence.append(f"선호 시간대 {BUCKET_LABELS.get(features.preferred_time_bucket, '')}(보호자 입력), 추천 {start_hour}시")
+        if "보호자 입력" not in sources:
+            sources.append("보호자 입력")
+    if not parts:
+        return None, ("선호 거리와 시간이 없어 반영하지 않았어요",), ""
+    return round(_clip(sum(parts) / len(parts)), 1), tuple(evidence), ", ".join(sources)
+
+
+def feedback_score_v2(course: CourseData, state: PreferenceState) -> tuple[float, tuple[str, ...]]:
+    """코스 피드백과 비슷한 코스에서 배운 특성 선호. v1의 익숙한 길 보너스와 반복 방문 감점은
+    성향 점수의 익숙함에 이미 들어가 있어 뺐다."""
+    current = state.courses.get(course.id, CoursePreference())
+    prediction = predict_from_attributes(state.attribute_weights, course)
+    if current.feedback_count and current.weight_total > 0:
+        # v1은 이미 50 쪽으로 줄인 affinity를 한 번 더 줄였다. v2는 최근 가중 평균 신호를 한 번만 줄인다.
+        signal = current.weighted_sum / current.weight_total
+        confidence = current.weight_total / (current.weight_total + PRIOR_STRENGTH)
+        score = confidence * signal + (1 - confidence) * prediction
+        return round(_clip(score), 1), (f"이 코스 피드백 {current.feedback_count}회, 평균 만족 신호 {signal:.0f}점",)
+    score = NEUTRAL + GENERALIZATION_DISCOUNT * (prediction - NEUTRAL)
+    if abs(prediction - NEUTRAL) >= 1:
+        direction = "비슷한 코스의 피드백이 좋았어요" if prediction > NEUTRAL else "비슷한 코스의 피드백이 낮았어요"
+        return round(_clip(score), 1), (f"{direction} (예측 선호도 {prediction:.0f}점)",)
+    return round(_clip(score), 1), ("이 코스와 비슷한 코스의 피드백이 아직 없어요",)
+
+
+def schedule_v2(course: CourseData, slot: SlotEvaluation, schedule: Schedule, profile: LearnedProfile) -> tuple[float, tuple[str, ...]]:
+    """희망 시간과 가능 시간에 맞는지. GPS 기록이 쌓였으면 이 반려견의 실제 걸음 속도로 예상 시간을 고친다."""
+    expected = course.duration_min * (profile.pace_ratio or 1.0)
+    target = schedule.preferred_duration_min
+    if expected <= target:
+        score = 100 - max(0.0, target * 0.5 - expected) / (target * 0.5) * 30
+    else:
+        score = 100 - (expected - target) / target * 120
+    evidence = [f"희망 {target}분, 코스 약 {course.duration_min}분"]
+    if profile.pace_ratio and abs(profile.pace_ratio - 1) >= 0.1:
+        evidence.append(f"GPS 산책 {profile.pace_samples}회 기준 실제로는 약 {expected:.0f}분 걸려요")
+    if not slot.fits_window:
+        score *= 0.4
+        evidence.append(f"가능 시간 {slot.window.end_hour}시를 넘겨요")
+    return _clip(score), tuple(evidence)
+
+
+def score_course_v2(
+    course: CourseData,
+    slot: SlotEvaluation,
+    pet: PetProfile,
+    features: PetFeatures,
+    schedule: Schedule,
+    state: PreferenceState,
+    profile: LearnedProfile,
+    weather_available: bool = True,
+    config: ScoringConfig = DEFAULT_CONFIG,
+) -> tuple[float, tuple[GroupScore, ...], tuple[FactorScore, ...], float]:
+    """(개인화 점수, 묶음별 점수, 세부 항목, 과거 피드백 점수). 안전은 엔진이 앞 단계에서 따로 다룬다."""
+    personality, personality_evidence = score_personality(course, pet, features, state)
+    ideal_km, learned_share = adjusted_ideal_km(features.ideal_distance_km, profile)
+    activity, activity_evidence = score_activity(course, replace(features, ideal_distance_km=ideal_km), slot)
+    if learned_share:
+        activity_evidence = (*activity_evidence, f"산책 {profile.completed_walks}회 기록으로 권장 거리를 {features.ideal_distance_km:.1f}km에서 {ideal_km:.1f}km로 보정")
+    schedule_score, schedule_evidence = schedule_v2(course, slot, schedule, profile)
+    weather, weather_evidence = score_weather(course, slot, features) if weather_available else (None, ("실제 날씨를 받지 못해 반영하지 않았어요",))
+    preference, preference_evidence = feedback_score_v2(course, state)
+    user_pref, user_evidence, user_source = user_preference_v2(course, slot.start.hour, features, profile)
+    has_feedback = state.feedback_total > 0
+
+    raw: dict[str, tuple[float | None, tuple[str, ...], str]] = {
+        "pet_fit": (PET_FIT_SPLIT["personality"] * personality + PET_FIT_SPLIT["activity"] * activity, (*personality_evidence, *activity_evidence), GROUP_SOURCES["pet_fit"]),
+        "user_preference": (user_pref, user_evidence, user_source),  # 보호자 입력만
+        "distance_time": (schedule_score, schedule_evidence, GROUP_SOURCES["distance_time"]),
+        "weather_env": (weather, weather_evidence, GROUP_SOURCES["weather_env"]),
+        "feedback": (preference if has_feedback else None, preference_evidence if has_feedback else ("아직 피드백이 없어 반영하지 않았어요",), f"피드백 {state.feedback_total}건" if has_feedback else ""),
+    }
+    available = {key: score is not None for key, (score, _, _) in raw.items()}
+    weights = effective_group_weights(available, state.feedback_total, config)
+
+    def contribution(key: str, score: float | None) -> float:
+        if score is None:
+            return 0.0
+        return weights[key] * 2 * (score - NEUTRAL) if key == "feedback" else weights[key] * score
+
+    groups = tuple(
+        GroupScore(
+            key=key,
+            label=GROUP_LABELS[key],
+            score=None if score is None else round(score, 1),
+            weight=weights[key],
+            contribution=round(contribution(key, score), 2),
+            evidence=evidence,
+            available=available[key],
+            source=source,
+        )
+        for key, (score, evidence, source) in raw.items()
+    )
+    total = sum(contribution(key, score) for key, (score, _, _) in raw.items())
+
+    # 설명의 세부 근거용. 묶음 안의 비중을 나눠 기여도를 매긴다.
+    detail_parts = (
+        ("personality", personality, weights["pet_fit"] * PET_FIT_SPLIT["personality"], personality_evidence),
+        ("activity", activity, weights["pet_fit"] * PET_FIT_SPLIT["activity"], activity_evidence),
+        ("schedule", schedule_score, weights["distance_time"], schedule_evidence),
+        ("weather", weather, weights["weather_env"], weather_evidence),
+        ("preference", preference if has_feedback else None, weights["feedback"], preference_evidence),
+        ("user_preference", user_pref, weights["user_preference"], user_evidence),
+    )
+    factors = tuple(
+        FactorScore(
+            key=key,
+            label=FACTOR_LABELS[key],
+            score=round(score, 1),
+            weight=round(weight, 4),
+            contribution=round(weight * 2 * (score - NEUTRAL) if key == "preference" else weight * score, 2),
+            evidence=evidence,
+        )
+        for key, score, weight, evidence in detail_parts
+        if score is not None
+    )
+    return round(_clip(total), 2), groups, factors, preference
+
+
+def group_payload(groups: tuple[GroupScore, ...]) -> list[dict]:
+    return [
+        {
+            "key": group.key,
+            "label": group.label,
+            "score": group.score,
+            "weight": group.weight,
+            "contribution": group.contribution,
+            "evidence": list(group.evidence),
+            "available": group.available,
+            "source": group.source,
+        }
+        for group in groups
+    ]

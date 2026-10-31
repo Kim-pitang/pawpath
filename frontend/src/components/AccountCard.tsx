@@ -1,4 +1,4 @@
-import { LogOut, UserRound } from 'lucide-react';
+import { LogOut, Settings, UserRound } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { clearDraft, loadDraft } from '../lib/recording';
@@ -26,20 +26,26 @@ export default function AccountCard() {
     const { user } = account;
     const google = user.provider === 'google';
     return (
-      <Card className="flex items-center justify-between gap-3" >
+      <Card className="flex flex-col gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <UserRound size={20} className="shrink-0 text-mango-700" aria-hidden />
           <div className="min-w-0">
             <p className="text-xs text-ink-muted">{google ? 'Google 계정으로 로그인' : '로그인 계정'}</p>
             <p className="truncate font-bold" data-testid="account-name">
-              {user.name} <span className="font-normal text-ink-soft">({google ? (user.email ?? 'Google') : user.login_id})</span>
+              {user.name} <span className="font-normal text-ink-soft">({google ? (user.email ?? 'Google') : (user.login_id ?? user.email)})</span>
             </p>
           </div>
         </div>
-        <Button variant="ghost" onClick={logout} className="shrink-0 !px-3">
-          <LogOut size={16} aria-hidden />
-          로그아웃
-        </Button>
+        <div className="grid grid-cols-2 gap-2">
+          <LinkButton to="/account" variant="ghost" className="!px-3">
+            <Settings size={16} aria-hidden />
+            계정 관리
+          </LinkButton>
+          <Button variant="ghost" onClick={logout} className="!px-3">
+            <LogOut size={16} aria-hidden />
+            로그아웃
+          </Button>
+        </div>
       </Card>
     );
   }

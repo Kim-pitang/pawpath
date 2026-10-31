@@ -14,19 +14,28 @@ import { Link } from 'react-router-dom';
 import HBarChart from '../components/charts/HBarChart';
 import RouteThumbnail from '../components/RouteThumbnail';
 import SafetyPanel from '../components/SafetyPanel';
-import { Button, Card, EmptyState, ErrorNotice, LinkButton, Loading, SectionTitle } from '../components/ui';
+import { Button, Card, EmptyState, ErrorNotice, InfoNotice, LinkButton, Loading, SectionTitle } from '../components/ui';
 import WeatherScenarioPicker from '../components/WeatherScenarioPicker';
 import WeatherSourceTag from '../components/WeatherSourceTag';
 import { useApp } from '../context/AppContext';
 import { api } from '../lib/api';
-import { dayLabel } from '../lib/format';
+import { dayLabel, signed } from '../lib/format';
 import { CROWD_LABELS, FACILITY_LABELS } from '../lib/labels';
-import type { Course, Recommendation, RecommendedCourse } from '../lib/types';
+import type { Course, Recommendation, RecommendationStatus, RecommendedCourse } from '../lib/types';
 
 const RANK_BADGE: Record<number, string> = {
   1: 'bg-mango-700',
   2: 'bg-leaf-500',
   3: 'bg-sky-500',
+};
+
+/** 산책을 권하지 않을 때 이유별 제목. 데이터가 없는 것과 날씨가 나쁜 것을 구분한다. */
+const BLOCKED_TITLE: Record<RecommendationStatus, string> = {
+  ok: '',
+  unsafe: '오늘은 실내 놀이를 추천해요',
+  no_forecast: '날씨를 확인하지 못했어요',
+  no_window: '산책 가능 시간이 없어요',
+  no_candidates: '추천할 코스가 없어요',
 };
 
 export default function RecommendPage() {
@@ -90,6 +99,7 @@ export default function RecommendPage() {
 
       <Card>
         <WeatherScenarioPicker status={result && <WeatherSourceTag weather={result.weather} />} />
+        {result?.data_notice && <div className="mt-3" data-testid="data-notice"><InfoNotice>{result.data_notice}</InfoNotice></div>}
       </Card>
 
       {error && <ErrorNotice message={error} />}
@@ -128,6 +138,11 @@ export default function RecommendPage() {
             <RefreshCw size={16} aria-hidden />
             다시 추천받기
           </Button>
+          {result.algorithm && (
+            <p className="px-1 text-center text-[11px] text-ink-muted">
+              추천 알고리즘 {result.algorithm.version} · 안전 평가를 먼저 하고, 위험 코스는 점수와 관계없이 뒤로 보내요.
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -140,7 +155,8 @@ export default function RecommendPage() {
  */
 function RecommendTitle({ petName, result }: { petName?: string; result: Recommendation | null }) {
   const top = result?.walkable ? result.courses[0] : undefined;
-  const title = result ? (top ? `코스 ${result.courses.length}곳을 골랐어요` : '오늘은 실내가 좋아요') : '코스를 고르는 중이에요';
+  const blockedTitle = !result?.status || result.status === 'unsafe' ? '오늘은 실내가 좋아요' : BLOCKED_TITLE[result.status] || '추천할 코스가 없어요';
+  const title = result ? (top ? `코스 ${result.courses.length}곳을 골랐어요` : blockedTitle) : '코스를 고르는 중이에요';
   const goToTop = () => {
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     document.querySelector('[data-testid="course-card-1"]')?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
@@ -213,6 +229,10 @@ function CourseCard({
   const cautions = course.other_cautions;
   const disclaimer = course.cautions[course.cautions.length - 1];
   const primary = course.rank === 1;
+  const skipped = (course.score_groups ?? []).filter((group) => !group.available);
+  const markSelected = () => {
+    api.recommendationEvent(recommendationId, course.course_id, 'select').catch(() => undefined);
+  };
 
   // 경로 티켓: 코스 모양이 카드의 얼굴이고, 아래 띠가 출발 시각을 표처럼 보여 준다.
   return (
@@ -232,6 +252,8 @@ function CourseCard({
         </div>
         <div className="min-w-0 flex-1 self-center">
           <h3 className="text-lg font-bold leading-snug text-ink">{course.name}</h3>
+          {course.is_personal && <span className="text-xs font-semibold text-mango-700">내 산책길</span>}
+          {course.exploration && <span className="ml-1 text-xs font-semibold text-ink-soft">새 코스 제안</span>}
           <p className="mt-0.5 text-sm tabular-nums text-ink-soft">
             {course.distance_km.toFixed(2)}km · 약 {course.duration_min}분 ·{' '}
             <span className="font-semibold text-ink">{course.total_score.toFixed(1)}점</span>
@@ -283,11 +305,7 @@ function CourseCard({
           <div className="mt-3 flex flex-col gap-3">
             <dl className="flex flex-col gap-1.5 text-sm">
               <InfoRow icon={<ShieldCheck size={15} />} label="코스 정보">
-                {[
-                  course.safety.has_park ? '공원 포함' : '공원 없음',
-                  `노면: ${course.safety.surface_note}(추정)`,
-                  `혼잡도 ${CROWD_LABELS[course.safety.crowd_level]}(추정)`,
-                ].join(' · ')}
+                {courseInfo(course).join(' · ')}
               </InfoRow>
               {facilities.length > 0 && (
                 <InfoRow icon={<MapIcon size={15} />} label="확인된 시설">
@@ -301,14 +319,41 @@ function CourseCard({
                 key: group.key,
                 label: group.label,
                 value: group.score,
-                note: `비중 ${Math.round(group.weight * 100)}%`,
+                note: group.key === 'feedback' ? `조정 ${signed(group.contribution)}점` : `비중 ${Math.round(group.weight * 100)}%`,
               }))}
             />
-            <ul className="flex flex-col gap-1 text-xs leading-relaxed text-ink-soft">
-              {course.reason.details.map((detail) => (
-                <li key={detail}>{detail}</li>
-              ))}
-            </ul>
+            {course.personalization_score != null && (
+              <p className="text-xs text-ink-soft" data-testid="score-formula">
+                개인화 {course.personalization_score.toFixed(1)}점
+                {course.safety_penalty ? ` − 안전 감점 ${course.safety_penalty.toFixed(1)}점` : ''}
+                {course.skip_penalty ? ` − 최근 다른 코스를 고른 날 ${course.skip_penalty.toFixed(0)}점` : ''} = 추천 점수 {course.total_score.toFixed(1)}점
+              </p>
+            )}
+            {skipped.length > 0 && (
+              <p className="text-xs text-ink-muted" data-testid="skipped-groups">
+                반영하지 않은 항목: {skipped.map((group) => group.label).join(', ')} (데이터가 없어 다른 항목으로 나눠 계산했어요)
+              </p>
+            )}
+            {course.reason.basis && course.reason.basis.length > 0 && (
+              <dl className="flex flex-col gap-1.5 text-xs leading-relaxed" aria-label="추천 근거">
+                {course.reason.basis.map((item) => (
+                  <div key={item.key}>
+                    <dt className="font-semibold text-ink">{item.label}</dt>
+                    <dd className="text-ink-soft">
+                      {item.text} <span className="text-ink-muted">({item.source})</span>
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+            {/* 예전 추천에는 항목별 근거가 없어 세부 문장을 보여 준다. */}
+            {!course.reason.basis?.length && (
+              <ul className="flex flex-col gap-1 text-xs leading-relaxed text-ink-soft">
+                {course.reason.details.map((detail) => (
+                  <li key={detail}>{detail}</li>
+                ))}
+              </ul>
+            )}
             <p className="text-xs text-ink-muted">{course.safety.pet_rule_note}</p>
             <p className="text-xs text-ink-muted">{disclaimer}</p>
           </div>
@@ -337,6 +382,7 @@ function CourseCard({
         </Link>
         <Link
           to={`/navigate?course=${course.course_id}&recommendation=${recommendationId}`}
+          onClick={markSelected}
           aria-label="이 코스로 산책"
           className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-ink px-4 text-sm font-bold text-white transition-[background-color,transform] hover:bg-black active:scale-[0.97]"
         >
@@ -352,6 +398,19 @@ function CourseCard({
 function clockLabel(iso: string): string {
   const date = new Date(iso);
   return `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function courseInfo(course: RecommendedCourse): string[] {
+  const { safety } = course;
+  const unknown = new Set(safety.unknown ?? []);
+  if (!safety.is_personal) {
+    return [safety.has_park ? '공원 포함' : '공원 없음', `노면: ${safety.surface_note}(추정)`, `혼잡도 ${CROWD_LABELS[safety.crowd_level]}(추정)`];
+  }
+  return [
+    unknown.has('has_park') ? '공원 확인 불가' : safety.has_park ? '공원 포함' : '공원 없음',
+    `노면: ${safety.surface_note}`,
+    '혼잡도 확인 불가',
+  ];
 }
 
 function InfoRow({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
@@ -372,7 +431,7 @@ function IndoorCard({ result }: { result: Recommendation }) {
       <SectionTitle>
         <span className="flex items-center gap-1.5">
           <HomeIcon size={18} className="text-ink-soft" aria-hidden />
-          오늘은 실내 놀이를 추천해요
+          {BLOCKED_TITLE[result.status ?? 'unsafe'] || BLOCKED_TITLE.unsafe}
         </span>
       </SectionTitle>
       {result.blocked_reasons.length > 0 && (

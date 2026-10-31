@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 _weather_lock = threading.Lock()
 
 LIVE = "live"
+# 날씨 API가 실패해 모의 날씨로 대신한 경우의 출처 이름
+MOCK_FALLBACK = "mock-fallback"
 SCENARIO_LABELS = {
     "rain_later": "시연용 시나리오: 곧 비가 오는 날",
     "rain_now": "시연용 시나리오: 지금 비가 내리는 상황",
@@ -45,6 +47,8 @@ class WeatherResult:
     scenario: str
     is_mock: bool
     notice: str | None
+    # 예보를 받아 온 시각. 캐시에서 읽었으면 가장 오래된 행의 시각이다.
+    fetched_at: datetime | None = None
 
     def at(self, hour: datetime) -> HourWeather | None:
         return next((row for row in self.hours if row.time == hour), None)
@@ -96,7 +100,7 @@ def _store(db: Session, source: str, hours: list[HourWeather], now: datetime) ->
         db.rollback()
 
 
-def _cached(db: Session, source: str, now: datetime, max_age_minutes: int) -> list[HourWeather]:
+def _cached(db: Session, source: str, now: datetime, max_age_minutes: int) -> tuple[list[HourWeather], datetime | None]:
     rows = db.scalars(
         select(WeatherRecord)
         .where(
@@ -106,7 +110,7 @@ def _cached(db: Session, source: str, now: datetime, max_age_minutes: int) -> li
         )
         .order_by(WeatherRecord.forecast_time)
     ).all()
-    return [_to_hour(row) for row in rows]
+    return [_to_hour(row) for row in rows], min((row.fetched_at for row in rows), default=None)
 
 
 def _scenario_anchor(now: datetime, windows: tuple[TimeWindow, ...]) -> datetime:
@@ -140,28 +144,28 @@ def _load_weather(
         hours = scenario_forecast(scenario, now, _scenario_anchor(now, windows))
         source = f"scenario:{scenario}"
         _store(db, source, hours, now)
-        return WeatherResult(hours, source, scenario, True, SCENARIO_LABELS[scenario])
+        return WeatherResult(hours, source, scenario, True, SCENARIO_LABELS[scenario], now)
 
     provider = provider or build_provider(settings)
     if provider.name == "mock":
         hours = provider.fetch(settings.service_latitude, settings.service_longitude, now)
         _store(db, provider.name, hours, now)
-        return WeatherResult(hours, provider.name, LIVE, True, MOCK_NOTICE)
+        return WeatherResult(hours, provider.name, LIVE, True, MOCK_NOTICE, now)
 
-    cached = _cached(db, provider.name, now, settings.weather_cache_minutes)
+    cached, fetched_at = _cached(db, provider.name, now, settings.weather_cache_minutes)
     if cached:
-        return WeatherResult(cached, provider.name, LIVE, False, None)
+        return WeatherResult(cached, provider.name, LIVE, False, None, fetched_at)
 
     try:
         hours = provider.fetch(settings.service_latitude, settings.service_longitude, now)
     except WeatherUnavailable as exc:
         logger.warning("날씨 API 실패, Mock으로 전환합니다: %s", exc)
         hours = MockWeatherProvider().fetch(settings.service_latitude, settings.service_longitude, now)
-        _store(db, "mock-fallback", hours, now)
-        return WeatherResult(hours, "mock-fallback", LIVE, True, FALLBACK_NOTICE)
+        _store(db, MOCK_FALLBACK, hours, now)
+        return WeatherResult(hours, MOCK_FALLBACK, LIVE, True, FALLBACK_NOTICE, now)
 
     _store(db, provider.name, hours, now)
-    return WeatherResult(hours, provider.name, LIVE, False, None)
+    return WeatherResult(hours, provider.name, LIVE, False, None, now)
 
 
 def find_record_id(db: Session, source: str, forecast_time: datetime) -> int | None:

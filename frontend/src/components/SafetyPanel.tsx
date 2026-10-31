@@ -18,7 +18,27 @@ const SOURCE_TEXT: Record<SafetyItem['source'], string> = {
   observed: 'OSM 기록',
   estimated: '팀 추정',
   unknown: '데이터 없음',
+  unavailable: '날씨 확인 불가',
 };
+
+const percent = (value: number) => `${Math.round(value * 100)}%`;
+
+/** 점수에 들어간 항목이 어디서 온 값인지 한 줄로 보여 준다. */
+function DataQualityLine({ assessment }: { assessment: SafetyAssessment }) {
+  const quality = assessment.data_quality;
+  if (!quality) return null;
+  const { shares } = quality;
+  const parts = [`예보·실측 ${percent(shares.realtime + shares.observed)}`, `팀 추정 ${percent(shares.estimated)}`];
+  if (shares.demo > 0) parts.push(`시연용 ${percent(shares.demo)}`);
+  parts.push(`데이터 없음 ${percent(shares.missing)}`);
+  return (
+    <p className="mt-2 text-[11px] text-ink-muted" data-testid="safety-data-quality">
+      안전 점수 근거: {parts.join(' · ')}
+      {quality.environment_collected_on && ` · 코스 환경 기록 ${quality.environment_collected_on}`}
+      {quality.insufficient && ' · 확인할 수 없는 항목이 많아 양호로 판단하지 않았어요'}
+    </p>
+  );
+}
 
 export function SafetyBadge({ assessment }: { assessment: SafetyAssessment }) {
   const level = LEVELS[assessment.level];
@@ -48,6 +68,12 @@ export default function SafetyPanel({ assessment }: { assessment: SafetyAssessme
         </button>
       </div>
 
+      {assessment.warning && (
+        <p role="alert" className="mt-2 flex items-start gap-1.5 rounded-xl bg-carrot-100 px-3 py-2 text-sm font-bold text-carrot-700" data-testid="safety-warning">
+          <AlertOctagon size={16} className="mt-0.5 shrink-0" aria-hidden />
+          <span>{assessment.warning}</span>
+        </p>
+      )}
       {assessment.risks.length > 0 && (
         <ul className="mt-2 flex flex-col gap-1 text-sm text-carrot-700" aria-label="위험 요인">
           {assessment.risks.map((risk) => (
@@ -64,6 +90,7 @@ export default function SafetyPanel({ assessment }: { assessment: SafetyAssessme
           <span>확인 불가: {assessment.unverified.join(', ')}. 데이터가 없는 항목은 안전하다고 보지 않아요.</span>
         </p>
       )}
+      <DataQualityLine assessment={assessment} />
 
       {open && (
         <div className="mt-3">

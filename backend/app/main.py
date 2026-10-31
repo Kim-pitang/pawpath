@@ -1,4 +1,5 @@
 """PawPath (댕댕 산책각) API 서버 진입점."""
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -7,15 +8,18 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app import api, models  # noqa: F401  models는 테이블 등록을 위해 불러온다
+from app import api, models, recommendation_api  # noqa: F401  models는 테이블 등록을 위해 불러온다
 from app.config import get_settings
 from app.database import SessionLocal, engine
-from app.migrations import ensure_schema
 from app.seed import seed_all
+from app.services import backup_service
 
 # 가장 긴 산책길(10만 지점)을 JSON으로 보낼 때 들어가는 크기를 기준으로 잡았다.
 MAX_REQUEST_BYTES = 25 * 1024 * 1024
 GOOGLE_CALLBACK_PATH = "/api/auth/google/callback"
+# 백업할 때가 되었는지 확인하는 간격. 서버가 꺼져 있던 동안 놓친 백업은 켜자마자 만든다.
+BACKUP_CHECK_SECONDS = 3600
+logger = logging.getLogger(__name__)
 
 
 class RedactOAuthCallback(logging.Filter):
@@ -32,12 +36,28 @@ class RedactOAuthCallback(logging.Filter):
 logging.getLogger("uvicorn.access").addFilter(RedactOAuthCallback())
 
 
+async def backup_loop() -> None:
+    while True:
+        try:
+            await asyncio.to_thread(backup_service.run_scheduled, get_settings())
+        except Exception:
+            # 실패해도 서버는 계속 돌고, 오래된 백업은 지우지 않는다.
+            logger.exception("자동 백업 실패")
+        await asyncio.sleep(BACKUP_CHECK_SECONDS)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    ensure_schema(engine)
+    report = backup_service.migrate(engine, get_settings())
+    if report.backup:
+        # 한 번만 일어나는 일이라 기본 로그 수준에서도 보이게 남긴다.
+        logger.warning("마이그레이션 전 백업: %s, 행 수 %s → %s", report.backup.name, report.before, report.after)
     with SessionLocal() as db:
         seed_all(db)
+    backups = asyncio.create_task(backup_loop()) if get_settings().backup_enabled else None
     yield
+    if backups:
+        backups.cancel()
 
 
 app = FastAPI(
@@ -65,3 +85,4 @@ async def limit_request_size(request: Request, call_next):
 
 
 app.include_router(api.router)
+app.include_router(recommendation_api.router)

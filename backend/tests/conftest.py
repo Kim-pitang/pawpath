@@ -13,12 +13,18 @@ os.environ["ROUTING_PROVIDER"] = "none"
 # 개발자의 .env 설정과 무관하게 같은 결과가 나오도록 고정한다. 환경변수가 .env보다 우선한다.
 os.environ["LLM_PROVIDER"] = "none"
 os.environ["RECOMMENDER_WEIGHTS"] = "{}"
+os.environ["RECOMMENDER_VERSION"] = "v2"
 os.environ["SERVICE_AREA"] = "mangwon"
 os.environ["AUTH_REQUIRED"] = "false"
+# 내 산책길 코스 등록 때 실제 Overpass를 부르지 않는다. 측정은 테스트가 가짜 서버로 따로 확인한다.
+os.environ["ENVIRONMENT_PROVIDER"] = "none"
 # 가짜 Google 클라이언트. 토큰 교환은 테스트가 가짜 Google 서버로 바꿔 끼우므로 실제 Google을 부르지 않는다.
 os.environ["GOOGLE_CLIENT_ID"] = "test-client.apps.googleusercontent.com"
 os.environ["GOOGLE_CLIENT_SECRET"] = "test-google-secret"
 os.environ["GOOGLE_REDIRECT_URI"] = "http://testserver/api/auth/google/callback"
+# 자동 백업을 끄고, 탈퇴 기록이 프로젝트의 backups 폴더에 쌓이지 않게 임시 폴더를 쓴다.
+os.environ["BACKUP_ENABLED"] = "false"
+os.environ["BACKUP_DIR"] = f"{_db_dir}/backups"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -143,6 +149,7 @@ def seed_course_data() -> list[CourseData]:
                 scenery_tags=tuple(raw["scenery_tags"]),
                 facility_counts=dict(Counter(f["type"] for f in raw["facilities"])),
                 environment=raw.get("environment") or {},
+                route=tuple((point[0], point[1]) for point in raw["route"]),
             )
         )
     return courses

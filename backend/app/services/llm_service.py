@@ -118,6 +118,9 @@ def enhance_recommendation(db: Session, record: Recommendation, pet: Pet, provid
     state = record.payload.get("explanation_engine", {})
     if provider is None or state.get("status") == "ok" or not record.payload.get("courses"):
         return record
+    # 날씨 API 장애로 모의 날씨를 쓴 추천이다. 근거 자료의 기온이 사실이 아니므로 문장을 만들지 않는다.
+    if record.payload.get("weather", {}).get("is_available") is False:
+        return record
 
     payload = copy.deepcopy(record.payload)
     courses = payload["courses"]

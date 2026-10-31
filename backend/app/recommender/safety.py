@@ -15,6 +15,8 @@ DEMO = "demo"
 OBSERVED = "observed"
 ESTIMATED = "estimated"
 UNKNOWN = "unknown"
+# 날씨 API가 실패해 모의 날씨로 대신 계산한 경우. 실제 날씨를 모르므로 날씨 항목을 '확인 불가'로 본다.
+UNAVAILABLE = "unavailable"
 
 SOURCE_LABELS = {
     FORECAST: "Open-Meteo 예보",
@@ -22,7 +24,14 @@ SOURCE_LABELS = {
     OBSERVED: "OpenStreetMap 기록",
     ESTIMATED: "팀 추정",
     UNKNOWN: "데이터 없음",
+    UNAVAILABLE: "날씨 확인 불가",
 }
+# 데이터 품질 집계에서 출처를 묶는 방법
+SOURCE_KIND = {FORECAST: "realtime", OBSERVED: "observed", ESTIMATED: "estimated", DEMO: "demo", UNKNOWN: "missing", UNAVAILABLE: "missing"}
+WEATHER_KEYS = ("temperature", "rain", "wind", "uv")
+# 점수에 들어간 항목 중 이만큼이 '데이터 없음'이면 다른 조건이 좋아도 '양호'로 판단하지 않는다.
+MISSING_SHARE_LIMIT = 0.25
+DANGER_WARNING = "위험 요인이 있어 지금은 이 코스를 권하지 않아요. 꼭 나가야 한다면 짧게 다녀오고 반려견 상태를 자주 살펴 주세요."
 
 OK = "ok"
 CAUTION = "caution"
@@ -175,6 +184,10 @@ def shade_item(course: CourseData, hour: HourWeather, features: PetFeatures, is_
         status = CAUTION if hot and trees < 0.3 and not is_dark else OK
         return _item("shade", "그늘", status, score, f"나무 기록 근접 구간 {trees:.0%}", OBSERVED, "나무 기록으로 짐작한 값이며 실제 그늘은 시간대에 따라 달라요." if status == CAUTION else None)
 
+    if "shade_level" in course.unknown:
+        if hot and not is_dark:
+            return _item("shade", "그늘", CAUTION, UNKNOWN_SCORE, "확인 불가", UNKNOWN, "그늘 기록이 없어요. 더운 시간에는 그늘을 직접 확인해 주세요.")
+        return _item("shade", "그늘", UNVERIFIED, UNKNOWN_SCORE, "확인 불가", UNKNOWN, "그늘 기록이 없어 확인할 수 없어요.")
     level = course.shade_level
     score = 40 + level * 40
     text = "많음" if level >= 0.6 else ("적음" if level <= 0.3 else "보통")
@@ -197,6 +210,8 @@ def traffic_item(course: CourseData, is_dark: bool) -> SafetyItem:
             return _item("traffic", "차량 노출", CAUTION, score, value, OBSERVED, "큰 도로를 따라 걷는 구간이 있어요.")
         return _item("traffic", "차량 노출", OK, score, value, OBSERVED)
 
+    if "traffic_exposure" in course.unknown:
+        return _item("traffic", "차량 노출", UNVERIFIED, UNKNOWN_SCORE, "확인 불가", UNKNOWN, "도로 기록이 부족해 확인할 수 없어요.")
     estimate = TRAFFIC_ESTIMATE_TEXT[course.traffic_exposure]
     score = TRAFFIC_ESTIMATE_SCORE[course.traffic_exposure]
     status = CAUTION if course.traffic_exposure == "high" else UNVERIFIED
@@ -212,6 +227,10 @@ def surface_item(course: CourseData, wet: bool) -> SafetyItem:
             status = CAUTION if unpaved >= 0.3 and wet else OK
             return _item("surface", "노면", status, 100 - unpaved * 50, f"기록된 구간의 {1 - unpaved:.0%} 포장", OBSERVED, "젖으면 미끄러울 수 있어요." if status == CAUTION else None)
 
+    if "is_paved" in course.unknown:
+        if wet:
+            return _item("surface", "노면", CAUTION, UNKNOWN_SCORE, "확인 불가", UNKNOWN, "노면 정보가 없어요. 비포장 구간이 있으면 미끄러울 수 있어요.")
+        return _item("surface", "노면", UNVERIFIED, UNKNOWN_SCORE, "확인 불가", UNKNOWN, "노면 기록이 부족해 확인할 수 없어요.")
     if course.is_paved:
         return _item("surface", "노면", UNVERIFIED, 70, "확인 불가 (추정: 포장)", ESTIMATED, "노면 기록이 부족해 확인할 수 없어요.")
     status = CAUTION if wet else UNVERIFIED
@@ -228,9 +247,36 @@ def facilities_item(course: CourseData) -> SafetyItem:
 
 
 def park_item(course: CourseData) -> SafetyItem:
+    if "has_park" in course.unknown:
+        return _item("park", "공원", UNVERIFIED, UNKNOWN_SCORE, "확인 불가", UNKNOWN, "공원 기록을 받지 못했어요.")
     if course.has_park:
         return _item("park", "공원", OK, 100, "공원 포함", OBSERVED if course.environment else ESTIMATED)
     return _item("park", "공원", OK, 60, "공원 없음", OBSERVED if course.environment else ESTIMATED)
+
+
+# 환경부 미세먼지 예보 등급(µg/m³, 24시간 평균 기준). 사람 기준이며 반려견 기준이 아니라 참고값으로만 쓴다.
+PM10_BAD, PM10_VERY_BAD = 81, 151
+PM25_BAD, PM25_VERY_BAD = 36, 76
+
+
+def air_quality_item(hour: HourWeather, source: str) -> SafetyItem:
+    """미세먼지. 받아 오는 데이터가 없으면 '확인 불가'로 두고 점수에는 넣지 않는다."""
+    if hour.pm10 is None and hour.pm2_5 is None:
+        return _item("air", "미세먼지", UNVERIFIED, None, "확인 불가", UNKNOWN, "미세먼지 정보를 받지 못했어요. 에어코리아 등에서 확인해 주세요.")
+    pm10 = hour.pm10 or 0.0
+    pm25 = hour.pm2_5 or 0.0
+    parts = [f"PM10 {hour.pm10:.0f}" if hour.pm10 is not None else None, f"PM2.5 {hour.pm2_5:.0f}" if hour.pm2_5 is not None else None]
+    value = ", ".join(part for part in parts if part) + "µg/m³"
+    if pm10 >= PM10_VERY_BAD or pm25 >= PM25_VERY_BAD:
+        return _item("air", "미세먼지", DANGER, 10, value, source, "미세먼지가 매우 나쁨 수준이에요(환경부 기준).")
+    if pm10 >= PM10_BAD or pm25 >= PM25_BAD:
+        return _item("air", "미세먼지", CAUTION, 50, value, source, "미세먼지가 나쁨 수준이에요(환경부 기준). 산책을 짧게 해 주세요.")
+    return _item("air", "미세먼지", OK, 100, value, source)
+
+
+def _unavailable_weather(item: SafetyItem) -> SafetyItem:
+    """날씨 API가 실패했을 때 모의 날씨로 만든 항목을 '확인 불가'로 바꾼다. 점수는 보수적인 값을 준다."""
+    return _item(item.key, item.label, UNVERIFIED, UNKNOWN_SCORE, "확인 불가", UNAVAILABLE, "실제 날씨를 받지 못했어요. 하늘과 기온을 직접 확인해 주세요.")
 
 
 def _weighted_score(items: tuple[SafetyItem, ...], weights: dict[str, float]) -> float:
@@ -243,16 +289,32 @@ def _weighted_score(items: tuple[SafetyItem, ...], weights: dict[str, float]) ->
     return total / weight_sum if weight_sum else 0.0
 
 
-def _summarize(items: tuple[SafetyItem, ...], score: float, blocked: tuple[str, ...]) -> SafetyAssessment:
+def data_quality(items: tuple[SafetyItem, ...], weights: dict[str, float], collected_on: str | None = None) -> dict:
+    """점수에 들어간 항목을 출처별 가중치 비중으로 나눈다. 실시간·실측과 추정, 데이터 없음을 구분해 보여 준다."""
+    shares = {"realtime": 0.0, "observed": 0.0, "estimated": 0.0, "demo": 0.0, "missing": 0.0}
+    weight_sum = sum(weights.get(item.key, 0.0) for item in items) or 1.0
+    for item in items:
+        shares[SOURCE_KIND[item.source]] += weights.get(item.key, 0.0) / weight_sum
+    return {
+        "shares": {key: round(value, 3) for key, value in shares.items()},
+        "missing_items": [item.label for item in items if item.source in (UNKNOWN, UNAVAILABLE)],
+        "estimated_items": [item.label for item in items if item.source == ESTIMATED],
+        "environment_collected_on": collected_on,
+    }
+
+
+def _summarize(items: tuple[SafetyItem, ...], score: float, blocked: tuple[str, ...], weights: dict[str, float] | None = None, collected_on: str | None = None) -> SafetyAssessment:
     dangers = [item for item in items if item.status == DANGER]
     cautions = [item for item in items if item.status == CAUTION]
     penalty = min(MAX_PENALTY, len(dangers) * DANGER_PENALTY + len(cautions) * CAUTION_PENALTY)
+    quality = data_quality(items, weights or {}, collected_on)
+    too_little_data = quality["shares"]["missing"] >= MISSING_SHARE_LIMIT
 
     if blocked:
         level = "blocked"
     elif dangers or score < DANGER_LEVEL:
         level = "danger"
-    elif cautions or score < GOOD_LEVEL:
+    elif cautions or score < GOOD_LEVEL or too_little_data:
         level = "caution"
     else:
         level = "good"
@@ -266,6 +328,8 @@ def _summarize(items: tuple[SafetyItem, ...], score: float, blocked: tuple[str, 
         unverified=tuple(item.label for item in items if item.status == UNVERIFIED),
         penalty=penalty,
         disclaimer=DISCLAIMER,
+        data_quality={**quality, "insufficient": too_little_data},
+        warning=DANGER_WARNING if level == "danger" else None,
     )
 
 
@@ -311,13 +375,22 @@ def assess_course(course: CourseData, slot: SlotEvaluation, features: PetFeature
         surface_item(course, wet),
         facilities_item(course),
         park_item(course),
+        air_quality_item(weather, weather_source),
     )
+    items = _apply_weather_source(items, weather_source)
     hot = weather.apparent_temperature >= features.comfort_high - 2 and not slot.is_dark
     weights = {**(WEIGHTS_DARK if slot.is_dark else WEIGHTS_DAY)}
     if hot:
         weights["shade"] = 0.15
     score = _weighted_score(items, weights)
-    return _summarize(items, score, _blocking_reasons(course, slot, features, shade, lighting))
+    blocked = _blocking_reasons(course, slot, features, shade, lighting)
+    return _summarize(items, score, blocked, weights, course.environment.get("collected_on"))
+
+
+def _apply_weather_source(items: tuple[SafetyItem, ...], weather_source: str) -> tuple[SafetyItem, ...]:
+    if weather_source != UNAVAILABLE:
+        return items
+    return tuple(_unavailable_weather(item) if item.key in WEATHER_KEYS else item for item in items)
 
 
 def assess_conditions(hour: HourWeather, features: PetFeatures, weather_source: str = FORECAST) -> SafetyAssessment:
@@ -329,8 +402,10 @@ def assess_conditions(hour: HourWeather, features: PetFeatures, weather_source: 
         wind_item(hour, weather_source),
         uv_item(hour, weather_source),
         time_item(is_dark, features, weather_source),
+        air_quality_item(hour, weather_source),
     )
-    return _summarize(items, _weighted_score(items, WEIGHTS_WEATHER_ONLY), ())
+    items = _apply_weather_source(items, weather_source)
+    return _summarize(items, _weighted_score(items, WEIGHTS_WEATHER_ONLY), (), WEIGHTS_WEATHER_ONLY)
 
 
 def assessment_payload(assessment: SafetyAssessment) -> dict:
@@ -355,4 +430,14 @@ def assessment_payload(assessment: SafetyAssessment) -> dict:
         "unverified": list(assessment.unverified),
         "penalty": assessment.penalty,
         "disclaimer": assessment.disclaimer,
+        "data_quality": assessment.data_quality,
+        "warning": assessment.warning,
     }
+
+
+LEVEL_TIER = {"good": 0, "caution": 0, "danger": 1, "blocked": 2}
+
+
+def safety_tier(assessment: SafetyAssessment) -> int:
+    """v2 순위의 첫 번째 기준. 위험 수준 코스는 개인화 점수와 관계없이 양호·주의 코스 뒤에 둔다."""
+    return LEVEL_TIER[assessment.level]
