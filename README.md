@@ -24,8 +24,6 @@ mungo(저장소 이름 PawPath)는 **"오늘 이 아이와 언제, 어디로 걸
 
 위 문장은 고정 문구가 아니라 두부의 프로필, 코스 데이터, 시간별 예보로 계산해 만든 결과입니다.
 
-*In English: mungo recommends when and where to walk your dog today. A safety-first, rule-based engine we built ourselves combines the dog's profile, the owner's schedule, hourly forecasts and route environment, then learns from post-walk feedback. An optional local LLM only rephrases reasons that pass a fact check; it never sets scores.*
-
 ### 해커톤 심사 안내
 
 코디세이 AI 해커톤 2026 출품작입니다(팀 김피탕). 발표자료(PDF)와 시연 영상(MP4)은 팀 구글 드라이브에 올렸고, 심사 기준 커밋 해시는 `팀명_소스코드.txt`에 적었습니다.
@@ -47,8 +45,6 @@ mungo(저장소 이름 PawPath)는 **"오늘 이 아이와 언제, 어디로 걸
 | 기획의 창의성 | [핵심 가치](#핵심-가치), [동작 원리](#동작-원리) |
 | 기술 완성도 (직접 개발) | [동작 원리](#동작-원리), [기술 스택과 선택 이유](#기술-스택과-선택-이유), [추천 알고리즘](docs/RECOMMENDER.md), [시스템 아키텍처](docs/ARCHITECTURE.md) |
 | 성과 및 실용 가능성 | [데모](#데모), [검증 결과](#검증-결과), [기능 정리](docs/FEATURES.md) |
-
-API 키 같은 인증정보는 저장소에 넣지 않았습니다. 설정값은 [`.env.example`](.env.example)에 있고, 실제 값은 커밋하지 않는 `.env`에 넣습니다.
 
 ## 문제
 
