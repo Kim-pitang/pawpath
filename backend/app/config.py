@@ -2,7 +2,7 @@
 from functools import lru_cache
 from typing import NamedTuple
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -40,6 +40,19 @@ class Settings(BaseSettings):
     routing_base_url: str = "https://routing.openstreetmap.de/routed-foot"
     routing_timeout_seconds: float = 4.0
     routing_max_distance_km: float = 3.0
+    # 산책길 자동 생성이 길찾기 서버를 부르는 방식. 기본값은 공용 서버(초당 1회 안내) 기준이다.
+    # 자체 OSRM 서버를 쓰면 간격을 0으로, 계정당 대기를 줄여도 된다.
+    routing_min_interval_seconds: float = 1.1
+    generation_max_seconds: float = 30.0
+    generation_cooldown_seconds: float = 10.0
+    # 어떤 모양을 얼마나 시도할지. 기본값(방위 8개, 요청 11회)은 공용 서버용이고, 자체 서버에서는 늘릴 수 있다.
+    # 시도 수 = 방위 수 × 반경 배율 수 × 벌어짐 각도 수(요청 상한까지), 후보가 모자라면 보정 요청이 몇 번 더 나간다.
+    generation_bearings: int = Field(default=8, ge=4, le=72)
+    generation_radius_scales: str = "1.0"  # 쉼표로 구분. 첫 값이 기본 모양
+    generation_spreads: str = "30"  # 경유점 두 개가 방위 양옆으로 벌어지는 각도(도), 쉼표로 구분. 첫 값이 기본 모양
+    generation_max_requests: int = Field(default=11, ge=4, le=300)
+    generation_pool_size: int = Field(default=5, ge=1, le=50)  # 평가 전에 남기는 서로 다른 후보 수
+    generation_max_results: int = Field(default=5, ge=1, le=10)  # 화면에 돌려주는 후보 수
 
     # 내 산책길을 추천 후보로 등록할 때 경로 주변 환경을 OSM에서 측정한다: overpass 또는 none(측정하지 않음)
     environment_provider: str = "overpass"
@@ -73,7 +86,27 @@ class Settings(BaseSettings):
             self.service_latitude = area.latitude
         if self.service_longitude is None:
             self.service_longitude = area.longitude
+        self.generation_radius_scale_list  # 잘못된 값이면 서버가 뜰 때 알린다
+        self.generation_spread_list
         return self
+
+    @staticmethod
+    def _numbers(raw: str, name: str, low: float, high: float) -> tuple[float, ...]:
+        try:
+            values = tuple(float(part) for part in raw.split(",") if part.strip())
+        except ValueError:
+            raise ValueError(f"{name}는 쉼표로 구분한 숫자여야 해요: {raw}") from None
+        if not values or any(not low <= value <= high for value in values) or len(set(values)) != len(values):
+            raise ValueError(f"{name}는 {low}~{high} 사이의 서로 다른 숫자여야 해요: {raw}")
+        return values
+
+    @property
+    def generation_radius_scale_list(self) -> tuple[float, ...]:
+        return self._numbers(self.generation_radius_scales, "GENERATION_RADIUS_SCALES", 0.5, 1.5)
+
+    @property
+    def generation_spread_list(self) -> tuple[int, ...]:
+        return tuple(round(v) for v in self._numbers(self.generation_spreads, "GENERATION_SPREADS", 10, 60))
 
     @property
     def google_enabled(self) -> bool:

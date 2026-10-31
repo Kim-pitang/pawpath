@@ -400,3 +400,48 @@ def test_park_share_threshold_matches_the_team_labels(share, expected):
     assert attributes["has_park"] is expected
     assert ("has_park" in unknown) is (share is None)
 
+
+
+def generated_loop():
+    """실제 OSRM으로 만든 망원동 30분 순환 경로(테스트 픽스처). 시각 정보가 없다."""
+    from tests.test_generate_route_api import SAMPLES
+
+    sample = SAMPLES["mangwon-30-0"]
+    return [(lat, lng) for lng, lat in sample["coordinates"]]
+
+
+def test_generated_route_saves_registers_and_is_labeled_as_generated(client):
+    response = client.post(
+        "/api/my-walks",
+        json={"title": "만든 산책길", "source_type": "generated", "points": [{"latitude": lat, "longitude": lng} for lat, lng in generated_loop()]},
+    )
+    assert response.status_code == 201, response.text
+    walk = response.json()
+    assert walk["source_type"] == "generated"
+    assert walk["has_timestamps"] is False
+    course = course_of(client, register(client, walk["id"]).json()["course"]["id"])
+    assert course["is_familiar"] is False
+    assert "만든 순환 산책길" in course["description"]
+    assert course["data_sources"]["route"] == "도보 길찾기로 자동 생성한 경로"
+    assert course["data_sources"]["source_type"] == "generated"
+    assert 1.5 <= course["distance_km"] <= 2.0  # 목표 30분 = 1.8km
+
+
+def test_generated_course_competes_in_recommendations(client):
+    walk = client.post(
+        "/api/my-walks",
+        json={"title": "만든 산책길", "source_type": "generated", "points": [{"latitude": lat, "longitude": lng} for lat, lng in generated_loop()]},
+    ).json()
+    course_id = register(client, walk["id"]).json()["course"]["id"]
+    from app.models import User
+    from app.services.recommendation_service import active_courses
+
+    with SessionLocal() as db:
+        # 추천은 상위 3개만 보여 주므로, 후보 집합에 들어갔는지를 직접 확인한다.
+        assert course_id in [c.id for c in active_courses(db, db.get(User, 1))]
+    assert client.post("/api/recommendations", json={"pet_id": dubu_id(client), "weather_scenario": "live"}).status_code == 201
+
+
+def test_unknown_source_type_is_still_rejected(client):
+    response = client.post("/api/my-walks", json={"title": "x", "source_type": "bogus", "points": points(out_and_back(PARK))})
+    assert response.status_code == 422

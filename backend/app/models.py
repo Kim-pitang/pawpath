@@ -237,7 +237,7 @@ class SavedWalk(Base):
     pet_id: Mapped[int | None] = mapped_column(ForeignKey("pets.id"), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(80))
     memo: Mapped[str] = mapped_column(Text, default="")
-    # recorded | imported
+    # recorded | imported | generated
     source_type: Mapped[str] = mapped_column(String(10))
     started_at: Mapped[datetime] = mapped_column(DateTime, index=True)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

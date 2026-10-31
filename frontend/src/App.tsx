@@ -1,5 +1,6 @@
 import { Route, Routes } from 'react-router-dom';
 import Layout from './components/Layout';
+import GeneratePage from './pages/GeneratePage';
 import GpxImportPage from './pages/GpxImportPage';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
@@ -39,6 +40,7 @@ export default function App() {
         <Route path="report" element={<ReportPage />} />
         <Route path="my-walks" element={<MyWalksPage />} />
         <Route path="my-walks/import" element={<GpxImportPage />} />
+        <Route path="generate" element={<GeneratePage />} />
         <Route path="my-walks/:walkId" element={<MyWalkDetailPage />} />
         <Route path="public-walks" element={<PublicWalksPage />} />
       </Route>

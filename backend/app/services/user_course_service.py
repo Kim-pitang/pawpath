@@ -35,6 +35,16 @@ FACILITY_TYPES = ("toilets", "drinking_water", "veterinary", "park")
 PARK_SHARE = 0.01
 # 측정 중에 서버가 다시 시작되면 결과가 오지 않으므로, 이 시간이 지나면 실패로 본다.
 MEASURE_TIMEOUT = timedelta(minutes=5)
+SOURCE_DESCRIPTIONS = {
+    "recorded": "직접 기록한 내 산책길이에요.",
+    "imported": "GPX로 가져온 내 산책길이에요.",
+    "generated": "시간에 맞춰 만든 순환 산책길이에요. 실제로 걸어 보며 길 상태를 확인해 주세요.",
+}
+ROUTE_SOURCES = {
+    "recorded": "직접 기록한 GPS 경로",
+    "imported": "가져온 GPX 경로",
+    "generated": "도보 길찾기로 자동 생성한 경로",
+}
 PET_RULE = "리드줄과 배변봉투를 챙기고, 출입 제한 구역은 현장 안내를 따라 주세요."
 
 
@@ -204,7 +214,7 @@ def register(db: Session, user: User, walk: SavedWalk, settings: Settings, now: 
     places = load_places()
     values = {
         "name": walk.title[:80],
-        "description": "직접 기록한 내 산책길이에요." if recorded else "GPX로 가져온 내 산책길이에요.",
+        "description": SOURCE_DESCRIPTIONS.get(walk.source_type, SOURCE_DESCRIPTIONS["imported"]),
         "area": area,
         "start_lat": simplified[0][0],
         "start_lng": simplified[0][1],
@@ -217,7 +227,7 @@ def register(db: Session, user: User, walk: SavedWalk, settings: Settings, now: 
         "facilities": facilities,
         "environment": None,
         "data_sources": {
-            "route": "직접 기록한 GPS 경로" if recorded else "가져온 GPX 경로",
+            "route": ROUTE_SOURCES.get(walk.source_type, ROUTE_SOURCES["imported"]),
             "source_type": walk.source_type,
             "facilities": f"OpenStreetMap ({places.get('collected_on')})",
             "environment": None,

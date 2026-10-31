@@ -7,6 +7,7 @@ import type {
   Feedback,
   FeedbackInput,
   ForecastWeather,
+  GenerateRouteResult,
   GpxPreview,
   Insights,
   NearbyResult,
@@ -131,6 +132,8 @@ export const api = {
     post<Approach>(`/courses/${courseId}/approach`, { latitude, longitude }),
   nearbyPlaces: (courseId: number, radiusM = 300, types?: string[]) =>
     request<NearbyResult>(`/courses/${courseId}/nearby?radius_m=${radiusM}${types ? `&types=${types.join(',')}` : ''}`),
+  generateRoute: (latitude: number, longitude: number, durationMin: number, petId: number | null = null) =>
+    post<GenerateRouteResult>('/routes/generate', { latitude, longitude, duration_min: durationMin, pet_id: petId }),
   walkingRoute: (from: [number, number], to: [number, number]) =>
     post<RouteResult>('/routes/walking', { from_latitude: from[0], from_longitude: from[1], to_latitude: to[0], to_longitude: to[1] }),
   alternativeRoute: (body: {

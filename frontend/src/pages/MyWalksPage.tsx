@@ -1,4 +1,4 @@
-import { FileUp, Footprints, Globe } from 'lucide-react';
+import { FileUp, Footprints, Globe, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import GuestNotice from '../components/GuestNotice';
@@ -49,6 +49,10 @@ export default function MyWalksPage() {
         <LinkButton to="/my-walks/import" variant="ghost">
           <FileUp size={18} aria-hidden />
           GPX 가져오기
+        </LinkButton>
+        <LinkButton to="/generate" variant="ghost" className="col-span-2">
+          <Sparkles size={18} aria-hidden />
+          산책길 만들기
         </LinkButton>
       </div>
 
