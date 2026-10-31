@@ -251,7 +251,7 @@ export default function GeneratePage() {
             <Button onClick={save} disabled={saving || !details.title.trim()} className="mt-4 w-full" data-testid="generate-save">
               {saving ? '저장 중이에요' : '내 산책길로 저장'}
             </Button>
-            <p className="mt-2 text-xs text-ink-muted">저장한 뒤 산책길 화면에서 &lsquo;추천 후보에 넣기&rsquo;를 누르면 추천에 포함돼요.</p>
+            <p className="mt-2 text-xs text-ink-muted">저장하면 바로 내 추천 후보 코스가 되고, 산책길 화면에서 뺄 수 있어요.</p>
           </Card>
         </>
       )}
