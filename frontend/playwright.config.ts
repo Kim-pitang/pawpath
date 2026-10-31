@@ -26,7 +26,8 @@ export default defineConfig({
       url: `http://127.0.0.1:${API_PORT}/api/health`,
       reuseExistingServer: false,
       env: {
-        DATABASE_URL: `sqlite:///${dbDir}/e2e.db`,
+        // E2E_DATABASE_URL을 주면 그 DB(예: 비워 둔 pawpath_test)에서 돈다. 빈 DB에서 시작해야 결과가 같다.
+        DATABASE_URL: process.env.E2E_DATABASE_URL || `sqlite:///${dbDir}/e2e.db`,
         WEATHER_PROVIDER: 'mock',
         SEED_DEMO_PET: 'true',
         ROUTING_PROVIDER: 'none',

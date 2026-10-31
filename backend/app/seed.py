@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.database import sync_id_sequence
 from app.models import Pet, User, WalkingCourse
 from app.services.profile_service import new_default_profile
 
@@ -73,6 +74,8 @@ def seed_all(db: Session) -> None:
     seed_courses(db)
     user = seed_default_user(db)
     db.flush()
+    # 시연 보호자는 번호를 직접 넣었다. 가입하는 보호자가 같은 번호를 받지 않게 한다.
+    sync_id_sequence(db, User.__table__)
     if get_settings().seed_demo_pet:
         seed_demo_pet(db, user)
     db.commit()

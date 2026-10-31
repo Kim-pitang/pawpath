@@ -1,9 +1,19 @@
-"""기존 DB를 지금 구조로 올린다.
+"""DB를 지금 구조로 올린다.
 
-create_all은 이미 있는 테이블을 바꾸지 않으므로, 예전 DB를 그대로 열면 새 컬럼이 없어 오류가 난다.
-모두 비어 있어도 되는 컬럼이라 기존 데이터에 영향을 주지 않는다. 프로필이 없던 시절의 데이터는 각 계정의
-대표 프로필로 잇는다. 여러 번 실행해도 비어 있는 행만 채우고, 중간에 실패하면 채우던 내용을 함께 되돌린다.
+구조 변경은 Alembic 리비전(backend/alembic/versions)으로 관리한다. 새 컬럼이나 테이블은 여기에 더하지 말고
+`uv run alembic revision --autogenerate -m "..."`로 리비전을 만드세요.
+
+Alembic 이전에 만든 DB(alembic_version 테이블이 없는 DB)는 아래 ADDED_COLUMNS 방식으로 처음 구조(0001)까지
+올린 뒤 0001로 표시하고, 그다음 리비전부터 Alembic이 이어서 적용한다. 더한 컬럼은 모두 비어 있어도 되므로
+기존 데이터에 영향을 주지 않는다. 프로필이 없던 시절의 데이터는 각 계정의 대표 프로필로 잇는다. 여러 번 실행해도
+비어 있는 행만 채우고, 중간에 실패하면 채우던 내용을 함께 되돌린다.
 """
+from pathlib import Path
+
+from alembic import command
+from alembic.config import Config
+from alembic.runtime.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from sqlalchemy import func, insert, inspect, literal, select, text, update
 from sqlalchemy.engine import Connection, Engine
 
@@ -11,6 +21,11 @@ from app.clock import now_local
 from app.database import Base
 from app.models import DEFAULT_AVATAR, Pet, Profile, Recommendation, SavedWalk, User, WalkFeedback, WalkHistory
 
+ALEMBIC_INI = Path(__file__).resolve().parent.parent / "alembic.ini"
+# Alembic 이전 DB를 아래 방식으로 올렸을 때의 구조. 이 뒤의 변경은 리비전으로만 더한다.
+BASELINE_REVISION = "0001"
+
+# Alembic 이전 DB용. 0001에서 멈춘 목록이라 더 늘리지 않는다.
 ADDED_COLUMNS = {
     "pets": (("preferred_distance_km", "FLOAT"), ("preferred_time_bucket", "VARCHAR(10)")),
     "walking_courses": (("environment", "JSON"), ("owner_user_id", "INTEGER"), ("saved_walk_id", "INTEGER"), ("is_active", "BOOLEAN DEFAULT TRUE"), ("community_trail_id", "INTEGER")),
@@ -60,8 +75,24 @@ def row_counts(engine: Engine) -> dict[str, int]:
         return {name: connection.execute(text(f"SELECT count(*) FROM {name}")).scalar_one() for name in COUNTED_TABLES if name in tables}
 
 
+def alembic_config(connection: Connection | None = None) -> Config:
+    config = Config(str(ALEMBIC_INI))
+    if connection is not None:
+        config.attributes["connection"] = connection
+    return config
+
+
+def head_revision() -> str:
+    return ScriptDirectory.from_config(alembic_config()).get_current_head()
+
+
+def current_revision(connection: Connection) -> str | None:
+    """DB가 어느 리비전까지 왔는지. Alembic 이전 DB와 빈 DB는 None이다."""
+    return MigrationContext.configure(connection).get_current_revision()
+
+
 def needs_migration(engine: Engine) -> bool:
-    """이미 데이터가 있는 DB에서 테이블이나 컬럼을 더해야 하면 참이다. 새 DB는 백업할 것이 없어 거짓이다."""
+    """이미 데이터가 있는 DB에서 구조를 바꿔야 하면 참이다. 새 DB는 백업할 것이 없어 거짓이다."""
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
     if "users" not in tables:
@@ -72,7 +103,8 @@ def needs_migration(engine: Engine) -> bool:
         existing = {column["name"] for column in inspector.get_columns(table)} if table in tables else set()
         if table in tables and any(name not in existing for name, _ in columns):
             return True
-    return False
+    with engine.connect() as connection:
+        return current_revision(connection) != head_revision()
 
 
 def backfill_profiles(connection: Connection) -> int:
@@ -107,7 +139,21 @@ def backfill_profiles(connection: Connection) -> int:
 
 
 def ensure_schema(engine: Engine) -> list[str]:
-    """테이블을 만들고 빠진 컬럼을 추가한 뒤 프로필을 잇는다. 추가한 컬럼 이름을 돌려준다."""
+    """DB를 최신 리비전으로 올린다. Alembic 이전 DB는 먼저 처음 구조로 맞춘다. 추가한 컬럼 이름을 돌려준다."""
+    with engine.connect() as connection:
+        revision = current_revision(connection)
+    has_tables = bool(set(inspect(engine).get_table_names()) & set(Base.metadata.tables))
+    added = _upgrade_to_baseline(engine) if revision is None and has_tables else []
+    # PostgreSQL은 구조 변경도 트랜잭션 안에서 일어나, 리비전 하나가 실패하면 그 리비전 전체가 되돌아간다.
+    with engine.begin() as connection:
+        if revision is None and has_tables:
+            command.stamp(alembic_config(connection), BASELINE_REVISION)
+        command.upgrade(alembic_config(connection), "head")
+    return added
+
+
+def _upgrade_to_baseline(engine: Engine) -> list[str]:
+    """Alembic 이전 DB에 빠진 테이블과 컬럼을 더하고 프로필을 잇는다."""
     Base.metadata.create_all(engine)
     inspector = inspect(engine)
     added: list[str] = []

@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=("../.env", ".env"), extra="ignore", env_ignore_empty=True)
 
     database_url: str = "sqlite:///./pawpath.db"
+    # PostgreSQL 연결 풀. 서버 한 대가 동시에 여는 연결은 최대 pool_size + max_overflow개다.
+    db_pool_size: int = 5
+    db_max_overflow: int = 10
+    db_pool_timeout_seconds: float = 10.0
 
     weather_provider: str = "open-meteo"
     weather_cache_minutes: int = 30

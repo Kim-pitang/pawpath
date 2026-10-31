@@ -11,6 +11,7 @@ from app.migrations import ensure_schema
 from app.models import SavedWalk, SavedWalkPoint
 from app.services.gpx_service import GpxPoint
 from app.services.saved_walk_service import haversine_m, split_impossible_jumps
+from tests.conftest import sqlite_only
 from tests.test_api_e2e import dubu_id
 
 START = datetime(2026, 10, 31, 16, 0, 0)
@@ -207,11 +208,14 @@ def test_delete_removes_the_walk_and_its_points(client):
         assert db.scalar(select(func.count()).select_from(SavedWalkPoint).where(SavedWalkPoint.walk_id == walk["id"])) == 0
 
 
+@sqlite_only  # Alembic 이전 DB는 SQLite로만 있었다. PostgreSQL은 외래 키 때문에 테이블만 지울 수도 없다.
 def test_new_tables_are_added_to_an_old_database_without_touching_others(client):
     pet_id = dubu_id(client)
     with engine.begin() as connection:
         connection.execute(text("DROP TABLE saved_walk_points"))
         connection.execute(text("DROP TABLE saved_walks"))
+        # Alembic 이전 DB에는 리비전 표시가 없다.
+        connection.execute(text("DROP TABLE alembic_version"))
     assert not inspect(engine).has_table("saved_walks")
     ensure_schema(engine)
     assert inspect(engine).has_table("saved_walks") and inspect(engine).has_table("saved_walk_points")

@@ -9,7 +9,7 @@ Every Paw Deserves a Perfect Path.
 | 프로젝트 폴더 | 비어 있음 | 신규 구축, `backend/` · `frontend/` · `docs/` 분리 |
 | Python / uv | 3.12, uv 0.9 | `uv`로 가상환경과 잠금 파일 관리 |
 | Node | 20.20 | Vite + React + TypeScript + Tailwind CSS |
-| PostgreSQL | 미설치 | SQLite 기본, `DATABASE_URL`로 교체 가능 |
+| PostgreSQL | 18.6 (`docker compose`) | 개발과 배포의 기본 DB. Docker 없이 돌릴 때는 SQLite |
 | Open-Meteo | 키 없이 호출 가능 | 실제 날씨 기본 제공자, 실패 시 Mock으로 전환 |
 | 지도 | Kakao 키 없음, OSM 타일 응답 정상 | Leaflet + OpenStreetMap |
 | 코스 데이터 | Overpass, OSRM 도보 경로 응답 정상 | 망원동 일대 실제 경로와 시설을 시드로 저장 |

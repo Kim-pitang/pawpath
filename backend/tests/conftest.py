@@ -6,7 +6,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 _db_dir = tempfile.mkdtemp(prefix="pawpath-test-")
-os.environ["DATABASE_URL"] = f"sqlite:///{_db_dir}/test.db"
+# TEST_DATABASE_URL을 주면 그 DB(예: docker compose의 pawpath_test)에서 돈다. 테이블을 지우고 다시 만드므로 개발 DB를 넣지 마세요.
+os.environ["DATABASE_URL"] = os.environ.get("TEST_DATABASE_URL") or f"sqlite:///{_db_dir}/test.db"
 os.environ["WEATHER_PROVIDER"] = "mock"
 os.environ["SEED_DEMO_PET"] = "true"
 os.environ["ROUTING_PROVIDER"] = "none"
@@ -42,6 +43,9 @@ from app.recommender.types import (  # noqa: E402
 from app.seed import seed_all  # noqa: E402
 
 COURSES_PATH = Path(__file__).parent.parent / "app" / "data" / "courses.json"
+IS_SQLITE = engine.dialect.name == "sqlite"
+# DB 파일을 직접 읽거나 SQLite만 허용하는 동작을 확인하는 테스트.
+sqlite_only = pytest.mark.skipif(not IS_SQLITE, reason="SQLite 파일과 동작에 대한 테스트")
 NOW = datetime(2026, 10, 30, 10, 0)
 
 

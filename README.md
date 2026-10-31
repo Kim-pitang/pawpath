@@ -28,7 +28,7 @@ PawPath는 반려동물의 나이, 크기, 활동량, 성격, 산책 선호도�
 
 ## 빠른 시작
 
-필요 도구: Python 3.12 이상, [uv](https://docs.astral.sh/uv/), Node.js 20 이상. API 키는 필요 없습니다.
+필요 도구: Python 3.12 이상, [uv](https://docs.astral.sh/uv/), Node.js 20 이상, Docker(PostgreSQL용). API 키는 필요 없습니다.
 
 Windows PowerShell에서는 다음 명령으로 실행합니다. `uv`가 Python도 자동으로 준비합니다.
 
@@ -41,19 +41,23 @@ Windows PowerShell에서는 다음 명령으로 실행합니다. `uv`가 Python�
 macOS / Linux / Git Bash에서는 다음 명령으로 실행합니다.
 
 ```bash
+cp .env.example .env   # POSTGRES_PASSWORD와 DATABASE_URL의 비밀번호를 같은 값으로 바꾸세요
 ./dev.sh
 ```
 
-의존성을 설치한 뒤 백엔드와 프론트엔드를 함께 띄우며, `Ctrl+C`로 함께 종료합니다. macOS와 Linux용 스크립트이므로 Windows에서는 아래 **따로 실행하기**를 따르세요.
+PostgreSQL을 `docker compose`로 띄워 접속을 받을 때까지 기다린 뒤, 의존성을 설치하고 백엔드와 프론트엔드를 함께 띄웁니다. `Ctrl+C`로 백엔드와 프론트엔드를 함께 종료합니다(DB는 계속 돎. 멈추려면 `docker compose stop`). macOS와 Linux용 스크립트이므로 Windows에서는 아래 **따로 실행하기**를 따르세요. `.env`가 없거나 `DATABASE_URL`을 지우면 Docker 없이 SQLite 파일(`backend/pawpath.db`)로 돕니다. 운영 방법은 [PostgreSQL 운영](docs/POSTGRES.md)에 있습니다.
 
 - 앱: http://localhost:5173
 - API 문서(Swagger): http://localhost:8000/docs
 
-처음 실행하면 DB(`backend/pawpath.db`)를 만들고, 산책 코스(망원동 10개, 개포동 6개, 공개 GPX로 만든 서울 20개 구 코스 20개)와 시연용 반려동물 두부, 기본 일정(16~20시)을 넣습니다. GPX 코스는 출발점이 서비스 지역 5km 안이면 그 지역 추천 후보가 됩니다(망원동 4개, 개포동 3개). 적재 방법과 결과는 [GPX 후보 코스](docs/GPX_COURSES.md)에 있습니다. 기본 지역은 망원동입니다. 이전 버전의 DB가 있으면 데이터를 유지한 채 새 컬럼을 자동으로 추가합니다.
+처음 실행하면 테이블을 만들고(Alembic), 산책 코스(망원동 10개, 개포동 6개, 공개 GPX로 만든 서울 20개 구 코스 20개)와 시연용 반려동물 두부, 기본 일정(16~20시)을 넣습니다. GPX 코스는 출발점이 서비스 지역 5km 안이면 그 지역 추천 후보가 됩니다(망원동 4개, 개포동 3개). 적재 방법과 결과는 [GPX 후보 코스](docs/GPX_COURSES.md)에 있습니다. 기본 지역은 망원동입니다. 이전 버전의 DB가 있으면 데이터를 유지한 채 구조를 자동으로 올립니다. 쓰던 SQLite 데이터를 PostgreSQL로 옮기려면 서버를 켜기 전에 `cd backend && uv run python -m app.transfer ./pawpath.db`를 실행하세요([절차](docs/POSTGRES.md#sqlite-데이터-옮기기)).
 
 ### 따로 실행하기
 
 ```bash
+# DB (PostgreSQL을 쓸 때)
+docker compose up -d --wait
+
 # 백엔드
 cd backend
 uv sync
@@ -68,7 +72,7 @@ npm run dev
 uv가 없다면 Python 3.12 가상환경을 켜고 `backend` 폴더에서 다음을 실행하세요.
 
 ```bash
-pip install fastapi "uvicorn[standard]" sqlalchemy pydantic pydantic-settings httpx
+pip install fastapi "uvicorn[standard]" sqlalchemy pydantic pydantic-settings httpx "psycopg[binary]" alembic
 uvicorn app.main:app --port 8000
 ```
 
@@ -82,7 +86,11 @@ cp .env.example .env
 
 | 변수 | 기본값 | 설명 |
 |---|---|---|
-| `DATABASE_URL` | `sqlite:///./pawpath.db` | DB 주소 |
+| `DATABASE_URL` | `sqlite:///./pawpath.db` | DB 주소. `.env.example`은 PostgreSQL(`postgresql+psycopg://...@localhost:5432/pawpath`) |
+| `DB_POOL_SIZE` | `5` | PostgreSQL 연결 풀 크기 |
+| `DB_MAX_OVERFLOW` | `10` | 풀이 찼을 때 더 여는 연결 수 |
+| `DB_POOL_TIMEOUT_SECONDS` | `10` | 연결을 기다리는 최대 시간 |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT` | `pawpath`, 없음, `pawpath`, `5432` | 앱이 아니라 `docker compose`가 읽는 DB 컨테이너 설정. 비밀번호는 필수 |
 | `WEATHER_PROVIDER` | `open-meteo` | `open-meteo` 또는 `mock` |
 | `WEATHER_CACHE_MINUTES` | `30` | 실제 날씨 캐시 시간 |
 | `WEATHER_TIMEOUT_SECONDS` | `5` | 날씨 API 제한 시간 |
@@ -114,7 +122,7 @@ cp .env.example .env
 | `AUTH_REQUIRED` | `false` | `true`면 로그인해야 앱을 쓸 수 있음. `false`면 로그인하지 않은 사용자는 시연 보호자로 동작하고, 로그인한 보호자의 데이터는 따로 관리 |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | 비어 있음 | Google 로그인용 OAuth 클라이언트 값. 둘 다 넣어야 켜짐. [Google 로그인 켜기](#google-로그인-켜기-선택) 참고 |
 | `GOOGLE_REDIRECT_URI` | `http://localhost:5173/api/auth/google/callback` | Google 콘솔에 등록한 리디렉션 URI와 같아야 함 |
-| `BACKUP_ENABLED` | `true` | SQLite DB 자동 백업. [백업과 복구](#백업과-복구) 참고 |
+| `BACKUP_ENABLED` | `true` | SQLite DB 자동 백업(PostgreSQL은 `pg_dump`). [백업과 복구](#백업과-복구) 참고 |
 | `BACKUP_DIR` | `./backups` | DB 사본과 탈퇴 기록을 둘 폴더. 디스크 장애에 대비하려면 다른 디스크로 지정 |
 | `BACKUP_INTERVAL_HOURS` | `24` | 자동 백업 간격 |
 | `BACKUP_RETENTION_DAYS` | `14` | 이 기간이 지난 백업을 지움. 탈퇴한 보호자의 데이터가 백업에 남는 최대 기간이기도 함 |
@@ -189,6 +197,8 @@ GOOGLE_CLIENT_SECRET=GOCSPX-xxxx
 | 로그 | 돌아오는 주소의 승인 코드와 state를 접근 로그에서 지움 |
 
 ## 백업과 복구
+
+PostgreSQL은 `pg_dump`로 백업하고 `pg_restore`로 복구합니다. 명령은 [PostgreSQL 운영](docs/POSTGRES.md#백업과-복구)에 있습니다. 아래 자동 백업과 명령은 SQLite일 때만 동작합니다.
 
 SQLite DB를 서버가 24시간마다 자동으로 백업하고, 14일이 지난 백업을 지웁니다. 기본 위치는 `backend/backups`입니다. 서버가 쓰는 중에도 안전하게 복사합니다.
 
@@ -315,8 +325,11 @@ cloudflared tunnel --url http://localhost:5173   # 또는: ngrok http 5173
 ## 테스트
 
 ```bash
-# 백엔드 단위 테스트와 API E2E
+# 백엔드 단위 테스트와 API E2E (기본은 임시 SQLite)
 (cd backend && uv sync && uv run pytest)
+
+# 같은 테스트를 PostgreSQL 테스트 DB로 (테이블을 지우므로 pawpath_test만 넣으세요)
+(cd backend && TEST_DATABASE_URL=postgresql+psycopg://pawpath:비밀번호@localhost:5432/pawpath_test uv run pytest)
 
 # 브라우저 E2E (임시 DB와 Mock 날씨로 서버를 직접 띄움)
 (cd frontend && npm install && npx playwright install chromium && npm run test:e2e)
@@ -339,7 +352,8 @@ backend/
     recommender/     추천 엔진: 특성값, 시간대, 코스 점수, 안전 지수, 학습, 설명
     services/        날씨, 길찾기, LLM, 대체 경로, 리포트, 시설 검색, GPX, 나만의 산책길, 커뮤니티, 계정, 탈퇴, 백업, 사진
     data/            산책 코스와 주변 시설 시드
-    api.py, models.py, schemas.py, migrations.py, seed.py, main.py, backup.py
+    api.py, models.py, schemas.py, migrations.py, seed.py, main.py, backup.py, transfer.py
+  alembic/           DB 구조 변경 리비전
   tests/             단위 테스트, API E2E, 검증 시나리오
 frontend/
   src/pages/         화면
@@ -359,6 +373,7 @@ docs/                아키텍처, API 명세, 고도화 보고서, 검증 결�
 - [추천 알고리즘 v2](docs/RECOMMENDER.md): 기존 엔진 분석, 4단계 구조, 가중치, 피드백 학습, 평가 지표와 결과, 검증하지 못한 항목
 - [검증 결과](docs/VALIDATION.md): 시나리오 12개, 나만의 산책길 14개 항목, 산책길 커뮤니티, GPX 호환성, 실제 환경 확인
 - [백업 및 복구 정책](docs/BACKUP.md): 기준, 절차, 복구하면 달라지는 것, 탈퇴와 백업, 한계
+- [PostgreSQL 운영](docs/POSTGRES.md): 띄우기, Alembic, SQLite 데이터 옮기기, pg_dump 백업과 복구, SQLite와 다른 점, 한계
 - [외부 자원 활용 내역](docs/EXTERNAL_RESOURCES.md): 발표자료용 표
 - [개발 계획](docs/PLAN.md)
 
@@ -391,10 +406,10 @@ docs/                아키텍처, API 명세, 고도화 보고서, 검증 결�
 | Google 로그인 | 구현. 팀이 실제 Google 클라이언트로 개발 서버에서 로그인을 확인했고, 위조와 장애 상황은 가짜 Google 서버로 검증. 아이디 계정과 Google 계정 연결은 미구현 |
 | 세션 만료와 본인 재확인 | 구현. 비밀번호 재확인은 실제 브라우저로 확인. Google 재확인은 가짜 Google 서버로만 확인했고, Google이 비밀번호를 다시 묻게 강제할 수는 없음 |
 | 계정 탈퇴와 데이터 삭제 | 구현. 유예 기간 없이 바로 삭제 |
-| 백업과 복구 | 구현(SQLite). 실제 서버로 복구 훈련을 함. 원격 복사와 백업 암호화는 미구현 |
+| 백업과 복구 | 구현(SQLite). 실제 서버로 복구 훈련을 함. 원격 복사와 백업 암호화는 미구현. PostgreSQL은 `pg_dump`/`pg_restore` 절차만 문서화하고 개발 DB로 확인했으며 자동화는 미구현 |
 | 산책길 커뮤니티 | 구현. 공유, 탐색, 좋아요, 저장, 후기, 관리, 위치 가림. Chromium(Pixel 7)과 WebKit(iPhone 13)으로 확인했고, 실제 휴대폰으로 걸어 보지는 않음 |
 | 내 산책길을 추천 후보로 쓰기 | 구현. 실제 Overpass로 측정해 시드 코스의 저장값과 같음을 확인. 혼잡도와 경사는 측정하지 않음 |
 | Kakao Maps, 기상청 API | 미구현: Leaflet + OSM, Open-Meteo 사용. 카카오맵은 길찾기 링크만 연결. 날씨는 `WeatherProvider` 프로토콜로 교체 가능 |
-| PostgreSQL | 설정만 지원, 연결 미검증 |
+| PostgreSQL | 구현. 개발용 `docker compose`(PostgreSQL 18.6), Alembic 구조 관리, SQLite 데이터 이전 도구. 백엔드 테스트와 브라우저 E2E를 PostgreSQL로 돌려 통과. 배포 서버의 실제 데이터 이전은 하지 않음. [운영](docs/POSTGRES.md) |
 
 지도 데이터 © OpenStreetMap contributors. 날씨 데이터 Open-Meteo.

@@ -22,6 +22,7 @@ from tests.conftest import EMPTY_STATE, NOW, default_schedule, make_course, make
 from tests.test_api_e2e import FIVE_STARS, PET_BODY, dubu_id
 
 COURSES = seed_course_data()
+COMPOSE_ONLY = {"postgres_user", "postgres_password", "postgres_db", "postgres_port"}
 FIXED_NOON = datetime(2026, 10, 30, 12, 0)
 
 
@@ -40,7 +41,8 @@ def test_env_example_matches_the_settings_and_can_be_used_as_is():
     root = Path(__file__).parent.parent.parent
     lines = [line for line in (root / ".env.example").read_text(encoding="utf-8").splitlines() if line and not line.startswith("#")]
     documented = {line.split("=", 1)[0].lower() for line in lines}
-    assert documented == set(Settings.model_fields)
+    # POSTGRES_* 는 앱이 아니라 docker-compose.yml이 읽는다.
+    assert documented - COMPOSE_ONLY == set(Settings.model_fields)
     # 예시 파일을 그대로 복사해도 설정이 읽힌다.
     assert Settings(_env_file=root / ".env.example").llm_provider == "none"
 

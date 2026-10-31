@@ -15,6 +15,7 @@ from app.config import get_settings
 from app.database import Base, SessionLocal, engine
 from app.models import AuthSession, OAuthState, User, WalkingCourse
 from app.services import account_service, auth_service, user_course_service
+from tests.conftest import IS_SQLITE, sqlite_only
 from tests.test_api_e2e import FIVE_STARS, PET_BODY, dubu_id
 from tests.test_auth import JPEG, PASSWORD, POINTS, other_client, signup
 from tests.test_google_auth import callback, google, start  # noqa: F401  google은 픽스처다
@@ -353,7 +354,8 @@ def test_summary_counts_what_will_be_deleted(client, monkeypatch):
     monkeypatch.setenv("BACKUP_ENABLED", "true")
     get_settings.cache_clear()
     try:
-        assert client.get("/api/auth/account").json()["backup_retention_days"] == 14
+        # PostgreSQL은 서버가 백업하지 않고 pg_dump로 따로 백업하므로 보존 기간을 말하지 않는다.
+        assert client.get("/api/auth/account").json()["backup_retention_days"] == (14 if IS_SQLITE else None)
     finally:
         monkeypatch.undo()
         get_settings.cache_clear()
@@ -452,6 +454,7 @@ def test_deletion_closes_shared_links_and_public_walks(client):
     assert all(walk["token"] != data["public"] for walk in visitor.get("/api/public-walks").json())
 
 
+@sqlite_only
 def test_deleted_data_is_not_left_in_the_database_file(client):
     signup(client)
     make_full_account(client)
@@ -474,9 +477,11 @@ def test_deletion_order_works_with_foreign_keys_enforced(client):
     with SessionLocal() as db:
         user_id = db.scalar(select(User.id).where(User.login_id == "alice"))
     checked = create_engine(engine.url)
-    event.listen(checked, "connect", lambda connection, _: connection.execute("PRAGMA foreign_keys = ON").close())
+    if IS_SQLITE:
+        event.listen(checked, "connect", lambda connection, _: connection.execute("PRAGMA foreign_keys = ON").close())
     with Session(checked) as db:
-        assert db.scalar(text("PRAGMA foreign_keys")) == 1
+        if IS_SQLITE:
+            assert db.scalar(text("PRAGMA foreign_keys")) == 1
         # 검사가 정말 켜져 있으면 보호자를 먼저 지울 수 없다.
         with pytest.raises(IntegrityError):
             db.execute(delete(User).where(User.id == user_id))

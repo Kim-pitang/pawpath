@@ -26,7 +26,7 @@ from app.migrations import ensure_schema
 from app.models import AuthSession, CommunityTrail, OAuthState, SavedWalk
 from app.services import account_service
 
-BACKUP_NAME = re.compile(r"^(pawpath|pre-restore|pre-migration)-(\d{8}-\d{6})\.db$")
+BACKUP_NAME = re.compile(r"^(pawpath|pre-restore|pre-migration|pre-postgres)-(\d{8}-\d{6})\.db$")
 # 이 테이블이 없으면 PawPath DB가 아니다. 나중에 더한 테이블은 복구할 때 자동으로 만든다.
 REQUIRED_TABLES = {"users", "pets", "walking_courses", "walk_histories", "recommendations"}
 BUSY_SECONDS = 30
