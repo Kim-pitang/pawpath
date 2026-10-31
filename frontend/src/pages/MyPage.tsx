@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import PreferenceRanking from '../components/charts/PreferenceRanking';
 import HBarChart from '../components/charts/HBarChart';
-import ScoreTrendChart from '../components/charts/ScoreTrendChart';
 import TimePreferenceCards from '../components/charts/TimePreferenceCards';
 import AccountCard from '../components/AccountCard';
 import { Card, EmptyState, ErrorNotice, InfoNotice, LinkButton, Loading, PageTitle, SectionTitle } from '../components/ui';
@@ -30,13 +29,6 @@ export default function MyPage() {
       active = false;
     };
   }, [petId]);
-
-  // 날씨가 다르면 점수 변화의 원인을 알 수 없으므로, 최신 추천과 같은 날씨 조건끼리만 비교한다.
-  const trend = useMemo(() => {
-    const history = insights?.recommendation_history ?? [];
-    const latest = history[history.length - 1];
-    return latest ? history.filter((record) => record.scenario === latest.scenario) : [];
-  }, [insights]);
 
   if (petsLoaded && !selectedPet) {
     return (
@@ -137,27 +129,11 @@ export default function MyPage() {
           </Card>
         )}
 
-        {trend.length >= 2 ? (
-          <Card>
-            <SectionTitle>추천 결과 변화</SectionTitle>
-            <ScoreTrendChart history={trend} />
-            <p className="mt-2 text-xs text-ink-muted">같은 날씨 조건에서 받은 추천끼리 비교했어요.</p>
-          </Card>
-        ) : (
-          hasFeedback && (
-            <Card>
-              <SectionTitle>추천 결과 변화</SectionTitle>
-              <p className="text-sm text-ink-soft">같은 날씨 조건에서 추천을 두 번 이상 받으면 변화가 그려져요.</p>
-              <LinkButton to="/recommend" variant="ghost" className="mt-3 w-full">다시 추천받기</LinkButton>
-            </Card>
-          )
-        )}
-
         {hasFeedback && (
           <Card>
             <SectionTitle>피드백 기록</SectionTitle>
             <ul className="flex flex-col divide-y divide-line">
-              {[...insights.affinity_history].reverse().slice(0, 6).map((item) => (
+              {[...insights.affinity_history].reverse().slice(0, 5).map((item) => (
                 <li key={item.feedback_id} className="py-2.5 first:pt-0 last:pb-0">
                   <div className="flex items-center justify-between gap-2 text-sm">
                     <span className="min-w-0 truncate font-semibold">{item.course_name}</span>

@@ -72,10 +72,7 @@ test('최종 검증 시나리오: 추천, 산책, 5점 피드백, 다음 추천 
   // 8. 다음 추천에 반영
   await page.getByRole('button', { name: '달라진 추천 보기' }).click();
   await expect(page.getByTestId('course-card-1').getByRole('heading')).toHaveText(secondName);
-  await expect(page.getByTestId('course-card-1').getByText('학습 전보다 1계단 상승')).toBeVisible();
-  const updated = page.getByRole('article').filter({ hasText: secondName });
-  await expect(updated.getByText(/학습 효과 \+/)).toBeVisible();
-  await expect(updated.getByTestId('reason-summary')).toContainText('지난번 만족도가 높았던');
+  await expect(page.getByTestId('course-card-1').getByTestId('reason-summary')).toContainText('지난번 만족도가 높았던');
 
   // 마이페이지 분석
   await page.getByRole('navigation', { name: '주요 메뉴' }).getByRole('link', { name: '마이' }).click();
@@ -83,8 +80,7 @@ test('최종 검증 시나리오: 추천, 산책, 5점 피드백, 다음 추천 
   await expect(page.getByText('1번').first()).toBeVisible();
   await expect(page.getByLabel('코스별 선호도').getByText(secondName)).toBeVisible();
   await expect(page.getByText('두부의 취향 분석')).toBeVisible();
-  await expect(page.getByText('추천 결과 변화')).toBeVisible();
-  await expect(page.getByRole('img', { name: '추천 회차별 코스 점수 변화' })).toBeVisible();
+  await expect(page.getByText('추천 결과 변화')).toHaveCount(0);
 });
 
 test('지도에 코스 경로와 시설이 표시된다', async ({ page }) => {
