@@ -7,7 +7,7 @@ import { Chip, ErrorNotice, LinkButton, Loading, PageTitle } from '../components
 import { useApp } from '../context/AppContext';
 import { api } from '../lib/api';
 import { CROWD_LABELS, DIFFICULTY_COURSE_LABELS, FACILITY_LABELS, TRAFFIC_LABELS } from '../lib/labels';
-import type { Course } from '../lib/types';
+import { isGpxCourse, type Course } from '../lib/types';
 
 const CROWD_ORDER: Record<string, number> = { low: 0, medium: 1, high: 2 };
 
@@ -299,6 +299,7 @@ function CourseRow({
               </span>
               <span className="block text-xs text-ink-soft">
                 {course.is_personal && <span className="mr-1 font-semibold text-carrot-700">내 산책길</span>}
+                {isGpxCourse(course) && <span className="mr-1 font-semibold text-sky-500">GPX 코스</span>}
                 혼잡 {course.data_sources.unknown?.includes('crowd_level') ? '확인 불가' : CROWD_LABELS[course.crowd_level]}
               </span>
             </span>
@@ -321,11 +322,14 @@ function CourseDetail({ course, recommendationId }: { course: Course; recommenda
   const estimates = course.data_sources.team_estimates?.length;
   const unknown = new Set(course.data_sources.unknown ?? []);
   const road = course.environment?.road;
+  const gpx = isGpxCourse(course) ? course.data_sources.gpx : undefined;
   return (
     <div className="pp-rise px-3 pb-3">
       <p className="text-sm text-ink-soft">{course.description}</p>
       <div className="mt-2 flex flex-wrap gap-1.5">
         {course.is_personal && <Chip tone="carrot">내 산책길</Chip>}
+        {gpx && <Chip tone="leaf">GPX 코스</Chip>}
+        {gpx && <Chip>{gpx.route_type === 'one_way' ? `편도 ${gpx.one_way_km.toFixed(2)}km 왕복` : '순환'}</Chip>}
         {course.park_names.map((name) => (
           <Chip key={name} tone="leaf">
             {name}
@@ -341,7 +345,9 @@ function CourseDetail({ course, recommendationId }: { course: Course; recommenda
         </p>
       )}
       <p className="mt-2 text-xs leading-relaxed text-ink-muted">
-        {course.is_personal
+        {gpx
+          ? `공개 GPX 경로(${course.data_sources.source_file ?? 'GPX'})로 만든 코스예요. 좌표 ${gpx.point_count}개로 잰 거리이고, 걷는 시간은 시속 3.6km로 추정했어요. 고도 ${gpx.elevation ? `상승 ${gpx.elevation.gain_m}m` : '기록이 없어 경사는 확인 불가'}예요.`
+          : course.is_personal
           ? `내 산책길로 만든 코스예요(${course.data_sources.route ?? '내 경로'}). 주변 환경은 OpenStreetMap 기록으로 측정했고, 기록이 없는 항목은 확인 불가예요.`
           : '경로와 시설 위치는 OpenStreetMap 기준이에요.'}
         {estimates ? ' 혼잡도, 그늘, 노면, 난이도는 팀 추정값이고, 조명은 기록이 없으면 확인 불가예요. 현장에서 확인해 주세요.' : ''} {course.pet_rule_note}

@@ -1,6 +1,6 @@
 import L from 'leaflet';
 import { useEffect, useRef } from 'react';
-import type { Course } from '../lib/types';
+import { isGpxCourse, type Course } from '../lib/types';
 
 export const RANK_COLORS: Record<number, string> = {
   1: 'var(--color-mango-700)',
@@ -94,6 +94,14 @@ export default function CourseMap({ courses, selectedId, rankById, onSelect }: C
         .addTo(layer)
         .getElement()
         ?.style.setProperty('background', RANK_HEX[rankById[selected.id]] ?? SELECTED_COURSE_HEX);
+      // 편도 GPX는 같은 길로 되돌아오므로 원래 도착점을 반환점으로 보여 준다.
+      const gpx = isGpxCourse(selected) ? selected.data_sources.gpx : undefined;
+      if (gpx?.route_type === 'one_way') {
+        L.marker(gpx.end, { icon: divIcon('반환', 'pp-marker pp-marker-start'), keyboard: false, title: 'GPX 도착점에서 되돌아와요' })
+          .addTo(layer)
+          .getElement()
+          ?.style.setProperty('background', '#5f5b50');
+      }
       for (const facility of selected.facilities) {
         const style = FACILITY_MARKERS[facility.type];
         if (!style) continue;

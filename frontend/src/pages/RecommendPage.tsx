@@ -253,6 +253,7 @@ function CourseCard({
         <div className="min-w-0 flex-1 self-center">
           <h3 className="text-lg font-bold leading-snug text-ink">{course.name}</h3>
           {course.is_personal && <span className="text-xs font-semibold text-mango-700">내 산책길</span>}
+          {course.source_type === 'gpx_import' && <span className="text-xs font-semibold text-sky-500">GPX 코스</span>}
           {course.exploration && <span className="ml-1 text-xs font-semibold text-ink-soft">새 코스 제안</span>}
           <p className="mt-0.5 text-sm tabular-nums text-ink-soft">
             {course.distance_km.toFixed(2)}km · 약 {course.duration_min}분 ·{' '}

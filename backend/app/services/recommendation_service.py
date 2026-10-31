@@ -254,6 +254,8 @@ def _course_payload(item: CourseRecommendation, course: WalkingCourse, state: Pr
         "name": course.name,
         "description": course.description,
         "is_personal": course.is_personal,
+        # gpx_import면 공개 GPX로 만든 코스다. 시드 코스와 내 산책길 코스는 비어 있거나 산책길 종류다.
+        "source_type": (course.data_sources or {}).get("source_type"),
         "distance_km": course.distance_km,
         "duration_min": course.duration_min,
         "total_score": item.total_score,

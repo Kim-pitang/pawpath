@@ -14,6 +14,10 @@ GAEPO = SERVICE_AREAS["gaepo"]
 GAEPO_COURSES = json.loads((DATA_DIR / "courses_gaepo.json").read_text(encoding="utf-8"))
 GAEPO_NAMES = {course["name"] for course in GAEPO_COURSES}
 MANGWON_CODES = [course["code"] for course in json.loads((DATA_DIR / "courses.json").read_text(encoding="utf-8"))]
+# 공개 GPX 코스는 출발점이 서비스 지역 반경 안이면 그 지역 후보에 들어간다.
+GPX_COURSES = json.loads((DATA_DIR / "courses_gpx.json").read_text(encoding="utf-8"))
+GAEPO_AREA_NAMES = GAEPO_NAMES | {course["name"] for course in GPX_COURSES if course["area"] == GAEPO.label}
+MANGWON_AREA_GPX = [course["code"] for course in GPX_COURSES if course["area"] == MANGWON.label]
 REQUIRED_SENTENCE = "낯선 길을 싫어하는 두부를 위해 익숙한 공원 코스를 골랐어요. 비가 오기 전 짧게 다녀올 수 있어요."
 
 
@@ -32,8 +36,10 @@ def recommend(client, pet_id, scenario="rain_later"):
 # ---------- 기본값은 그대로
 def test_default_area_keeps_the_mangwon_courses_and_their_numbers(client):
     courses = client.get("/api/courses").json()
-    assert [course["code"] for course in courses] == MANGWON_CODES
-    assert [course["id"] for course in courses] == list(range(1, len(MANGWON_CODES) + 1))
+    seeds = [course for course in courses if not course["code"].startswith("gpx-")]
+    assert [course["code"] for course in seeds] == MANGWON_CODES
+    assert [course["id"] for course in seeds] == list(range(1, len(MANGWON_CODES) + 1))
+    assert sorted(course["code"] for course in courses if course["code"].startswith("gpx-")) == sorted(MANGWON_AREA_GPX)
     assert {course["area"] for course in courses} == {MANGWON.label}
 
 
@@ -60,21 +66,21 @@ def test_unknown_area_stops_the_server_with_a_clear_message():
 # ---------- 개포동
 def test_gaepo_area_lists_only_its_courses(gaepo, client):
     courses = client.get("/api/courses").json()
-    assert {course["name"] for course in courses} == GAEPO_NAMES
+    assert {course["name"] for course in courses} == GAEPO_AREA_NAMES
     assert {course["area"] for course in courses} == {GAEPO.label}
 
 
 def test_gaepo_recommendation_uses_only_its_courses_and_gives_the_same_reason(gaepo, client):
     body = recommend(client, dubu_id(client))
     assert len(body["courses"]) == 3
-    assert {course["name"] for course in body["courses"]} <= GAEPO_NAMES
+    assert {course["name"] for course in body["courses"]} <= GAEPO_AREA_NAMES
     assert body["courses"][0]["reason"]["summary"] == REQUIRED_SENTENCE
 
 
 def test_gaepo_excludes_courses_in_a_heatwave_only_from_its_own(gaepo, client):
     body = recommend(client, dubu_id(client), "heatwave")
     assert body["excluded_courses"]
-    assert {course["name"] for course in body["excluded_courses"]} <= GAEPO_NAMES
+    assert {course["name"] for course in body["excluded_courses"]} <= GAEPO_AREA_NAMES
 
 
 def test_five_stars_on_the_second_course_moves_it_to_first_in_gaepo(gaepo, client):

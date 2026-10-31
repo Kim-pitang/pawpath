@@ -25,6 +25,10 @@
 
 원격 `main`의 경로 생성 코드와의 호환은 임시 복제본에서 시험 병합해 확인했습니다. 백엔드 테스트 808개가 통과했고, 충돌한 5개 파일 중 `api.py`, `engine.py`만 풀어 돌렸습니다. 병합 후 E2E와 경로 생성 화면은 확인하지 않았습니다.
 
+## GPX 후보 코스
+
+공개 GPX 20개 적재의 검증 항목 10개(일괄 처리, 좌표, 거리, 잘못된 좌표, 중복, DB, 후보 반영, 점수와 순위, 지도, 회귀)와 기존 코스와의 추천 비교는 [GPX 후보 코스](GPX_COURSES.md)에 있습니다. 테스트는 `backend/tests/test_gpx_courses.py`와 `frontend/e2e/scenario.spec.ts`이고, 적재 후 백엔드 831개와 E2E 160개가 통과했습니다.
+
 ## 나만의 산책길 예외 항목
 
 신규 기능 지시서의 반드시 검증할 항목 14개입니다. 테스트 파일은 `backend/tests/test_saved_walks.py`, `backend/tests/test_gpx.py`, `frontend/e2e/my-walks.spec.ts`, `frontend/e2e/recording-logic.spec.ts`입니다.

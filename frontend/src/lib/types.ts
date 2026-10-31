@@ -77,6 +77,20 @@ export interface Facility {
   lng: number;
 }
 
+export interface GpxCourseInfo {
+  route_type: 'circular' | 'one_way';
+  one_way_km: number;
+  start: [number, number];
+  end: [number, number];
+  point_count: number;
+  elevation: { gain_m: number; loss_m: number; min_m: number; max_m: number } | null;
+  verification: string | null;
+}
+
+export function isGpxCourse(course: { data_sources?: { source_type?: string } }): boolean {
+  return course.data_sources?.source_type === 'gpx_import';
+}
+
 export interface Course {
   id: number;
   code: string;
@@ -107,8 +121,12 @@ export interface Course {
     facilities?: string;
     team_estimates?: string[];
     observed?: string[];
-    /** 측정도 추정도 없어 '확인 불가'로 표시하는 속성. 내 산책길 코스에만 있다. */
+    /** 측정도 추정도 없어 '확인 불가'로 표시하는 속성. 내 산책길 코스와 GPX 코스에만 있다. */
     unknown?: string[];
+    source_type?: string;
+    source_file?: string;
+    /** 공개 GPX로 만든 코스의 원본 측정값 */
+    gpx?: GpxCourseInfo;
   };
   /** 내 산책길로 만든 코스. 주인에게만 보인다. */
   is_personal?: boolean;
@@ -244,6 +262,8 @@ export interface RecommendedCourse {
   name: string;
   description: string;
   is_personal?: boolean;
+  /** 'gpx_import'면 공개 GPX로 만든 코스 */
+  source_type?: string | null;
   distance_km: number;
   duration_min: number;
   total_score: number;

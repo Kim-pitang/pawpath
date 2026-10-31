@@ -11,7 +11,8 @@ from app.services.profile_service import new_default_profile
 
 DATA_DIR = Path(__file__).parent / "data"
 # 모든 지역의 코스를 넣어 두고 SERVICE_AREA로 고른다. 지역을 바꿔도 코스 번호와 기록이 유지된다.
-COURSE_FILES = (DATA_DIR / "courses.json", DATA_DIR / "courses_gaepo.json")
+# courses_gpx.json은 공개 GPX로 만든 코스로, app.gpx_import가 만든다. is_active가 없어 관리자가 끈 코스는 꺼진 채 남는다.
+COURSE_FILES = (DATA_DIR / "courses.json", DATA_DIR / "courses_gaepo.json", DATA_DIR / "courses_gpx.json")
 DEFAULT_USER_ID = 1
 
 
@@ -24,6 +25,8 @@ def seed_courses(db: Session) -> None:
     """코드 기준으로 코스를 추가하거나 갱신한다. 다시 실행해도 안전하다."""
     existing = {course.code: course for course in db.scalars(select(WalkingCourse))}
     for path in COURSE_FILES:
+        if not path.exists():
+            continue
         for raw in json.loads(path.read_text(encoding="utf-8")):
             course = existing.get(raw["code"])
             if course is None:

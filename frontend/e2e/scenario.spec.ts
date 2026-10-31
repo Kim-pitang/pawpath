@@ -107,14 +107,26 @@ test('최종 검증 시나리오: 추천, 산책, 5점 피드백, 다음 추천 
   await expect(page.getByText('추천 결과 변화')).toHaveCount(0);
 });
 
+test('GPX 코스를 고르면 출발점, 반환점, 거리와 출처가 보인다', async ({ page }) => {
+  await page.goto('/map');
+  const list = page.getByRole('list', { name: '코스 목록' });
+  await list.getByRole('button').filter({ hasText: 'GPX 코스' }).filter({ hasText: '망원한강공원' }).click();
+  await expect(page.getByTestId('selected-course-name')).toHaveText('마포구 망원한강공원');
+  await expect(page.getByText('편도 3.68km 왕복')).toBeVisible();
+  await expect(page.getByText(/공개 GPX 경로\(마포구_망원한강공원\.gpx\)로 만든 코스예요/)).toBeVisible();
+  await expect(page.locator('.pp-marker-start', { hasText: '출발' })).toBeVisible();
+  await expect(page.locator('.pp-marker-start', { hasText: '반환' })).toBeVisible();
+});
+
 test('지도에 코스 경로와 시설이 표시된다', async ({ page }) => {
   await page.goto('/map');
   await expect(page.getByTestId('course-map')).toBeVisible();
-  // 시드 코스 10개에, 저장과 동시에 후보가 된 내 산책길이 더해진다.
+  // 시드 코스 10개와 망원동 5km 안의 GPX 코스 4개에, 저장과 동시에 후보가 된 내 산책길이 더해진다.
   const list = page.getByRole('list', { name: '코스 목록' });
   await expect(list.getByRole('button').first()).toBeVisible();
   const personal = await list.getByText('내 산책길').count();
-  await expect(page.locator('path.course-line')).toHaveCount(10 + personal);
+  await expect(list.getByText('GPX 코스')).toHaveCount(4);
+  await expect(page.locator('path.course-line')).toHaveCount(10 + 4 + personal);
   await list.getByRole('button').first().click();
   await expect(page.getByTestId('selected-course-name')).toBeVisible();
   await expect(page.locator('.pp-marker').first()).toBeVisible();

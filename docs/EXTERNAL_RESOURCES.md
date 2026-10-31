@@ -30,14 +30,17 @@
 | 외부 API | 브라우저 Web Share API, Clipboard API | 산책길 공유 링크 전달과 복사 (브라우저 내장) | 웹 표준 |
 | 외부 API | Overpass API | 경로 주변 시설, 도로, 조명, 나무 기록 수집 (데이터 구축 시), 내 산책길을 저장해 추천 후보가 될 때 주변 환경 측정 (실행 중 호출) | 데이터 ODbL |
 | 외부 API | OpenStreetMap Nominatim | 개포동 코스 제작 중 주소 확인 (개발 중 1회, 앱에서는 호출하지 않음) | 데이터 ODbL |
+| 외부 API | Valhalla 공개 보행 경로 서버 (valhalla1.openstreetmap.de) | 서울 20개 구 GPX 후보 코스의 경로 계산 (데이터 구축 시 경유지 3개씩 20회, 앱에서는 호출하지 않음). 요청 URL은 GPX 자료의 `코스목록.csv`에 있음 | Valhalla MIT, 데이터 ODbL |
 | 사전 보유 코드 | 없음 | 해당 없음 | 해당 없음 |
 | 기타 | 카카오맵 길찾기 링크 | 출발점이 먼 경우 외부 지도로 연결 (사용자가 눌렀을 때만 이동, API 미사용) | 카카오맵 이용약관 |
 | 기타 | OpenStreetMap 데이터 | 코스 경로, 주변 시설, 도로 유형, 조명, 노면, 나무 기록 | ODbL 1.0 |
+| 기타 | 서울 반려견 산책 후보 GPX 20개 (Valhalla 응답 원본과 trkpt 변환본, 코스목록.csv) | 추천 후보 코스 20개(`backend/app/data/courses_gpx.json`)의 경로. 원본 zip은 저장소에 넣지 않음 | 데이터 ODbL (© OpenStreetMap contributors) |
 | 기타 | Google "G" 로고 | Google 로그인 버튼 (Google 로그인 브랜드 지침에 따름) | Google 브랜드 지침 |
 | 기타 | GPX 1.1 표준과 스키마 (TopoGrafix) | 가져오기와 내보내기 형식, 내보낸 파일 검증 | 공개 표준 |
 | 기타 | gpxpy, togeojson 저장소의 공개 GPX 시험 파일 51개 | 실제 기기와 앱(스트라바, 애플워치, 가민 등)이 만든 GPX 호환성 확인. 개발 중 검증에만 쓰고 저장소에 포함하지 않음 | Apache-2.0, BSD-2-Clause |
 | 기타 | Ollama 0.33 | 로컬 LLM 실행 (선택 기능) | MIT |
 | 기타 | Gemma 4 (`gemma4:e4b`) | 추천 이유 문장 생성 (선택 기능) | Apache-2.0 |
+| 기타 | 해커톤 제공 서버 (네이버 클라우드 플랫폼, SSL VPN 접속) | 일반 서버에서 앱 실행, GPU 서버(NVIDIA L4)에서 Ollama 실행. 2026-10-31~11-01 동작 확인용, 사설망 SSH 터널로만 접속 | 해커톤 운영 제공 자원 |
 | 기타 | Claude Code (Anthropic) | AI 코딩 도구로 구현 전반에 활용 | 상용 서비스 |
 
 ## 직접 개발한 범위
