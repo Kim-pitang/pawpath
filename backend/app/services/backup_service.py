@@ -86,7 +86,8 @@ def current_time(settings: Settings) -> datetime:
 
 
 def _open_readonly(path: Path) -> sqlite3.Connection:
-    return sqlite3.connect(f"{path.as_uri()}?mode=ro", uri=True, timeout=BUSY_SECONDS)
+    # as_uri()는 절대 경로만 받는다. backup_dir 기본값(./backups)처럼 상대 경로도 들어온다.
+    return sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True, timeout=BUSY_SECONDS)
 
 
 def _copy_database(source: Path, target: Path) -> None:
