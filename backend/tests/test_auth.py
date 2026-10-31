@@ -203,6 +203,7 @@ def assert_cannot_touch(intruder, data):
         intruder.get("/api/walks", params={"pet_id": pet}),
         intruder.get("/api/walks/report", params={"pet_id": pet}),
         intruder.post("/api/feedback", json={"walk_id": data["walk"], **FIVE_STARS}),
+        intruder.delete(f"/api/walks/{data['walk']}"),
         intruder.get(f"/api/feedback/{pet}"),
         intruder.get(f"/api/my-walks/{saved}"),
         intruder.patch(f"/api/my-walks/{saved}", json={"title": "탈취"}),

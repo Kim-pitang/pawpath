@@ -12,3 +12,10 @@ from app.config import get_settings
 def now_local() -> datetime:
     tz = ZoneInfo(get_settings().service_timezone)
     return datetime.now(tz).replace(tzinfo=None, second=0, microsecond=0)
+
+
+def to_local(value: datetime) -> datetime:
+    """타임존이 붙은 시각을 서비스 현지 시각으로 바꾼다. 타임존이 없으면 이미 현지 시각으로 본다."""
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(ZoneInfo(get_settings().service_timezone)).replace(tzinfo=None)

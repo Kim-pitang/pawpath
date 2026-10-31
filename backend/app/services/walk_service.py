@@ -72,6 +72,22 @@ def record_walk(
     return walk
 
 
+def remove_walk(db: Session, walk: WalkHistory) -> None:
+    """피드백 전 산책 기록을 지운다. 기록할 때 올린 방문 수를 되돌리고, 그것뿐이던 선호도 행은 없앤다."""
+    row = db.scalar(
+        select(PetCoursePreference).where(
+            PetCoursePreference.pet_id == walk.pet_id,
+            PetCoursePreference.course_id == walk.course_id,
+        )
+    )
+    if row is not None:
+        row.visit_count = max(0, row.visit_count - 1)
+        if row.visit_count == 0 and row.feedback_count == 0:
+            db.delete(row)
+    db.delete(walk)
+    db.commit()
+
+
 def submit_feedback(db: Session, walk: WalkHistory, feedback: FeedbackInput, memo: str, now: datetime) -> WalkFeedback:
     pet = walk.pet
     course = walk.course

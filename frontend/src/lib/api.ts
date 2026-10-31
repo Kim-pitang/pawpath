@@ -162,6 +162,8 @@ export const api = {
   }) =>
     post<Walk>('/walks', body),
   listWalks: (petId: number) => request<Walk[]>(`/walks?pet_id=${petId}`),
+  /** 피드백 전 산책만 지울 수 있다. */
+  deleteWalk: (id: number) => request<void>(`/walks/${id}`, { method: 'DELETE' }),
   walkReport: (petId: number, weekOffset = 0) => request<WalkReport>(`/walks/report?pet_id=${petId}&week_offset=${weekOffset}`),
 
   submitFeedback: (body: FeedbackInput) => post<Feedback>('/feedback', body),

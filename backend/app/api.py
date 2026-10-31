@@ -1,5 +1,6 @@
 """REST API 라우터."""
 import logging
+from datetime import timedelta
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
@@ -7,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import schemas
-from app.clock import now_local
+from app.clock import now_local, to_local
 from app.database import get_db
 from app.config import get_settings
 from app.models import Pet, Recommendation, SavedWalk, SavedWalkPhoto, User, WalkFeedback, WalkHistory, WalkingCourse
@@ -27,7 +28,7 @@ from app.services.recommendation_service import active_courses, create_recommend
 from app.services.report_service import build_report, is_simulated, walked_km
 from app.services import route_fit_service, route_generator
 from app.services.routing_service import Approach, build_router, plan_approach
-from app.services.walk_service import build_insights, record_walk, submit_feedback
+from app.services.walk_service import build_insights, record_walk, remove_walk, submit_feedback
 from app.services.weather_service import WeatherResult, get_weather
 
 router = APIRouter(prefix="/api")
@@ -603,6 +604,9 @@ def explain_recommendation(
 
 
 # 산책 기록
+WALK_CLOCK_SKEW = timedelta(minutes=30)
+
+
 def _walk_response(walk: WalkHistory) -> dict:
     return {
         "id": walk.id,
@@ -628,18 +632,34 @@ def post_walk(body: schemas.WalkCreate, db: Session = Depends(get_db), user: Use
         recommendation = db.get(Recommendation, body.recommendation_id)
         if recommendation is None or recommendation.pet_id != pet.id:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "추천 결과를 찾을 수 없습니다")
+    now = now_local()
+    started_at = to_local(body.started_at) if body.started_at is not None else None
+    # 휴대폰과 서버 시계가 조금 어긋나도 막지 않도록 여유를 둔다.
+    if started_at is not None and started_at + timedelta(minutes=body.duration_min) > now + WALK_CLOCK_SKEW:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "아직 끝나지 않은 시각입니다. 다녀온 산책만 기록할 수 있습니다")
     walk = record_walk(
         db,
         pet,
         course,
         body.duration_min,
-        body.started_at,
+        started_at,
         body.recommendation_id,
-        now_local(),
+        now,
         tracking_source=body.tracking_source,
         distance_km=body.distance_km,
     )
     return _walk_response(walk)
+
+
+@router.delete("/walks/{walk_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["산책 기록"])
+def delete_walk(walk_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> None:
+    """잘못 남긴 산책 기록을 지운다. 피드백을 남긴 산책은 이미 학습에 반영되어 지우지 않는다."""
+    walk = db.get(WalkHistory, walk_id)
+    if walk is None or walk.pet.user_id != user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "산책 기록을 찾을 수 없습니다")
+    if walk.feedback is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "피드백을 남긴 산책은 학습에 반영되어 지울 수 없습니다")
+    remove_walk(db, walk)
 
 
 @router.get("/walks", response_model=list[schemas.WalkRead], tags=["산책 기록"])
