@@ -1,5 +1,5 @@
 """산책 기록과 피드백 처리. 피드백은 저장과 동시에 학습 상태를 갱신한다."""
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import asdict
 from datetime import datetime, timedelta
 
@@ -52,10 +52,13 @@ def record_walk(
     now: datetime,
     tracking_source: str = "manual",
     distance_km: float | None = None,
+    *,
+    profile_id: int,
 ) -> WalkHistory:
     started = started_at or now - timedelta(minutes=duration_min)
     walk = WalkHistory(
         pet_id=pet.id,
+        profile_id=profile_id,
         course_id=course.id,
         recommendation_id=recommendation_id,
         started_at=started,
@@ -110,6 +113,7 @@ def submit_feedback(db: Session, walk: WalkHistory, feedback: FeedbackInput, mem
     record = WalkFeedback(
         walk_id=walk.id,
         pet_id=pet.id,
+        profile_id=walk.profile_id,
         course_id=course.id,
         walk_rating=feedback.walk_rating,
         pet_rating=feedback.pet_rating,
@@ -132,17 +136,23 @@ def _average_rating(feedbacks: list[WalkFeedback], real_walk_ids: set[int]) -> f
     return round(sum(ratings) / len(ratings), 1) if ratings else None
 
 
-def build_insights(db: Session, pet: Pet) -> dict:
-    """마이페이지 분석: 통계, 자주 간 코스, 학습된 선호, 추천 결과 변화."""
-    all_walks = list(
-        db.scalars(select(WalkHistory).where(WalkHistory.pet_id == pet.id).order_by(WalkHistory.started_at))
-    )
+def build_insights(db: Session, pet: Pet, profile_id: int | None = None) -> dict:
+    """마이페이지 분석: 통계, 자주 간 코스, 학습된 선호, 추천 결과 변화.
+
+    profile_id를 주면 그 프로필의 활동만 센다. 코스 선호도와 취향은 반려동물의 것이라 가족이 함께 쓴다.
+    """
+    walk_query = select(WalkHistory).where(WalkHistory.pet_id == pet.id)
+    feedback_query = select(WalkFeedback).where(WalkFeedback.pet_id == pet.id)
+    recommendation_query = select(Recommendation).where(Recommendation.pet_id == pet.id, Recommendation.walkable.is_(True))
+    if profile_id is not None:
+        walk_query = walk_query.where(WalkHistory.profile_id == profile_id)
+        feedback_query = feedback_query.where(WalkFeedback.profile_id == profile_id)
+        recommendation_query = recommendation_query.where(Recommendation.profile_id == profile_id)
+    all_walks = list(db.scalars(walk_query.order_by(WalkHistory.started_at)))
     # 활동 통계에는 실제 산책만 넣는다. 시연용 산책은 건수만 따로 알려 준다.
     walks = [walk for walk in all_walks if not is_simulated(walk)]
     real_walk_ids = {walk.id for walk in walks}
-    feedbacks = list(
-        db.scalars(select(WalkFeedback).where(WalkFeedback.pet_id == pet.id).order_by(WalkFeedback.id))
-    )
+    feedbacks = list(db.scalars(feedback_query.order_by(WalkFeedback.id)))
     preferences = list(db.scalars(select(PetCoursePreference).where(PetCoursePreference.pet_id == pet.id)))
     state = load_state(db, pet)
 
@@ -150,18 +160,21 @@ def build_insights(db: Session, pet: Pet) -> dict:
     for feedback in feedbacks:
         pet_ratings[feedback.course_id].append(feedback.pet_rating)
 
+    visits = Counter(walk.course_id for walk in all_walks)
+    feedback_counts = Counter(feedback.course_id for feedback in feedbacks)
     courses = [
         {
             "course_id": row.course_id,
             "course_name": row.course.name,
-            "visit_count": row.visit_count,
-            "feedback_count": row.feedback_count,
+            "visit_count": row.visit_count if profile_id is None else visits[row.course_id],
+            "feedback_count": row.feedback_count if profile_id is None else feedback_counts[row.course_id],
             "affinity": row.affinity,
             "average_pet_rating": round(sum(pet_ratings[row.course_id]) / len(pet_ratings[row.course_id]), 1)
             if pet_ratings[row.course_id]
             else None,
         }
         for row in preferences
+        if profile_id is None or visits[row.course_id] or feedback_counts[row.course_id]
     ]
     courses.sort(key=lambda item: (-item["visit_count"], -item["affinity"]))
 
@@ -170,14 +183,7 @@ def build_insights(db: Session, pet: Pet) -> dict:
         if walk.feedback is not None:
             bucket_samples[bucket_for_hour(walk.started_at.hour)] += 1
 
-    recent = list(
-        db.scalars(
-            select(Recommendation)
-            .where(Recommendation.pet_id == pet.id, Recommendation.walkable.is_(True))
-            .order_by(Recommendation.id.desc())
-            .limit(8)
-        )
-    )
+    recent = list(db.scalars(recommendation_query.order_by(Recommendation.id.desc()).limit(8)))
     recent.reverse()
 
     return {

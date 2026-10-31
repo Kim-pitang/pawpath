@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.models import Pet, User, WalkingCourse
+from app.services.profile_service import new_default_profile
 
 DATA_DIR = Path(__file__).parent / "data"
 # 모든 지역의 코스를 넣어 두고 SERVICE_AREA로 고른다. 지역을 바꿔도 코스 번호와 기록이 유지된다.
@@ -40,6 +41,7 @@ def seed_default_user(db: Session) -> User:
             name="보호자",
             **new_user_defaults(),
         )
+        new_default_profile(user)
         db.add(user)
     return user
 

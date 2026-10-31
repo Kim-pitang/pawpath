@@ -60,13 +60,19 @@ def _comparison(walk: WalkHistory, recommendation: Recommendation | None) -> dic
     }
 
 
-def build_report(db: Session, pet: Pet, now: datetime, week_offset: int = 0) -> dict:
+def build_report(db: Session, pet: Pet, now: datetime, week_offset: int = 0, profile_id: int | None = None) -> dict:
+    """주간 리포트. profile_id를 주면 그 프로필이 한 산책만 센다."""
     today: date = now.date()
     week_start = today - timedelta(days=today.weekday()) + timedelta(weeks=week_offset)
     week_end = week_start + timedelta(days=6)
     previous_start = week_start - timedelta(weeks=1)
 
-    all_walks = list(db.scalars(select(WalkHistory).where(WalkHistory.pet_id == pet.id).order_by(WalkHistory.started_at)))
+    walk_query = select(WalkHistory).where(WalkHistory.pet_id == pet.id)
+    feedback_query = select(WalkFeedback).where(WalkFeedback.pet_id == pet.id)
+    if profile_id is not None:
+        walk_query = walk_query.where(WalkHistory.profile_id == profile_id)
+        feedback_query = feedback_query.where(WalkFeedback.profile_id == profile_id)
+    all_walks = list(db.scalars(walk_query.order_by(WalkHistory.started_at)))
     real = [walk for walk in all_walks if not is_simulated(walk)]
     in_range = lambda walk, start, end: start <= walk.started_at.date() <= end  # noqa: E731
     this_week = [walk for walk in real if in_range(walk, week_start, week_end)]
@@ -118,7 +124,7 @@ def build_report(db: Session, pet: Pet, now: datetime, week_offset: int = 0) -> 
     )[:5]
 
     real_ids = {walk.id for walk in real}
-    feedbacks = list(db.scalars(select(WalkFeedback).where(WalkFeedback.pet_id == pet.id).order_by(WalkFeedback.id)))
+    feedbacks = list(db.scalars(feedback_query.order_by(WalkFeedback.id)))
     trend = [
         {
             "feedback_id": feedback.id,

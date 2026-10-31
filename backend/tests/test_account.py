@@ -346,7 +346,7 @@ def test_summary_counts_what_will_be_deleted(client, monkeypatch):
     body = client.get("/api/auth/account").json()
     assert body["provider"] == "password"
     assert body["session_idle_days"] == auth_service.SESSION_IDLE_DAYS
-    assert body["data"] == {"pets": 1, "walks": 2, "feedback": 1, "recommendations": 1, "saved_walks": 2, "photos": 1, "personal_courses": 1, "shared_walks": 2, "community_trails": 0, "trail_reviews": 0}
+    assert body["data"] == {"profiles": 0, "pets": 1, "walks": 2, "feedback": 1, "recommendations": 1, "saved_walks": 2, "photos": 1, "personal_courses": 1, "shared_walks": 2, "community_trails": 0, "trail_reviews": 0}
     # 백업을 끈 서버는 백업 보존 기간을 말하지 않는다.
     assert body["backup_retention_days"] is None
     monkeypatch.setenv("BACKUP_ENABLED", "true")

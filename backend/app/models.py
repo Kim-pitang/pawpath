@@ -1,15 +1,20 @@
 """PawPath ORM 모델."""
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, LargeBinary, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, LargeBinary, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.clock import now_local
 from app.database import Base
 
+DEFAULT_AVATAR = "paw"
+
 
 class User(Base):
-    """보호자. id 1은 로그인하지 않은 요청이 쓰는 시연 보호자이며 비밀번호가 없다."""
+    """대표 계정(가족 계정). 로그인 주체이고, 반려동물과 산책길의 주인이다. 그 안에서 누가 썼는지는 Profile로 구분한다.
+
+    id 1은 로그인하지 않은 요청이 쓰는 시연 보호자이며 비밀번호가 없다.
+    """
 
     __tablename__ = "users"
 
@@ -20,6 +25,8 @@ class User(Base):
     preferred_duration_min: Mapped[int] = mapped_column(Integer, default=40)
     walks_per_day: Mapped[int] = mapped_column(Integer, default=1)
     login_id: Mapped[str | None] = mapped_column(String(30), nullable=True, unique=True, index=True)
+    # 이메일로 가입한 계정의 로그인 주소. 소유 확인은 하지 않아 Google 계정과 자동으로 잇지 않는다.
+    email: Mapped[str | None] = mapped_column(String(254), nullable=True, unique=True, index=True)
     # scrypt$N$r$p$salt$hash. 시연 보호자는 비어 있어 로그인할 수 없다.
     password_hash: Mapped[str | None] = mapped_column(String(200), nullable=True)
     # Google 로그인 사용자의 고유 ID(sub). 이메일은 바뀔 수 있어 표시에만 쓴다.
@@ -29,6 +36,35 @@ class User(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_local, onupdate=now_local)
 
     pets: Mapped[list["Pet"]] = relationship(back_populates="user")
+    profiles: Mapped[list["Profile"]] = relationship(back_populates="user")
+
+
+class Profile(Base):
+    """대표 계정 안의 보호자 프로필. 따로 로그인하지 않고, 지워도 기록이 누구의 것인지 남도록 행을 지우지 않는다."""
+
+    __tablename__ = "profiles"
+    # 계정마다 대표 프로필은 하나뿐이다.
+    __table_args__ = (Index("ux_profiles_one_default", "user_id", unique=True, sqlite_where=text("is_default"), postgresql_where=text("is_default")),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    name: Mapped[str] = mapped_column(String(30))
+    avatar_key: Mapped[str] = mapped_column(String(20), default=DEFAULT_AVATAR)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    # 산책할 수 있는 시간은 사람마다 달라 프로필마다 둔다. 추천과 날씨 조회가 이 값을 쓴다.
+    available_windows: Mapped[list] = mapped_column(JSON, default=list)
+    preferred_duration_min: Mapped[int] = mapped_column(Integer, default=40)
+    walks_per_day: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_local)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_local, onupdate=now_local)
+    last_active_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    user: Mapped[User] = relationship(back_populates="profiles")
+
+    @property
+    def deleted(self) -> bool:
+        return self.deleted_at is not None
 
 
 class AuthSession(Base):
@@ -45,9 +81,13 @@ class AuthSession(Base):
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # 탈퇴처럼 되돌릴 수 없는 작업 전에 본인을 다시 확인한 시각. 비어 있으면 로그인한 시각으로 본다.
     reauthenticated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # 이 세션에서 고른 프로필. 쓸 때마다 이 계정 소속인지 다시 확인한다. 비어 있으면 아직 고르지 않았다.
+    profile_id: Mapped[int | None] = mapped_column(ForeignKey("profiles.id", ondelete="SET NULL"), nullable=True, index=True)
 
 
 class Pet(Base):
+    """반려동물. 대표 계정의 공용 자산이라 어느 프로필에서나 고를 수 있고, 학습한 취향도 함께 쓴다."""
+
     __tablename__ = "pets"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -146,6 +186,8 @@ class Recommendation(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     pet_id: Mapped[int] = mapped_column(ForeignKey("pets.id"), index=True)
+    # 추천을 받은 프로필. 대표 계정은 pet_id로 이어진다.
+    profile_id: Mapped[int | None] = mapped_column(ForeignKey("profiles.id"), nullable=True, index=True)
     top_course_id: Mapped[int | None] = mapped_column(ForeignKey("walking_courses.id"), nullable=True)
     weather_record_id: Mapped[int | None] = mapped_column(ForeignKey("weather_records.id"), nullable=True)
     weather_source: Mapped[str] = mapped_column(String(40))
@@ -161,6 +203,8 @@ class WalkHistory(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     pet_id: Mapped[int] = mapped_column(ForeignKey("pets.id"), index=True)
+    # 산책을 한 프로필. 대표 계정은 pet_id로 이어진다. 프로필이 없던 시절의 기록은 대표 프로필로 옮겼다.
+    profile_id: Mapped[int | None] = mapped_column(ForeignKey("profiles.id"), nullable=True, index=True)
     course_id: Mapped[int] = mapped_column(ForeignKey("walking_courses.id"), index=True)
     recommendation_id: Mapped[int | None] = mapped_column(ForeignKey("recommendations.id"), nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime)
@@ -173,6 +217,7 @@ class WalkHistory(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_local)
 
     pet: Mapped[Pet] = relationship(back_populates="walks")
+    profile: Mapped[Profile | None] = relationship()
     course: Mapped[WalkingCourse] = relationship()
     feedback: Mapped["WalkFeedback | None"] = relationship(back_populates="walk", uselist=False)
 
@@ -184,6 +229,8 @@ class WalkFeedback(Base):
     # 산책 1회당 피드백 1건. 중복 제출로 학습이 부풀려지는 것을 막는다.
     walk_id: Mapped[int] = mapped_column(ForeignKey("walk_histories.id"), unique=True)
     pet_id: Mapped[int] = mapped_column(ForeignKey("pets.id"), index=True)
+    # 산책을 한 프로필. 산책 기록의 값을 그대로 옮겨 둔다.
+    profile_id: Mapped[int | None] = mapped_column(ForeignKey("profiles.id"), nullable=True, index=True)
     course_id: Mapped[int] = mapped_column(ForeignKey("walking_courses.id"), index=True)
     walk_rating: Mapped[int] = mapped_column(Integer)
     pet_rating: Mapped[int] = mapped_column(Integer)
@@ -242,6 +289,8 @@ class SavedWalk(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    # 산책길을 만든 프로필. 고치고 지울 수 있는 사람을 가른다.
+    profile_id: Mapped[int | None] = mapped_column(ForeignKey("profiles.id"), nullable=True, index=True)
     pet_id: Mapped[int | None] = mapped_column(ForeignKey("pets.id"), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(80))
     memo: Mapped[str] = mapped_column(Text, default="")
@@ -269,6 +318,7 @@ class SavedWalk(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_local, onupdate=now_local)
 
     pet: Mapped[Pet | None] = relationship()
+    profile: Mapped[Profile | None] = relationship()
     course: Mapped[WalkingCourse | None] = relationship(uselist=False, viewonly=True)
     points: Mapped[list["SavedWalkPoint"]] = relationship(
         back_populates="walk", cascade="all, delete-orphan", order_by="SavedWalkPoint.sequence"

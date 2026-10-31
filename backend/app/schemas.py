@@ -15,6 +15,21 @@ TimeBucket = Literal["morning", "lunch", "afternoon", "evening"]
 TrackingSource = Literal["gps", "manual", "simulation"]
 
 
+WalkScope = Literal["profile", "family"]
+
+
+class ProfileBrief(BaseModel):
+    """기록에 붙이는 프로필 정보. 지운 프로필도 이름을 남겨 누구의 기록인지 알 수 있게 한다."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    avatar_key: str
+    is_default: bool
+    deleted: bool
+
+
 class PetBase(BaseModel):
     name: str = Field(min_length=1, max_length=30)
     breed: str = Field(min_length=1, max_length=50)
@@ -249,6 +264,8 @@ class WalkRead(BaseModel):
     is_simulated: bool = False
     # 커뮤니티 산책길로 걸었으면 그 번호. 산책을 마친 뒤 후기로 잇는 데 쓴다.
     community_trail_id: int | None = None
+    # 산책을 한 프로필. 프로필을 지워도 누구의 기록인지 남는다.
+    profile: ProfileBrief | None = None
 
 
 class FeedbackCreate(BaseModel):
@@ -321,6 +338,8 @@ class SavedWalkSummary(BaseModel):
     id: int
     pet_id: int | None
     pet_name: str | None = None
+    # 산책길을 만든 프로필.
+    profile: ProfileBrief | None = None
     title: str
     source_type: WalkSourceType
     started_at: datetime
@@ -365,6 +384,8 @@ class SavedWalkDetail(SavedWalkSummary):
     share_memo: bool
     route: list[list[list[float]]]
     photos: list[PhotoRead] = []
+    # 지금 프로필이 고치고 지울 수 있으면 참이다. 만든 프로필이나 대표 프로필만 할 수 있다.
+    can_manage: bool = True
 
 
 class ShareRequest(BaseModel):
@@ -658,16 +679,28 @@ def _normalize_login_id(value: object) -> object:
 
 
 LoginId = Annotated[str, BeforeValidator(_normalize_login_id), StringConstraints(min_length=3, max_length=30, pattern=r"^[a-z0-9][a-z0-9_.-]*$")]
+EmailAddress = Annotated[str, BeforeValidator(_normalize_login_id), StringConstraints(max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")]
+PersonName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=30)]
 
 
 class SignupRequest(BaseModel):
-    login_id: LoginId
+    """대표 계정 가입. 이메일이나 아이디 중 하나로 로그인한다."""
+
+    login_id: LoginId | None = None
+    email: EmailAddress | None = None
     password: str = Field(min_length=8, max_length=128)
-    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=30)]
+    name: PersonName
+
+    @model_validator(mode="after")
+    def one_identifier(self) -> "SignupRequest":
+        if (self.login_id is None) == (self.email is None):
+            raise ValueError("이메일이나 아이디 중 하나만 입력해 주세요.")
+        return self
 
 
 class LoginRequest(BaseModel):
-    login_id: Annotated[str, BeforeValidator(_normalize_login_id), StringConstraints(min_length=1, max_length=30)]
+    # 아이디나 이메일.
+    login_id: Annotated[str, BeforeValidator(_normalize_login_id), StringConstraints(min_length=1, max_length=254)]
     password: str = Field(min_length=1, max_length=128)
 
 
@@ -680,11 +713,85 @@ class AccountUser(BaseModel):
     provider: Literal["password", "google"]
 
 
+# 프로필
+AvatarKey = Literal["paw", "bone", "sun", "moon", "leaf", "heart", "star", "flower"]
+
+
+class ProfileRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    avatar_key: str
+    is_default: bool
+    created_at: datetime
+    updated_at: datetime
+    last_active_at: datetime | None
+
+
+class ProfileCreate(BaseModel):
+    name: PersonName
+    avatar_key: AvatarKey = "paw"
+
+
+class ProfileUpdate(BaseModel):
+    name: PersonName | None = None
+    avatar_key: AvatarKey | None = None
+
+
+class ProfileActivity(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    walk_count: int
+    total_distance_km: float
+    total_minutes: int
+    saved_walk_count: int
+    # 활동 통계에서 뺀 시연용 산책 수.
+    simulated_walk_count: int
+    last_walk_at: datetime | None
+
+
+class ProfileDetail(ProfileRead):
+    activity: ProfileActivity
+
+
+class FamilyMember(BaseModel):
+    profile: ProfileBrief
+    last_active_at: datetime | None
+    activity: ProfileActivity
+
+
+class FamilyPet(BaseModel):
+    id: int
+    name: str
+    breed: str
+    walk_count: int
+
+
+class FamilyOverview(BaseModel):
+    profile_count: int
+    max_profiles: int
+    totals: ProfileActivity
+    members: list[FamilyMember]
+    pets: list[FamilyPet]
+    recent_walks: list[WalkRead]
+
+
 class AccountRead(BaseModel):
     authenticated: bool
     auth_required: bool
     google_enabled: bool
     user: AccountUser | None
+    profiles: list[ProfileRead] = []
+    max_profiles: int = 5
+    # 이 세션에서 쓰는 프로필. 서버가 계정 소속을 확인한 값이다.
+    current_profile: ProfileRead | None = None
+    # 프로필이 여러 개인데 아직 고르지 않았으면 참이다. 이때 프로필이 필요한 API는 428을 돌려준다.
+    profile_required: bool = False
+
+
+class AccountUpdate(BaseModel):
+    name: PersonName
 
 
 class ReauthRequest(BaseModel):
@@ -696,6 +803,7 @@ class ReauthRead(BaseModel):
 
 
 class AccountDataCounts(BaseModel):
+    profiles: int
     pets: int
     walks: int
     feedback: int
@@ -717,4 +825,3 @@ class AccountSummary(BaseModel):
     data: AccountDataCounts
     # 자동 백업을 쓰지 않으면 비어 있다.
     backup_retention_days: int | None
-

@@ -1,4 +1,4 @@
-"""백업 명령. backend 폴더에서 실행한다: uv run python -m app.backup {create,list,verify,restore}"""
+"""백업 명령. backend 폴더에서 실행한다: uv run python -m app.backup {create,list,verify,restore,migrate}"""
 import argparse
 import sqlite3
 import sys
@@ -69,6 +69,17 @@ def _restore(settings: Settings, args: argparse.Namespace) -> None:
     print(f"끝낸 세션: {report.sessions_cleared}, 비공개로 돌린 산책길: {report.shares_closed}")
 
 
+def _migrate(settings: Settings, _: argparse.Namespace) -> None:
+    from app.database import engine
+
+    report = backup_service.migrate(engine, settings, force_backup=True)
+    print(f"마이그레이션 전 백업: {report.backup or '바꿀 것이 없어 만들지 않음'}")
+    print(f"더한 컬럼: {', '.join(report.added_columns) or '없음'}")
+    for name, after in report.after.items():
+        before = report.before.get(name, 0)
+        print(f"  {name:20} {before:>7} → {after:>7}" + ("" if before == after else "  (늘어남)"))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m app.backup", description="PawPath DB 백업과 복구")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -81,6 +92,7 @@ def main(argv: list[str] | None = None) -> int:
     restore.add_argument("file", help='백업 파일 이름이나 경로, 또는 "latest"')
     restore.add_argument("--yes", action="store_true", help="확인을 묻지 않는다")
     restore.set_defaults(run=_restore)
+    commands.add_parser("migrate", help="백업한 뒤 DB 구조를 올리고 전후 행 수를 비교한다").set_defaults(run=_migrate)
     args = parser.parse_args(argv)
     try:
         args.run(get_settings(), args)

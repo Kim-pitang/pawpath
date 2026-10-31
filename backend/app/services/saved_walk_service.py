@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app import schemas
 from app.clock import now_local
-from app.models import SavedWalk, SavedWalkPoint, User
+from app.models import Profile, SavedWalk, SavedWalkPoint, User
 from app.services.gpx_service import GpxPoint, ParsedGpx
 
 EARTH_RADIUS_M = 6371000.0
@@ -177,7 +177,7 @@ def _apply_visibility(walk: SavedWalk, visibility: str) -> None:
         walk.share_expires_at = None
 
 
-def create_saved_walk(db: Session, user: User, body: schemas.SavedWalkCreate) -> tuple[SavedWalk, bool]:
+def create_saved_walk(db: Session, user: User, body: schemas.SavedWalkCreate, profile: Profile) -> tuple[SavedWalk, bool]:
     """산책길을 저장한다. 같은 client_id로 다시 보내면 새로 만들지 않고 저장된 것을 돌려준다."""
     if body.client_id:
         existing = db.scalar(select(SavedWalk).where(SavedWalk.client_id == body.client_id, SavedWalk.user_id == user.id))
@@ -196,6 +196,7 @@ def create_saved_walk(db: Session, user: User, body: schemas.SavedWalkCreate) ->
 
     walk = SavedWalk(
         user_id=user.id,
+        profile_id=profile.id,
         pet_id=body.pet_id,
         title=body.title,
         memo=body.memo,
@@ -238,8 +239,11 @@ def create_saved_walk(db: Session, user: User, body: schemas.SavedWalkCreate) ->
     return walk, True
 
 
-def list_saved_walks(db: Session, user: User, sort: str, pet_id: int | None, visibility: str | None) -> list[SavedWalk]:
+def list_saved_walks(db: Session, user: User, sort: str, pet_id: int | None, visibility: str | None, profile_id: int | None = None) -> list[SavedWalk]:
+    """대표 계정의 산책길 목록. profile_id를 주면 그 프로필이 만든 것만 돌려준다."""
     query = select(SavedWalk).where(SavedWalk.user_id == user.id)
+    if profile_id is not None:
+        query = query.where(SavedWalk.profile_id == profile_id)
     if pet_id is not None:
         query = query.where(SavedWalk.pet_id == pet_id)
     if visibility is not None:

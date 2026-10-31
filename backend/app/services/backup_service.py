@@ -16,16 +16,17 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import URL, create_engine, delete, update
+from sqlalchemy import URL, Engine, create_engine, delete, update
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
 from app.config import Settings
+from app import migrations
 from app.migrations import ensure_schema
 from app.models import AuthSession, CommunityTrail, OAuthState, SavedWalk
 from app.services import account_service
 
-BACKUP_NAME = re.compile(r"^(pawpath|pre-restore)-(\d{8}-\d{6})\.db$")
+BACKUP_NAME = re.compile(r"^(pawpath|pre-restore|pre-migration)-(\d{8}-\d{6})\.db$")
 # 이 테이블이 없으면 PawPath DB가 아니다. 나중에 더한 테이블은 복구할 때 자동으로 만든다.
 REQUIRED_TABLES = {"users", "pets", "walking_courses", "walk_histories", "recommendations"}
 BUSY_SECONDS = 30
@@ -52,6 +53,14 @@ class VerifiedBackup:
     path: Path
     checksum_checked: bool
     rows: dict[str, int]
+
+
+@dataclass(frozen=True)
+class MigrationReport:
+    backup: Path | None
+    added_columns: list[str]
+    before: dict[str, int]
+    after: dict[str, int]
 
 
 @dataclass(frozen=True)
@@ -93,7 +102,7 @@ def _inspect(path: Path) -> dict[str, int]:
             tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
             missing = REQUIRED_TABLES - tables
             if verdict == "ok" and not missing:
-                names = ("users", "pets", "walk_histories", "saved_walks", "saved_walk_photos")
+                names = ("users", "profiles", "pets", "walk_histories", "saved_walks", "saved_walk_photos")
                 return {name: connection.execute(f"SELECT count(*) FROM {name}").fetchone()[0] for name in names if name in tables}
     except sqlite3.DatabaseError as error:
         raise BackupError(f"{path.name}: 읽을 수 없는 파일이에요 ({error})") from error
@@ -125,12 +134,12 @@ def _prepare_directory(directory: Path) -> None:
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
 
 
-def create_backup(db_path: Path, directory: Path, now: datetime) -> Path:
+def create_backup(db_path: Path, directory: Path, now: datetime, kind: str = "pawpath") -> Path:
     """검증까지 끝낸 사본만 백업 이름을 받는다. 중간에 멈추면 임시 파일만 남는다."""
     if not db_path.exists():
         raise BackupError(f"DB 파일이 없어요: {db_path}")
     _prepare_directory(directory)
-    final = directory / f"pawpath-{now:%Y%m%d-%H%M%S}.db"
+    final = directory / f"{kind}-{now:%Y%m%d-%H%M%S}.db"
     temp = directory / f".{final.name}.tmp"
     temp.unlink(missing_ok=True)
     # 비밀번호 해시, 경로, 사진이 들어 있어 주인만 읽게 한다.
@@ -198,6 +207,27 @@ def run_scheduled(settings: Settings, now: datetime | None = None) -> Path | Non
         created = create_backup(db_path, directory, now)
     prune_backups(directory, settings.backup_retention_days, now)
     return created
+
+
+def migrate(engine: Engine, settings: Settings, now: datetime | None = None, force_backup: bool = False) -> MigrationReport:
+    """DB 구조를 올린다. 바꿀 것이 있으면 먼저 백업하고, 끝난 뒤 행 수가 줄어든 테이블이 없는지 확인한다.
+
+    프로필 잇기는 한 트랜잭션이라 실패하면 채우던 내용이 모두 되돌아간다. 먼저 더한 빈 컬럼은 남지만 데이터에
+    영향이 없고, 다시 실행하면 이어서 진행한다. 백업은 그래도 문제가 남았을 때 restore로 쓴다.
+    """
+    pending = migrations.needs_migration(engine)
+    before = migrations.row_counts(engine)
+    db_path = sqlite_path(settings.database_url)
+    backup = None
+    if pending and (force_backup or settings.backup_enabled) and db_path is not None and db_path.exists():
+        backup = create_backup(db_path, Path(settings.backup_dir), now or current_time(settings), kind="pre-migration")
+    added = ensure_schema(engine)
+    after = migrations.row_counts(engine)
+    shrunk = [f"{name} {count}→{after.get(name, 0)}" for name, count in before.items() if after.get(name, 0) < count]
+    if shrunk:
+        hint = f" 백업으로 되돌리세요: uv run python -m app.backup restore {backup.name}" if backup else ""
+        raise BackupError(f"마이그레이션 뒤 행 수가 줄었어요: {', '.join(shrunk)}.{hint}")
+    return MigrationReport(backup, added, before, after)
 
 
 def verify_backup(path: Path) -> VerifiedBackup:

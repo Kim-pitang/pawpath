@@ -18,6 +18,7 @@ from app.models import (
     CommunityTrail,
     Pet,
     PetCoursePreference,
+    Profile,
     Recommendation,
     SavedWalk,
     SavedWalkPhoto,
@@ -46,6 +47,8 @@ def data_counts(db: Session, user_id: int) -> dict[str, int]:
         return db.scalar(select(func.count()).select_from(model).where(condition)) or 0
 
     return {
+        # 대표 프로필은 계정 정보와 같이 사라지므로 더 만든 프로필만 알린다.
+        "profiles": count(Profile, (Profile.user_id == user_id) & Profile.is_default.is_(False) & Profile.deleted_at.is_(None)),
         "pets": count(Pet, Pet.user_id == user_id),
         "walks": count(WalkHistory, WalkHistory.pet_id.in_(pets)),
         "feedback": count(WalkFeedback, WalkFeedback.pet_id.in_(pets)),
@@ -78,6 +81,8 @@ def delete_user_data(db: Session, user_id: int) -> None:
         delete(SavedWalk).where(SavedWalk.user_id == user_id),
         delete(Pet).where(Pet.user_id == user_id),
         delete(AuthSession).where(AuthSession.user_id == user_id),
+        # 산책 기록과 세션이 가리키므로 그 뒤에 지운다. 지운 프로필의 행도 여기서 함께 사라진다.
+        delete(Profile).where(Profile.user_id == user_id),
         delete(User).where(User.id == user_id),
     ):
         db.execute(statement, execution_options={"synchronize_session": False})
@@ -125,7 +130,7 @@ def replay_deletions(db: Session, entries: list[dict]) -> int:
 
 def delete_account(db: Session, user: User, settings: Settings, now: datetime) -> None:
     """탈퇴 처리. 탈퇴 기록을 먼저 남기고 커밋해, 지워졌는데 기록이 없어 복구 때 되살아나는 일을 막는다."""
-    login_id, user_id, created_at = user.login_id, user.id, user.created_at
+    login_id, user_id, created_at = user.login_id or user.email, user.id, user.created_at
     delete_user_data(db, user_id)
     try:
         record_deletion(Path(settings.backup_dir), user_id, created_at, now)

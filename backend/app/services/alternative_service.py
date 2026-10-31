@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.models import Pet, User, WalkingCourse
+from app.models import Pet, Profile, User, WalkingCourse
 from app.recommender.features import build_features
 from app.recommender.safety import DEMO, FORECAST, assess_course, assessment_payload
 from app.recommender.text import hour_label
@@ -84,8 +84,9 @@ def evaluate_alternative(
     scenario: str,
     now: datetime,
     router: Router | None = None,
+    profile: Profile | None = None,
 ) -> dict:
-    weather = get_weather(db, now, windows_of(user), scenario)
+    weather = get_weather(db, now, windows_of(profile or user), scenario)
     forecast = {hour.time: hour for hour in weather.hours}
     features = build_features(to_profile(pet))
     state = load_state(db, pet)

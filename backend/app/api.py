@@ -1,5 +1,6 @@
 """REST API 라우터."""
 import logging
+from dataclasses import asdict
 from datetime import timedelta
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response, status
@@ -11,13 +12,13 @@ from app import schemas
 from app.clock import now_local, to_local
 from app.database import get_db
 from app.config import get_settings
-from app.models import AuthSession, CommunityTrail, Pet, Recommendation, SavedWalk, SavedWalkPhoto, TrailBookmark, TrailLike, TrailReview, TrailReviewPhoto, User, WalkFeedback, WalkHistory, WalkingCourse
+from app.models import AuthSession, CommunityTrail, Pet, Profile, Recommendation, SavedWalk, SavedWalkPhoto, TrailBookmark, TrailLike, TrailReview, TrailReviewPhoto, User, WalkFeedback, WalkHistory, WalkingCourse
 from app.recommender.features import build_features
 from app.recommender.safety import DEMO, FORECAST, assess_conditions, assess_course, assessment_payload
 from app.recommender.timeslots import evaluate_slot, hour_comfort, is_rainy
 from app.recommender.types import FeedbackInput
 from app.seed import DEFAULT_USER_ID
-from app.services import account_service, auth_service, backup_service, community_service, google_auth_service, saved_walk_service
+from app.services import account_service, auth_service, backup_service, community_service, google_auth_service, profile_service, saved_walk_service
 from app.services.alternative_service import ALL_DAY, evaluate_alternative
 from app.services.gpx_service import MAX_GPX_BYTES, GpxError, build_gpx, content_disposition, parse_gpx
 from app.services.llm_service import enhance_recommendation
@@ -35,26 +36,61 @@ router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
 ACCOUNT_PAGE = "/account"
 SESSION_EXPIRED = "로그인이 만료되었어요. 다시 로그인해 주세요."
+PROFILE_REQUIRED = "누구의 산책인지 프로필을 먼저 골라 주세요."
+NOT_YOUR_RECORD = "만든 프로필이나 대표 프로필만 고칠 수 있어요."
 
 
-def current_user(request: Request, db: Session = Depends(get_db)) -> User:
-    """로그인한 보호자. 로그인이 필수가 아니면 로그인하지 않은 요청은 시연 보호자(id 1)로 처리한다.
+def current_session(request: Request, db: Session = Depends(get_db)) -> AuthSession | None:
+    """로그인 세션. 로그인이 필수가 아니면 로그인하지 않은 요청은 세션 없이 시연 보호자로 처리한다."""
+    token = request.cookies.get(auth_service.SESSION_COOKIE)
+    if token:
+        session = auth_service.find_session(db, token, now_local())
+        if session is None:
+            # 만료된 세션으로 시연 보호자의 데이터를 보여 주지 않도록 막고, 쿠키를 지운다.
+            raise HTTPException(401, SESSION_EXPIRED, headers={"Set-Cookie": auth_service.EXPIRED_COOKIE})
+        return session
+    if get_settings().auth_required:
+        raise HTTPException(401, "로그인이 필요해요.")
+    return None
+
+
+def current_user(session: AuthSession | None = Depends(current_session), db: Session = Depends(get_db)) -> User:
+    """로그인한 대표 계정. 로그인이 필수가 아니면 로그인하지 않은 요청은 시연 보호자(id 1)로 처리한다.
 
     모든 사용자 데이터 API가 이 값으로 반려동물과 산책길의 주인을 확인한다.
     """
-    token = request.cookies.get(auth_service.SESSION_COOKIE)
-    if token:
-        user = auth_service.user_for_token(db, token, now_local())
-        if user is None:
-            # 만료된 세션으로 시연 보호자의 데이터를 보여 주지 않도록 막고, 쿠키를 지운다.
-            raise HTTPException(401, SESSION_EXPIRED, headers={"Set-Cookie": auth_service.EXPIRED_COOKIE})
-        return user
-    if get_settings().auth_required:
-        raise HTTPException(401, "로그인이 필요해요.")
-    user = db.get(User, DEFAULT_USER_ID)
+    user = db.get(User, session.user_id if session else DEFAULT_USER_ID)
     if user is None:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "초기 데이터가 준비되지 않았습니다")
     return user
+
+
+def current_profile(
+    session: AuthSession | None = Depends(current_session),
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> Profile:
+    """이 요청을 하는 프로필. 세션에 고른 프로필이 이 계정 소속인지 요청마다 다시 확인한다.
+
+    요청 본문이나 주소의 프로필 번호로는 바꿀 수 없다. 프로필이 여럿인데 고르지 않았으면 428로 알린다.
+    """
+    profiles = profile_service.profiles_of(db, user)
+    profile = profile_service.selected_profile(db, user.id, session.profile_id if session else None)
+    if profile is None:
+        # 시연 보호자는 프로필을 만들 수 없어 대표 프로필 하나뿐이다.
+        if session is None:
+            profile = profiles[0]
+        else:
+            raise HTTPException(status.HTTP_428_PRECONDITION_REQUIRED, PROFILE_REQUIRED)
+    profile_service.touch(db, profile, now_local())
+    return profile
+
+
+def signed_in_session(session: AuthSession | None = Depends(current_session)) -> AuthSession:
+    """실제로 로그인한 세션. 시연 보호자로 넘어가면 안 되는 계정 API가 쓴다."""
+    if session is None:
+        raise HTTPException(401, "로그인이 필요해요.")
+    return session
 
 
 def viewer(request: Request, db: Session = Depends(get_db)) -> User | None:
@@ -65,17 +101,6 @@ def viewer(request: Request, db: Session = Depends(get_db)) -> User | None:
     if get_settings().auth_required:
         return None
     return db.get(User, DEFAULT_USER_ID)
-
-
-def signed_in_session(request: Request, db: Session = Depends(get_db)) -> AuthSession:
-    """실제로 로그인한 세션. 시연 보호자로 넘어가면 안 되는 계정 API가 쓴다."""
-    token = request.cookies.get(auth_service.SESSION_COOKIE)
-    if not token:
-        raise HTTPException(401, "로그인이 필요해요.")
-    session = auth_service.find_session(db, token, now_local())
-    if session is None:
-        raise HTTPException(401, SESSION_EXPIRED, headers={"Set-Cookie": auth_service.EXPIRED_COOKIE})
-    return session
 
 
 def signed_in_user(session: AuthSession = Depends(signed_in_session), db: Session = Depends(get_db)) -> User:
@@ -103,10 +128,28 @@ def _visible_course(db: Session, course_id: int, user: User | None) -> WalkingCo
 
 
 def _get_pet(db: Session, pet_id: int, user: User) -> Pet:
+    """반려동물은 가족 공용이라 대표 계정만 확인한다. 어느 프로필에서나 고를 수 있다."""
     pet = db.get(Pet, pet_id)
     if pet is None or pet.user_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "반려동물을 찾을 수 없습니다")
     return pet
+
+
+def _require_manage(profile: Profile, owner_profile_id: int | None) -> None:
+    """가족 기록은 함께 보지만, 고치고 지우는 것은 만든 프로필이나 대표 프로필만 한다."""
+    if not profile_service.can_manage(profile, owner_profile_id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, NOT_YOUR_RECORD)
+
+
+def _family_profile(db: Session, user: User, profile_id: int, include_deleted: bool = False) -> Profile:
+    try:
+        return profile_service.family_profile(db, user.id, profile_id, include_deleted)
+    except profile_service.ProfileError as error:
+        raise HTTPException(error.status_code, error.message) from error
+
+
+def _brief(profile: Profile | None) -> schemas.ProfileBrief | None:
+    return schemas.ProfileBrief.model_validate(profile) if profile else None
 
 
 @router.get("/health", tags=["시스템"])
@@ -115,22 +158,31 @@ def health() -> dict:
 
 
 # 계정
-def _account(user: User | None) -> schemas.AccountRead:
+def _account(db: Session, user: User | None, profile_id: int | None = None) -> schemas.AccountRead:
+    """로그인 상태와 프로필. profile_id는 세션에 고른 프로필이며 이 계정 소속일 때만 현재 프로필이 된다."""
     settings = get_settings()
-    return schemas.AccountRead(
+    account = schemas.AccountRead(
         authenticated=user is not None,
         auth_required=settings.auth_required,
         google_enabled=settings.google_enabled,
-        user=None
-        if user is None
-        else schemas.AccountUser(
-            id=user.id,
-            name=user.name,
-            login_id=user.login_id,
-            email=user.google_email,
-            provider="google" if user.google_sub else "password",
-        ),
+        user=None,
+        max_profiles=profile_service.MAX_PROFILES,
     )
+    if user is None:
+        return account
+    profiles = profile_service.profiles_of(db, user)
+    current = profile_service.selected_profile(db, user.id, profile_id)
+    account.user = schemas.AccountUser(
+        id=user.id,
+        name=user.name,
+        login_id=user.login_id,
+        email=user.email or user.google_email,
+        provider="google" if user.google_sub else "password",
+    )
+    account.profiles = [schemas.ProfileRead.model_validate(profile) for profile in profiles]
+    account.current_profile = schemas.ProfileRead.model_validate(current) if current else None
+    account.profile_required = current is None
+    return account
 
 
 def _is_https(request: Request) -> bool:
@@ -150,9 +202,13 @@ def _set_session_cookie(request: Request, response: Response, token: str, lifeti
     )
 
 
-def _start_session(request: Request, response: Response, db: Session, user: User) -> None:
-    token = auth_service.create_session(db, user, now_local())
+def _start_session(request: Request, response: Response, db: Session, user: User) -> int | None:
+    """세션을 열고 쓸 프로필을 돌려준다. 프로필이 하나뿐이면 바로 그 프로필로 쓰고, 여럿이면 화면에서 고른다."""
+    profiles = profile_service.profiles_of(db, user)
+    profile_id = profiles[0].id if len(profiles) == 1 else None
+    token = auth_service.create_session(db, user, now_local(), profile_id)
     _set_session_cookie(request, response, token, timedelta(days=auth_service.SESSION_DAYS))
+    return profile_id
 
 
 def _renew_after_reauth(request: Request, response: Response, db: Session, session: AuthSession) -> None:
@@ -165,11 +221,10 @@ def _renew_after_reauth(request: Request, response: Response, db: Session, sessi
 @router.post("/auth/signup", response_model=schemas.AccountRead, status_code=status.HTTP_201_CREATED, tags=["계정"])
 def signup(body: schemas.SignupRequest, request: Request, response: Response, db: Session = Depends(get_db)) -> schemas.AccountRead:
     try:
-        user = auth_service.signup(db, body.login_id, body.password, body.name)
+        user = auth_service.signup(db, body.login_id, body.password, body.name, body.email)
     except auth_service.AuthError as error:
         raise HTTPException(error.status_code, error.message) from error
-    _start_session(request, response, db, user)
-    return _account(user)
+    return _account(db, user, _start_session(request, response, db, user))
 
 
 @router.post("/auth/login", response_model=schemas.AccountRead, tags=["계정"])
@@ -178,8 +233,7 @@ def login(body: schemas.LoginRequest, request: Request, response: Response, db: 
         user = auth_service.login(db, body.login_id, body.password)
     except auth_service.AuthError as error:
         raise HTTPException(error.status_code, error.message) from error
-    _start_session(request, response, db, user)
-    return _account(user)
+    return _account(db, user, _start_session(request, response, db, user))
 
 
 @router.post("/auth/logout", response_model=schemas.AccountRead, tags=["계정"])
@@ -188,7 +242,7 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)) 
     if token:
         auth_service.end_session(db, token)
     response.delete_cookie(auth_service.SESSION_COOKIE, path="/", httponly=True, samesite="lax")
-    return _account(None)
+    return _account(db, None)
 
 
 @router.get("/auth/google/start", tags=["계정"])
@@ -276,10 +330,20 @@ def google_callback(
 def me(request: Request, response: Response, db: Session = Depends(get_db)) -> schemas.AccountRead:
     """로그인 상태. 만료된 쿠키는 지우고 로그인하지 않은 상태로 알려 준다."""
     token = request.cookies.get(auth_service.SESSION_COOKIE)
-    user = auth_service.user_for_token(db, token, now_local()) if token else None
+    session = auth_service.find_session(db, token, now_local()) if token else None
+    user = db.get(User, session.user_id) if session else None
     if token and user is None:
         response.delete_cookie(auth_service.SESSION_COOKIE, path="/", httponly=True, samesite="lax")
-    return _account(user)
+    return _account(db, user, session.profile_id if session else None)
+
+
+@router.patch("/auth/account", response_model=schemas.AccountRead, tags=["계정"])
+def update_account(body: schemas.AccountUpdate, db: Session = Depends(get_db), session: AuthSession = Depends(signed_in_session)) -> schemas.AccountRead:
+    """대표 계정 이름을 바꾼다. 프로필 이름은 프로필마다 따로 바꾼다."""
+    user = db.get(User, session.user_id)
+    user.name = body.name
+    db.commit()
+    return _account(db, user, session.profile_id)
 
 
 @router.post("/auth/reauth", response_model=schemas.ReauthRead, tags=["계정"])
@@ -331,6 +395,80 @@ def delete_account(response: Response, db: Session = Depends(get_db), session: A
     response.headers["Clear-Site-Data"] = '"cache"'
 
 
+# 프로필
+@router.get("/profiles", response_model=list[schemas.ProfileRead], tags=["프로필"])
+def list_profiles(db: Session = Depends(get_db), user: User = Depends(signed_in_user)) -> list[Profile]:
+    return profile_service.profiles_of(db, user)
+
+
+@router.post("/profiles", response_model=schemas.ProfileRead, status_code=status.HTTP_201_CREATED, tags=["프로필"])
+def create_profile(body: schemas.ProfileCreate, db: Session = Depends(get_db), session: AuthSession = Depends(signed_in_session)) -> Profile:
+    """대표 프로필을 포함해 5개까지 만든다. 따로 로그인하지 않으며, 만든 뒤에는 고르기 전까지 지금 프로필이 그대로다."""
+    user = db.get(User, session.user_id)
+    if session.profile_id is None:
+        # 프로필이 하나라 고르지 않고 쓰던 세션이다. 둘이 되어도 쓰던 프로필이 이어지게 남긴다.
+        implied = profile_service.selected_profile(db, user.id, None)
+        session.profile_id = implied.id if implied else None
+    try:
+        return profile_service.create_profile(db, user, body.name, body.avatar_key)
+    except profile_service.ProfileError as error:
+        raise HTTPException(error.status_code, error.message) from error
+
+
+@router.get("/profiles/{profile_id}", response_model=schemas.ProfileDetail, tags=["프로필"])
+def get_profile(profile_id: int, db: Session = Depends(get_db), user: User = Depends(signed_in_user)) -> schemas.ProfileDetail:
+    """프로필 정보와 이용 통계. 다른 계정의 프로필은 없는 것과 같다."""
+    profile = _family_profile(db, user, profile_id)
+    activity = asdict(profile_service.profile_activity(db, profile))
+    return schemas.ProfileDetail(**schemas.ProfileRead.model_validate(profile).model_dump(), activity=schemas.ProfileActivity(**activity))
+
+
+@router.patch("/profiles/{profile_id}", response_model=schemas.ProfileRead, tags=["프로필"])
+def update_profile(profile_id: int, body: schemas.ProfileUpdate, db: Session = Depends(get_db), user: User = Depends(signed_in_user)) -> Profile:
+    profile = _family_profile(db, user, profile_id)
+    changes = body.model_dump(exclude_unset=True)
+    cleared = [key for key, value in changes.items() if value is None]
+    if cleared:
+        raise HTTPException(422, f"비울 수 없는 항목이에요: {', '.join(cleared)}")
+    try:
+        return profile_service.update_profile(db, profile, changes)
+    except profile_service.ProfileError as error:
+        raise HTTPException(error.status_code, error.message) from error
+
+
+@router.delete("/profiles/{profile_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["프로필"])
+def delete_profile(profile_id: int, db: Session = Depends(get_db), user: User = Depends(signed_in_user)) -> None:
+    """프로필을 지운다. 그 프로필의 산책 기록과 산책길은 가족 기록에 남고, 반려동물은 그대로다. 대표 프로필은 지울 수 없다."""
+    profile = _family_profile(db, user, profile_id)
+    try:
+        profile_service.delete_profile(db, profile, now_local())
+    except profile_service.ProfileError as error:
+        raise HTTPException(error.status_code, error.message) from error
+
+
+@router.post("/profiles/{profile_id}/select", response_model=schemas.AccountRead, tags=["프로필"])
+def select_profile(profile_id: int, db: Session = Depends(get_db), session: AuthSession = Depends(signed_in_session)) -> schemas.AccountRead:
+    """이 세션에서 쓸 프로필을 바꾼다. 다시 로그인하지 않으며, 이 계정의 프로필인지 서버가 확인한다."""
+    user = db.get(User, session.user_id)
+    profile = _family_profile(db, user, profile_id)
+    profile_service.select_profile(db, session, profile, now_local())
+    return _account(db, user, profile.id)
+
+
+@router.get("/family/overview", response_model=schemas.FamilyOverview, tags=["프로필"])
+def family_overview(db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    """가족 전체 활동: 합계, 구성원별 통계, 반려동물별 산책 수, 최근 산책. 지운 프로필도 기록이 있으면 보여 준다."""
+    overview = profile_service.family_overview(db, user.id)
+    return {
+        "profile_count": overview.profile_count,
+        "max_profiles": profile_service.MAX_PROFILES,
+        "totals": asdict(overview.totals),
+        "members": [{"profile": _brief(profile), "last_active_at": profile.last_active_at, "activity": asdict(activity)} for profile, activity in overview.members],
+        "pets": [{"id": pet.id, "name": pet.name, "breed": pet.breed, "walk_count": count} for pet, count in overview.pets],
+        "recent_walks": [_walk_response(walk) for walk in overview.recent_walks],
+    }
+
+
 # 반려동물
 @router.post("/pets", response_model=schemas.PetRead, status_code=status.HTTP_201_CREATED, tags=["반려동물"])
 def create_pet(body: schemas.PetCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> Pet:
@@ -366,8 +504,15 @@ def update_pet(
 
 
 @router.get("/pets/{pet_id}/insights", tags=["반려동물"])
-def pet_insights(pet_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
-    return build_insights(db, _get_pet(db, pet_id, user))
+def pet_insights(
+    pet_id: int,
+    scope: schemas.WalkScope = "profile",
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+    profile: Profile = Depends(current_profile),
+) -> dict:
+    """활동 통계는 지금 프로필 기준이고 scope=family면 가족 전체다. 취향 학습은 반려동물의 것이라 가족이 함께 쓴다."""
+    return build_insights(db, _get_pet(db, pet_id, user), profile.id if scope == "profile" else None)
 
 
 # 보호자 일정
@@ -383,26 +528,27 @@ def _merge_windows(windows: list[schemas.TimeWindowSchema]) -> list[dict]:
 
 
 @router.get("/schedule", response_model=schemas.ScheduleSchema, tags=["보호자 일정"])
-def get_schedule(user: User = Depends(current_user)) -> User:
-    return user
+def get_schedule(profile: Profile = Depends(current_profile)) -> Profile:
+    """산책할 수 있는 시간은 사람마다 달라 프로필마다 둔다."""
+    return profile
 
 
 @router.put("/schedule", response_model=schemas.ScheduleSchema, tags=["보호자 일정"])
 def update_schedule(
     body: schemas.ScheduleSchema,
     db: Session = Depends(get_db),
-    user: User = Depends(current_user),
-) -> User:
-    user.available_windows = _merge_windows(body.available_windows)
-    user.preferred_duration_min = body.preferred_duration_min
-    user.walks_per_day = body.walks_per_day
+    profile: Profile = Depends(current_profile),
+) -> Profile:
+    profile.available_windows = _merge_windows(body.available_windows)
+    profile.preferred_duration_min = body.preferred_duration_min
+    profile.walks_per_day = body.walks_per_day
     db.commit()
-    return user
+    return profile
 
 
 # 날씨
-def _load_weather(db: Session, user: User, scenario: str) -> WeatherResult:
-    return get_weather(db, now_local(), windows_of(user), scenario)
+def _load_weather(db: Session, profile: Profile, scenario: str) -> WeatherResult:
+    return get_weather(db, now_local(), windows_of(profile), scenario)
 
 
 def _condition(rainy: bool, temperature: float) -> str:
@@ -426,8 +572,9 @@ def weather_current(
     pet_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
+    profile: Profile = Depends(current_profile),
 ) -> dict:
-    result = _load_weather(db, user, scenario)
+    result = _load_weather(db, profile, scenario)
     current = result.hours[0]
 
     hint = "오늘의 산책각을 확인해 보세요."
@@ -452,9 +599,9 @@ def weather_forecast(
     scenario: schemas.WeatherScenario = "live",
     hours: int = Query(default=24, ge=1, le=48),
     db: Session = Depends(get_db),
-    user: User = Depends(current_user),
+    profile: Profile = Depends(current_profile),
 ) -> dict:
-    result = _load_weather(db, user, scenario)
+    result = _load_weather(db, profile, scenario)
     return {
         "source": result.source,
         "scenario": result.scenario,
@@ -547,12 +694,13 @@ def generate_route(
     body: schemas.GenerateRouteRequest,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
+    profile: Profile = Depends(current_profile),
     gate: route_generator.GenerationGate = Depends(generation_gate),
     path_router=Depends(generation_router),
 ) -> dict:
     """출발점과 원하는 산책 시간으로 순환 경로 후보를 만든다. 공용 길찾기 서버를 쓰므로 수 초 걸린다.
 
-    pet_id를 주면 후보를 그 반려동물의 성향, 날씨, 일정, 지난 피드백으로 평가해 맞는 순서로 돌려준다.
+    pet_id를 주면 후보를 그 반려동물의 성향, 날씨, 지금 프로필의 일정, 지난 피드백으로 평가해 맞는 순서로 돌려준다.
     위치는 계산에만 쓰고 저장하지 않는다. 마음에 드는 후보는 내 산책길로 저장해 쓴다.
     """
     if path_router is None:
@@ -580,11 +728,11 @@ def generate_route(
             max_results=max(settings.generation_pool_size, settings.generation_max_results) if pet is not None else settings.generation_max_results,
         )
         if pet is not None and result.candidates:
-            weather = _load_weather(db, user, body.weather_scenario)
+            weather = _load_weather(db, profile, body.weather_scenario)
             report = route_fit_service.fit_candidates(
                 [c.points for c in result.candidates],
                 to_profile(pet),
-                to_schedule(user),
+                to_schedule(profile),
                 load_state(db, pet),
                 weather,
                 now_local(),
@@ -629,6 +777,7 @@ def route_alternative(
     body: schemas.AlternativeRequest,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
+    profile: Profile = Depends(current_profile),
 ) -> dict:
     """산책 중 날씨를 다시 평가해 계속 걸을지, 줄일지, 돌아갈지와 대체 코스를 알려 준다."""
     pet = _get_pet(db, body.pet_id, user)
@@ -636,7 +785,7 @@ def route_alternative(
     if (body.latitude is None) != (body.longitude is None):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "위도와 경도를 함께 보내 주세요")
     position = (body.latitude, body.longitude) if body.latitude is not None else None
-    return evaluate_alternative(db, pet, user, course, position, body.progress_m, body.weather_scenario, now_local())
+    return evaluate_alternative(db, pet, user, course, position, body.progress_m, body.weather_scenario, now_local(), profile=profile)
 
 
 # 안전 지수
@@ -647,11 +796,12 @@ def safety(
     scenario: schemas.WeatherScenario = "live",
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
+    profile: Profile = Depends(current_profile),
 ) -> dict:
     """지금 환경의 안전 평가. course_id를 주면 그 코스를 지금 걷는 경우를 평가한다."""
     pet = _get_pet(db, pet_id, user)
     now = now_local()
-    result = _load_weather(db, user, scenario)
+    result = _load_weather(db, profile, scenario)
     features = build_features(to_profile(pet))
     source = DEMO if result.is_mock else FORECAST
     weather = {"source": result.source, "scenario": result.scenario, "is_mock": result.is_mock, "notice": result.notice}
@@ -677,9 +827,11 @@ def post_recommendation(
     body: schemas.RecommendationRequest,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
+    profile: Profile = Depends(current_profile),
 ) -> dict:
+    """지금 프로필의 일정으로 추천한다. 반려동물의 학습 상태는 가족이 함께 쓴다."""
     pet = _get_pet(db, body.pet_id, user)
-    return _recommendation_response(create_recommendation(db, pet, user, body.weather_scenario, now_local()))
+    return _recommendation_response(create_recommendation(db, pet, user, body.weather_scenario, now_local(), profile=profile))
 
 
 @router.get("/recommendations", tags=["추천"])
@@ -688,10 +840,15 @@ def list_recommendations(
     limit: int = Query(default=10, ge=1, le=50),
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
+    profile: Profile = Depends(current_profile),
 ) -> list[dict]:
+    """지금 프로필이 받은 추천. 프로필마다 일정이 달라 다른 프로필의 추천은 섞지 않는다."""
     _get_pet(db, pet_id, user)
     records = db.scalars(
-        select(Recommendation).where(Recommendation.pet_id == pet_id).order_by(Recommendation.id.desc()).limit(limit)
+        select(Recommendation)
+        .where(Recommendation.pet_id == pet_id, Recommendation.profile_id == profile.id)
+        .order_by(Recommendation.id.desc())
+        .limit(limit)
     )
     return [_recommendation_response(record) for record in records]
 
@@ -742,11 +899,18 @@ def _walk_response(walk: WalkHistory) -> dict:
         "duration_min": walk.duration_min,
         "feedback": walk.feedback,
         "community_trail_id": walk.course.community_trail_id,
+        "profile": _brief(walk.profile),
     }
 
 
 @router.post("/walks", response_model=schemas.WalkRead, status_code=status.HTTP_201_CREATED, tags=["산책 기록"])
-def post_walk(body: schemas.WalkCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+def post_walk(
+    body: schemas.WalkCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+    profile: Profile = Depends(current_profile),
+) -> dict:
+    """산책 기록은 산책을 한 프로필(지금 프로필)에 남는다."""
     pet = _get_pet(db, body.pet_id, user)
     course = _visible_course(db, body.course_id, user)
     if body.recommendation_id is not None:
@@ -768,16 +932,18 @@ def post_walk(body: schemas.WalkCreate, db: Session = Depends(get_db), user: Use
         now,
         tracking_source=body.tracking_source,
         distance_km=body.distance_km,
+        profile_id=profile.id,
     )
     return _walk_response(walk)
 
 
 @router.delete("/walks/{walk_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["산책 기록"])
-def delete_walk(walk_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> None:
+def delete_walk(walk_id: int, db: Session = Depends(get_db), user: User = Depends(current_user), profile: Profile = Depends(current_profile)) -> None:
     """잘못 남긴 산책 기록을 지운다. 피드백을 남긴 산책은 이미 학습에 반영되어 지우지 않는다."""
     walk = db.get(WalkHistory, walk_id)
     if walk is None or walk.pet.user_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "산책 기록을 찾을 수 없습니다")
+    _require_manage(profile, walk.profile_id)
     if walk.feedback is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "피드백을 남긴 산책은 학습에 반영되어 지울 수 없습니다")
     remove_walk(db, walk)
@@ -786,10 +952,18 @@ def delete_walk(walk_id: int, db: Session = Depends(get_db), user: User = Depend
 @router.get("/walks", response_model=list[schemas.WalkRead], tags=["산책 기록"])
 def list_walks(
     pet_id: int | None = None,
+    scope: schemas.WalkScope = "profile",
+    profile_id: int | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
+    profile: Profile = Depends(current_profile),
 ) -> list[dict]:
+    """지금 프로필의 산책 기록. scope=family면 가족 전체, profile_id를 주면 그 가족 구성원의 기록이다."""
     query = select(WalkHistory).join(Pet).where(Pet.user_id == user.id)
+    if profile_id is not None:
+        query = query.where(WalkHistory.profile_id == _family_profile(db, user, profile_id, include_deleted=True).id)
+    elif scope == "profile":
+        query = query.where(WalkHistory.profile_id == profile.id)
     if pet_id is not None:
         _get_pet(db, pet_id, user)
         query = query.where(WalkHistory.pet_id == pet_id)
@@ -800,11 +974,13 @@ def list_walks(
 def walks_report(
     pet_id: int,
     week_offset: int = Query(default=0, ge=-52, le=0, description="0은 이번 주, -1은 지난주"),
+    scope: schemas.WalkScope = "profile",
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
+    profile: Profile = Depends(current_profile),
 ) -> dict:
-    """주간 활동 리포트. 시연용 산책은 통계에서 빼고 건수만 따로 알려 준다."""
-    return build_report(db, _get_pet(db, pet_id, user), now_local(), week_offset)
+    """주간 활동 리포트. 지금 프로필 기준이고 scope=family면 가족 전체다. 시연용 산책은 통계에서 빼고 건수만 따로 알려 준다."""
+    return build_report(db, _get_pet(db, pet_id, user), now_local(), week_offset, profile.id if scope == "profile" else None)
 
 
 # 피드백
@@ -829,10 +1005,16 @@ def _feedback_response(feedback: WalkFeedback) -> dict:
 
 
 @router.post("/feedback", response_model=schemas.FeedbackRead, status_code=status.HTTP_201_CREATED, tags=["피드백"])
-def post_feedback(body: schemas.FeedbackCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+def post_feedback(
+    body: schemas.FeedbackCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+    profile: Profile = Depends(current_profile),
+) -> dict:
     walk = db.get(WalkHistory, body.walk_id)
     if walk is None or walk.pet.user_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "산책 기록을 찾을 수 없습니다")
+    _require_manage(profile, walk.profile_id)
     if walk.feedback is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "이미 피드백을 남긴 산책입니다")
     feedback = FeedbackInput(
@@ -857,15 +1039,24 @@ GPX_MEDIA_TYPE = "application/gpx+xml"
 
 
 def _get_saved_walk(db: Session, walk_id: int, user: User) -> SavedWalk:
+    """가족의 산책길이면 어느 프로필에서나 볼 수 있다. 다른 계정의 산책길은 없는 것과 같다."""
     walk = db.get(SavedWalk, walk_id)
     if walk is None or walk.user_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "산책길을 찾을 수 없습니다")
     return walk
 
 
+def _managed_walk(db: Session, walk_id: int, user: User, profile: Profile) -> SavedWalk:
+    """고치거나 지울 산책길. 계정 소유를 먼저 확인하고, 만든 프로필이나 대표 프로필인지 본다."""
+    walk = _get_saved_walk(db, walk_id, user)
+    _require_manage(profile, walk.profile_id)
+    return walk
+
+
 def _walk_summary(walk: SavedWalk) -> schemas.SavedWalkSummary:
     summary = schemas.SavedWalkSummary.model_validate(walk)
     summary.pet_name = walk.pet.name if walk.pet else None
+    summary.profile = _brief(walk.profile)
     return summary
 
 
@@ -896,9 +1087,10 @@ def _personal_course(walk: SavedWalk) -> schemas.PersonalCourseRead | None:
     )
 
 
-def _walk_detail(walk: SavedWalk) -> schemas.SavedWalkDetail:
+def _walk_detail(walk: SavedWalk, profile: Profile) -> schemas.SavedWalkDetail:
     return schemas.SavedWalkDetail(
         **_walk_summary(walk).model_dump(),
+        can_manage=profile_service.can_manage(profile, walk.profile_id),
         course=_personal_course(walk),
         memo=walk.memo,
         share_token=walk.share_token,
@@ -949,13 +1141,14 @@ def create_saved_walk(
     response: Response,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
+    profile: Profile = Depends(current_profile),
 ) -> schemas.SavedWalkDetail:
     if body.pet_id is not None:
         _get_pet(db, body.pet_id, user)
-    walk, created = saved_walk_service.create_saved_walk(db, user, body)
+    walk, created = saved_walk_service.create_saved_walk(db, user, body, profile)
     if not created:
         response.status_code = status.HTTP_200_OK
-    return _walk_detail(walk)
+    return _walk_detail(walk, profile)
 
 
 @router.get("/my-walks", response_model=list[schemas.SavedWalkSummary], tags=["나만의 산책길"])
@@ -963,15 +1156,20 @@ def list_saved_walks(
     sort: schemas.SavedWalkSort = "recent",
     pet_id: int | None = None,
     visibility: schemas.Visibility | None = None,
+    scope: schemas.WalkScope = "profile",
+    profile_id: int | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
+    profile: Profile = Depends(current_profile),
 ) -> list[schemas.SavedWalkSummary]:
-    return [_walk_summary(walk) for walk in saved_walk_service.list_saved_walks(db, user, sort, pet_id, visibility)]
+    """지금 프로필이 만든 산책길. scope=family면 가족 전체, profile_id를 주면 그 가족 구성원의 산책길이다."""
+    owner = _family_profile(db, user, profile_id, include_deleted=True).id if profile_id is not None else profile.id if scope == "profile" else None
+    return [_walk_summary(walk) for walk in saved_walk_service.list_saved_walks(db, user, sort, pet_id, visibility, owner)]
 
 
 @router.get("/my-walks/{walk_id}", response_model=schemas.SavedWalkDetail, tags=["나만의 산책길"])
-def get_saved_walk(walk_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> schemas.SavedWalkDetail:
-    return _walk_detail(_get_saved_walk(db, walk_id, user))
+def get_saved_walk(walk_id: int, db: Session = Depends(get_db), user: User = Depends(current_user), profile: Profile = Depends(current_profile)) -> schemas.SavedWalkDetail:
+    return _walk_detail(_get_saved_walk(db, walk_id, user), profile)
 
 
 @router.patch("/my-walks/{walk_id}", response_model=schemas.SavedWalkDetail, tags=["나만의 산책길"])
@@ -980,8 +1178,9 @@ def update_saved_walk(
     body: schemas.SavedWalkUpdate,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
+    profile: Profile = Depends(current_profile),
 ) -> schemas.SavedWalkDetail:
-    walk = _get_saved_walk(db, walk_id, user)
+    walk = _managed_walk(db, walk_id, user, profile)
     changes = body.model_dump(exclude_unset=True)
     # 반려동물 연결만 비울 수 있다. 나머지 항목을 null로 보내면 저장하지 않고 알려 준다.
     cleared = [key for key, value in changes.items() if value is None and key != "pet_id"]
@@ -989,12 +1188,12 @@ def update_saved_walk(
         raise HTTPException(422, f"비울 수 없는 항목이에요: {', '.join(cleared)}")
     if changes.get("pet_id") is not None:
         _get_pet(db, changes["pet_id"], user)
-    return _walk_detail(saved_walk_service.update_saved_walk(db, walk, changes))
+    return _walk_detail(saved_walk_service.update_saved_walk(db, walk, changes), profile)
 
 
 @router.delete("/my-walks/{walk_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["나만의 산책길"])
-def delete_saved_walk(walk_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> None:
-    walk = _get_saved_walk(db, walk_id, user)
+def delete_saved_walk(walk_id: int, db: Session = Depends(get_db), user: User = Depends(current_user), profile: Profile = Depends(current_profile)) -> None:
+    walk = _managed_walk(db, walk_id, user, profile)
     # 이 코스로 남긴 산책 기록이 있을 수 있어 코스는 지우지 않고 추천에서만 뺀다.
     user_course_service.detach(db, walk)
     # 커뮤니티에 공유한 글과 좋아요, 저장, 후기도 함께 지워진다.
@@ -1009,24 +1208,25 @@ def register_course(
     background: BackgroundTasks,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
+    profile: Profile = Depends(current_profile),
 ) -> schemas.SavedWalkDetail:
     """산책길을 내 추천 후보 코스로 등록한다. 주변 환경은 응답을 보낸 뒤 측정하며, 다시 부르면 다시 측정한다."""
-    walk = _get_saved_walk(db, walk_id, user)
+    walk = _managed_walk(db, walk_id, user, profile)
     try:
         course, token = user_course_service.register(db, user, walk, get_settings(), now_local())
     except user_course_service.CourseError as error:
         raise HTTPException(422, str(error)) from error
     if token:
         background.add_task(user_course_service.measure, course.id, token)
-    return _walk_detail(walk)
+    return _walk_detail(walk, profile)
 
 
 @router.delete("/my-walks/{walk_id}/course", response_model=schemas.SavedWalkDetail, tags=["나만의 산책길"])
-def unregister_course(walk_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> schemas.SavedWalkDetail:
+def unregister_course(walk_id: int, db: Session = Depends(get_db), user: User = Depends(current_user), profile: Profile = Depends(current_profile)) -> schemas.SavedWalkDetail:
     """추천 후보에서 뺀다. 이 코스로 남긴 산책 기록과 피드백은 그대로 둔다."""
-    walk = _get_saved_walk(db, walk_id, user)
+    walk = _managed_walk(db, walk_id, user, profile)
     user_course_service.unregister(db, walk)
-    return _walk_detail(walk)
+    return _walk_detail(walk, profile)
 
 
 @router.get("/my-walks/{walk_id}/gpx", tags=["나만의 산책길"])
@@ -1045,14 +1245,15 @@ def share_saved_walk(
     body: schemas.ShareRequest,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
+    profile: Profile = Depends(current_profile),
 ) -> schemas.SavedWalkDetail:
-    walk = _get_saved_walk(db, walk_id, user)
-    return _walk_detail(saved_walk_service.enable_share(db, walk, body, now_local()))
+    walk = _managed_walk(db, walk_id, user, profile)
+    return _walk_detail(saved_walk_service.enable_share(db, walk, body, now_local()), profile)
 
 
 @router.delete("/my-walks/{walk_id}/share", response_model=schemas.SavedWalkDetail, tags=["나만의 산책길"])
-def unshare_saved_walk(walk_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> schemas.SavedWalkDetail:
-    return _walk_detail(saved_walk_service.disable_share(db, _get_saved_walk(db, walk_id, user)))
+def unshare_saved_walk(walk_id: int, db: Session = Depends(get_db), user: User = Depends(current_user), profile: Profile = Depends(current_profile)) -> schemas.SavedWalkDetail:
+    return _walk_detail(saved_walk_service.disable_share(db, _managed_walk(db, walk_id, user, profile)), profile)
 
 
 def _get_photo(db: Session, walk: SavedWalk, photo_id: int) -> SavedWalkPhoto:
@@ -1068,9 +1269,10 @@ def upload_photo(
     data: bytes = Depends(_read_photo_body),
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
+    profile: Profile = Depends(current_profile),
 ) -> SavedWalkPhoto:
     """사진 원본을 본문으로 받는다. 형식은 파일 내용으로 판단하고, 촬영 위치 같은 메타데이터를 지운 뒤 저장한다."""
-    walk = _get_saved_walk(db, walk_id, user)
+    walk = _managed_walk(db, walk_id, user, profile)
     if len(walk.photos) >= MAX_PHOTOS_PER_WALK:
         raise HTTPException(status.HTTP_409_CONFLICT, f"사진은 {MAX_PHOTOS_PER_WALK}장까지 올릴 수 있어요.")
     try:
@@ -1094,8 +1296,8 @@ def get_photo(walk_id: int, photo_id: int, db: Session = Depends(get_db), user: 
 
 
 @router.delete("/my-walks/{walk_id}/photos/{photo_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["나만의 산책길"])
-def delete_photo(walk_id: int, photo_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> None:
-    photo = _get_photo(db, _get_saved_walk(db, walk_id, user), photo_id)
+def delete_photo(walk_id: int, photo_id: int, db: Session = Depends(get_db), user: User = Depends(current_user), profile: Profile = Depends(current_profile)) -> None:
+    photo = _get_photo(db, _managed_walk(db, walk_id, user, profile), photo_id)
     community_service.clear_cover(db, photo)
     db.delete(photo)
     db.commit()
@@ -1163,9 +1365,14 @@ def _own_review(db: Session, review_id: int, user: User) -> TrailReview:
 
 
 @router.post("/community/trails/preview", response_model=schemas.TrailPreview, tags=["산책길 커뮤니티"])
-def preview_trail(body: schemas.TrailPreviewRequest, db: Session = Depends(get_db), user: User = Depends(signed_in_user)) -> dict:
+def preview_trail(
+    body: schemas.TrailPreviewRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(signed_in_user),
+    profile: Profile = Depends(current_profile),
+) -> dict:
     """출발점과 도착점 주변을 가린 뒤 실제로 공개될 경로를 미리 보여 준다. 저장하지 않는다."""
-    walk = _get_saved_walk(db, body.saved_walk_id, user)
+    walk = _managed_walk(db, body.saved_walk_id, user, profile)
     try:
         return community_service.preview_public(walk, body.hide_radius_m)
     except community_service.CommunityError as error:
@@ -1208,9 +1415,14 @@ def list_trails(
 
 
 @router.post("/community/trails", response_model=schemas.TrailDetail, status_code=status.HTTP_201_CREATED, tags=["산책길 커뮤니티"])
-def create_trail(body: schemas.TrailCreate, db: Session = Depends(get_db), user: User = Depends(signed_in_user)) -> dict:
-    """저장한 산책길을 커뮤니티에 공유한다. 좌표를 복사하지 않고 원본을 참조한다."""
-    walk = _get_saved_walk(db, body.saved_walk_id, user)
+def create_trail(
+    body: schemas.TrailCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(signed_in_user),
+    profile: Profile = Depends(current_profile),
+) -> dict:
+    """저장한 산책길을 커뮤니티에 공유한다. 좌표를 복사하지 않고 원본을 참조한다. 공개 화면에는 계정 이름만 나가고 프로필은 드러나지 않는다."""
+    walk = _managed_walk(db, body.saved_walk_id, user, profile)
     try:
         trail = community_service.create_trail(db, user, walk, body, now_local())
     except community_service.CommunityError as error:

@@ -8,7 +8,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.models import Pet, PetCoursePreference, Recommendation, User, WalkingCourse
+from app.models import Pet, PetCoursePreference, Profile, Recommendation, User, WalkingCourse
 from app.recommender.config import DEFAULT_CONFIG, ScoringConfig, parse_scoring_config
 from app.recommender.course_scoring import LIGHTING_TEXT, score_breakdown
 from app.recommender.engine import recommend
@@ -97,16 +97,16 @@ def to_course_data(course: WalkingCourse) -> CourseData:
     )
 
 
-def to_schedule(user: User) -> Schedule:
+def to_schedule(owner: User | Profile) -> Schedule:
     return Schedule(
-        windows=windows_of(user),
-        preferred_duration_min=user.preferred_duration_min,
-        walks_per_day=user.walks_per_day,
+        windows=windows_of(owner),
+        preferred_duration_min=owner.preferred_duration_min,
+        walks_per_day=owner.walks_per_day,
     )
 
 
-def windows_of(user: User) -> tuple[TimeWindow, ...]:
-    return tuple(TimeWindow(w["start_hour"], w["end_hour"]) for w in user.available_windows)
+def windows_of(owner: User | Profile) -> tuple[TimeWindow, ...]:
+    return tuple(TimeWindow(w["start_hour"], w["end_hour"]) for w in owner.available_windows)
 
 
 def load_state(db: Session, pet: Pet) -> PreferenceState:
@@ -281,8 +281,9 @@ def _result_payload(
     }
 
 
-def create_recommendation(db: Session, pet: Pet, user: User, scenario: str, now: datetime) -> Recommendation:
-    schedule = to_schedule(user)
+def create_recommendation(db: Session, pet: Pet, user: User, scenario: str, now: datetime, profile: Profile | None = None) -> Recommendation:
+    """추천을 계산해 저장한다. 프로필을 주면 그 프로필의 일정으로 계산하고 받은 사람으로 남긴다."""
+    schedule = to_schedule(profile or user)
     weather = get_weather(db, now, schedule.windows, scenario)
     state = load_state(db, pet)
     courses = active_courses(db, user)
@@ -303,6 +304,7 @@ def create_recommendation(db: Session, pet: Pet, user: User, scenario: str, now:
     top = result.courses[0] if result.courses else None
     record = Recommendation(
         pet_id=pet.id,
+        profile_id=profile.id if profile else None,
         top_course_id=top.course.id if top else None,
         weather_record_id=find_record_id(db, weather.source, top.slot.start.replace(minute=0)) if top else None,
         weather_source=weather.source,

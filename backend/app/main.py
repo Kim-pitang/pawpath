@@ -11,7 +11,6 @@ from fastapi.responses import JSONResponse
 from app import api, models  # noqa: F401  models는 테이블 등록을 위해 불러온다
 from app.config import get_settings
 from app.database import SessionLocal, engine
-from app.migrations import ensure_schema
 from app.seed import seed_all
 from app.services import backup_service
 
@@ -49,7 +48,10 @@ async def backup_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    ensure_schema(engine)
+    report = backup_service.migrate(engine, get_settings())
+    if report.backup:
+        # 한 번만 일어나는 일이라 기본 로그 수준에서도 보이게 남긴다.
+        logger.warning("마이그레이션 전 백업: %s, 행 수 %s → %s", report.backup.name, report.before, report.after)
     with SessionLocal() as db:
         seed_all(db)
     backups = asyncio.create_task(backup_loop()) if get_settings().backup_enabled else None

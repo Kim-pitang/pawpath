@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.models import AuthSession, User
 from app.seed import new_user_defaults
+from app.services.profile_service import new_default_profile
 
 SESSION_COOKIE = "pawpath_session"
 # 로그인한 지 이 기간이 지나면 계속 쓰고 있어도 끝난다.
@@ -96,17 +97,20 @@ def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def signup(db: Session, login_id: str, password: str, name: str) -> User:
-    if db.scalar(select(User.id).where(User.login_id == login_id)) is not None:
-        raise AuthError(409, "이미 사용 중인 아이디예요.")
-    user = User(name=name, login_id=login_id, password_hash=hash_password(password), **new_user_defaults())
+def signup(db: Session, login_id: str | None, password: str, name: str, email: str | None = None) -> User:
+    """대표 계정을 만든다. 아이디나 이메일 중 하나로 로그인하고, 대표 프로필이 함께 만들어진다."""
+    taken = AuthError(409, "이미 사용 중인 이메일이에요." if email else "이미 사용 중인 아이디예요.")
+    if db.scalar(select(User.id).where(User.email == email if email else User.login_id == login_id)) is not None:
+        raise taken
+    user = User(name=name, login_id=login_id, email=email, password_hash=hash_password(password), **new_user_defaults())
+    new_default_profile(user)
     db.add(user)
     try:
         db.commit()
     except IntegrityError as error:
         # 같은 아이디로 동시에 가입한 경우다.
         db.rollback()
-        raise AuthError(409, "이미 사용 중인 아이디예요.") from error
+        raise taken from error
     return user
 
 
@@ -123,17 +127,19 @@ def _check_password(throttle_key: str, stored: str | None, password: str, failur
 
 
 def login(db: Session, login_id: str, password: str, clock: float | None = None) -> User:
-    user = db.scalar(select(User).where(User.login_id == login_id))
+    """아이디에는 @를 쓸 수 없으므로 @가 있으면 이메일로 찾는다."""
+    user = db.scalar(select(User).where(User.email == login_id if "@" in login_id else User.login_id == login_id))
     stored = user.password_hash if user is not None and user.password_hash else None
     _check_password(login_id, stored, password, AuthError(401, "아이디나 비밀번호가 맞지 않아요."), clock)
     return user
 
 
-def create_session(db: Session, user: User, now: datetime) -> str:
+def create_session(db: Session, user: User, now: datetime, profile_id: int | None = None) -> str:
+    """profile_id는 로그인하자마자 쓸 프로필이다. 비우면 화면에서 프로필을 고른다."""
     token = secrets.token_urlsafe(32)
     idle_limit = now - timedelta(days=SESSION_IDLE_DAYS)
     db.execute(delete(AuthSession).where(or_(AuthSession.expires_at <= now, func.coalesce(AuthSession.last_seen_at, AuthSession.created_at) <= idle_limit)))
-    db.add(AuthSession(user_id=user.id, token_hash=_token_hash(token), created_at=now, expires_at=now + timedelta(days=SESSION_DAYS), last_seen_at=now))
+    db.add(AuthSession(user_id=user.id, token_hash=_token_hash(token), created_at=now, expires_at=now + timedelta(days=SESSION_DAYS), last_seen_at=now, profile_id=profile_id))
     db.commit()
     return token
 

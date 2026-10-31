@@ -12,7 +12,7 @@ import secrets
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import httpx
 from sqlalchemy import delete, select
@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from app.config import Settings
 from app.models import OAuthState, User
 from app.seed import new_user_defaults
+from app.services.profile_service import new_default_profile
 
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -29,6 +30,8 @@ ISSUERS = {"https://accounts.google.com", "accounts.google.com"}
 STATE_COOKIE = "pawpath_google_state"
 STATE_COOKIE_PATH = "/api/auth/google"
 STATE_MINUTES = 10
+# 처음 로그인한 계정은 대표 프로필의 이름과 아바타를 정한 뒤 원래 가려던 곳으로 간다.
+PROFILE_SETUP_PATH = "/profiles/setup"
 # 본인 재확인의 state 앞에 붙인다. 이미 쓴 state로 돌아와도 오류를 어느 화면에 알릴지 알 수 있다. 권한 판단에는 쓰지 않는다.
 REAUTH_STATE_PREFIX = "reauth."
 TIMEOUT_SECONDS = 10.0
@@ -183,9 +186,12 @@ def complete(db: Session, settings: Settings, code: str | None, state: str | Non
     email = claims.get("email") if claims.get("email_verified") is True and isinstance(claims.get("email"), str) else None
     email = email[:254] if email else None
     user = db.scalar(select(User).where(User.google_sub == claims["sub"]))
+    next_path = pending.next_path
     if user is None:
         user = User(name=_display_name(claims), google_sub=claims["sub"], google_email=email, **new_user_defaults())
+        new_default_profile(user)
         db.add(user)
+        next_path = f"{PROFILE_SETUP_PATH}?next={quote(pending.next_path, safe='')}"
     elif email:
         user.google_email = email
     try:
@@ -193,7 +199,8 @@ def complete(db: Session, settings: Settings, code: str | None, state: str | Non
     except IntegrityError:
         # 같은 Google 계정으로 동시에 처음 로그인한 경우다.
         db.rollback()
+        next_path = pending.next_path
         user = db.scalar(select(User).where(User.google_sub == claims["sub"]))
         if user is None:
             raise
-    return user, pending.next_path, False
+    return user, next_path, False
